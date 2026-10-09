@@ -30,6 +30,7 @@ Route::middleware('auth')->group(function () {
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
         Route::patch('expenses/batch', [ExpenseController::class, 'batch'])->name('expenses.batch');
+        Route::delete('expenses/batch', [ExpenseController::class, 'destroyBatch'])->name('expenses.destroy-batch');
         Route::get('expenses/{expense}', [ExpenseController::class, 'show'])->name('expenses.show');
         Route::patch('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
         Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');

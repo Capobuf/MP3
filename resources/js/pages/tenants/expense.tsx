@@ -22,7 +22,7 @@ export default function ExpenseDetail({
     return (
         <>
             <Head title={`${expense.title} · ${tenant.name}`} />
-            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+            <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
                 <header className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <Link
@@ -69,7 +69,9 @@ export default function ExpenseDetail({
                                     <dt className="text-xs text-muted-foreground">
                                         {label}
                                     </dt>
-                                    <dd className="mt-2 font-medium tabular-nums">
+                                    <dd
+                                        className={`mt-2 text-base font-medium tabular-nums ${['Allocato', 'Effettivo', 'Scostamento (effettivo − allocato)'].includes(String(label)) ? 'text-right' : ''} ${String(label).startsWith('Scostamento') && Number(expense.variance) > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}
+                                    >
                                         {value}
                                     </dd>
                                 </div>

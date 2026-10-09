@@ -1,11 +1,13 @@
+const euro = new Intl.NumberFormat('it-IT', {
+    style: 'currency',
+    useGrouping: 'always',
+    currency: 'EUR',
+});
+
 export function money(value: string | number | null | undefined): string {
     return value === null || value === undefined
         ? 'Da inserire'
-        : new Intl.NumberFormat('it-IT', {
-              style: 'currency',
-              useGrouping: 'always',
-              currency: 'EUR',
-          }).format(Number(value));
+        : euro.format(Number(value) === 0 ? 0 : Number(value));
 }
 export function dateLabel(value: string | null | undefined): string {
     if (!value) return '—';

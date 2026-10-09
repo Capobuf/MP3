@@ -164,6 +164,85 @@ class ManagementTest extends TestCase
         $this->assertNull($own->refresh()->vendor_id);
     }
 
+    public function test_bulk_delete_validates_the_entire_selection_and_tenant(): void
+    {
+        $first = $this->tenant->expenses()->create(['title' => 'First', 'year' => 2026]);
+        $second = $this->tenant->expenses()->create(['title' => 'Second', 'year' => 2026]);
+        $foreign = $this->other->expenses()->create(['title' => 'Foreign', 'year' => 2026]);
+        foreach ([[], [$first->id, $foreign->id], [$first->id, 999999], [$first->id, $first->id], [$first->id, 'invalid'], array_fill(0, 51, $first->id)] as $ids) {
+            $this->deleteJson('/t/alfa/expenses/batch', ['ids' => $ids])->assertUnprocessable();
+            $this->assertDatabaseHas('expenses', ['id' => $first->id]);
+            $this->assertDatabaseHas('expenses', ['id' => $second->id]);
+            $this->assertDatabaseHas('expenses', ['id' => $foreign->id]);
+        }
+        $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$first->id], 'tenant_id' => $this->other->id])->assertUnprocessable();
+        $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$first->id, $second->id]])->assertOk();
+        $this->assertDatabaseMissing('expenses', ['id' => $first->id]);
+        $this->assertDatabaseMissing('expenses', ['id' => $second->id]);
+        $this->assertDatabaseHas('expenses', ['id' => $foreign->id]);
+    }
+
+    public function test_bulk_delete_checks_permissions_before_deleting(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Protected', 'year' => 2026]);
+        $member = User::factory()->create();
+        $this->actingAs($member)->deleteJson('/t/alfa/expenses/batch', ['ids' => [$expense->id]])->assertForbidden();
+        $this->assertDatabaseHas('expenses', ['id' => $expense->id]);
+        $member->tenants()->attach($this->tenant);
+        $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$expense->id]])->assertOk();
+        $this->assertDatabaseMissing('expenses', ['id' => $expense->id]);
+        auth()->forgetGuards();
+        $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$expense->id]])->assertUnauthorized();
+    }
+
+    public function test_bulk_delete_rolls_back_if_a_later_deletion_is_refused(): void
+    {
+        $first = $this->tenant->expenses()->create(['title' => 'First', 'year' => 2026]);
+        $second = $this->tenant->expenses()->create(['title' => 'Second', 'year' => 2026]);
+        Expense::deleting(fn (Expense $expense) => $expense->id === $second->id ? false : null);
+        try {
+            $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$first->id, $second->id]])->assertConflict();
+        } finally {
+            Expense::flushEventListeners();
+        }
+        $this->assertDatabaseHas('expenses', ['id' => $first->id]);
+        $this->assertDatabaseHas('expenses', ['id' => $second->id]);
+    }
+
+    public function test_amount_edits_and_bulk_delete_refresh_dashboard_totals_and_charts(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Vendor']);
+        $project = $this->tenant->projects()->create(['name' => 'Project', 'status' => 'attivo']);
+        $expense = $this->tenant->expenses()->create(['title' => 'Cost', 'year' => 2026, 'vendor_id' => $vendor->id, 'project_id' => $project->id, 'allocated_amount' => '12.50']);
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['actual_amount' => '0'])->assertOk()->assertJsonPath('record.variance', '-12.50');
+        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '12.50')->where('totals.actual', '0.00')->where('totals.variance', '-12.50')->where('totals.incomplete', 0)
+            ->where('vendorChart.0.id', $vendor->id)->where('projectChart.0.id', $project->id));
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['allocated_amount' => null])->assertOk()->assertJsonPath('record.variance', null);
+        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('totals.incomplete', 1));
+        $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$expense->id]])->assertOk();
+        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00')->has('vendorChart', 0)->has('projectChart', 0));
+    }
+
+    public function test_server_sorting_preserves_filters_and_pagination(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Vendor']);
+        for ($i = 0; $i < 51; $i++) {
+            $this->tenant->expenses()->create(['title' => sprintf('Cost %02d', $i), 'year' => 2026, 'vendor_id' => $vendor->id, 'allocated_amount' => (string) $i, 'actual_amount' => (string) (50 - $i), 'due_on' => now()->addDays($i)->toDateString()]);
+        }
+        $this->tenant->expenses()->create(['title' => 'Excluded year', 'year' => 2025, 'vendor_id' => $vendor->id]);
+        $this->tenant->expenses()->create(['title' => 'Excluded vendor', 'year' => 2026]);
+        foreach (['title', 'allocated_amount', 'due_on'] as $sort) {
+            $this->get('/t/alfa/expenses?year=2026&vendor_id='.$vendor->id.'&search=Cost&sort='.$sort.'&direction=desc')->assertInertia(fn (Assert $page) => $page
+                ->where('expenses.total', 51)->where('expenses.data.0.title', 'Cost 50')->where('filters.sort', $sort)
+                ->where('filters.direction', 'desc')->where('totals.count', 51));
+        }
+        $this->get('/t/alfa/expenses?year=2026&vendor_id='.$vendor->id.'&search=Cost&sort=actual_amount&direction=desc&page=2')->assertInertia(fn (Assert $page) => $page
+            ->has('expenses.data', 1)->where('expenses.data.0.title', 'Cost 50')->where('expenses.current_page', 2)->where('totals.count', 51));
+        $this->get('/t/alfa/expenses?year=2026&sort=variance&direction=invalid')->assertInertia(fn (Assert $page) => $page->where('filters.sort', 'title')->where('filters.direction', 'asc'));
+    }
+
     public function test_large_amounts_and_decimal_validation(): void
     {
         $this->assertSame('999999999999.99', Money::decimal(Money::cents('999999999999.99')));

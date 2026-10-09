@@ -52,6 +52,30 @@ class ExpenseController extends Controller
         return response()->json(['message' => 'Spesa eliminata.']);
     }
 
+    public function destroyBatch(Request $request, Tenant $tenant): JsonResponse
+    {
+        $data = $request->validate([
+            'tenant_id' => ['prohibited'],
+            'ids' => ['required', 'array', 'min:1', 'max:50'],
+            'ids.*' => ['required', 'integer', 'distinct', Rule::exists('expenses', 'id')->where('tenant_id', $tenant->id)],
+        ], [
+            'ids.*.exists' => 'Una spesa non è disponibile in questo ambiente. Nessuna spesa eliminata.',
+        ]);
+
+        DB::transaction(function () use ($tenant, $data): void {
+            $records = $tenant->expenses()->whereIn('id', $data['ids'])->orderBy('id')->lockForUpdate()->get();
+            abort_unless($records->count() === count($data['ids']), 409, 'La selezione è cambiata. Nessuna spesa eliminata.');
+
+            foreach ($records as $record) {
+                if (! $record->delete()) {
+                    abort(409, 'Eliminazione non riuscita. Nessuna spesa eliminata.');
+                }
+            }
+        });
+
+        return response()->json(['message' => 'Spese selezionate eliminate.']);
+    }
+
     public function batch(Request $request, Tenant $tenant): JsonResponse
     {
         $rules = ['tenant_id' => 'prohibited', 'updates' => ['required', 'array', 'min:1', 'max:500'], 'updates.*' => ['required', 'array:'.implode(',', ['id', ...array_keys(ExpenseRequest::forTenant($tenant, true))])]];

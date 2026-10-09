@@ -16,7 +16,7 @@ export default function Expenses(props: ExpensePageProps) {
                 </div>
                 <Summary totals={props.totals} />
                 <ExpenseWorkspace
-                    key={JSON.stringify(props.filters)}
+                    key={JSON.stringify([props.tenant.slug, props.filters])}
                     {...props}
                 />
             </div>

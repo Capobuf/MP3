@@ -430,6 +430,11 @@ export function EntitySheet({
                                     ) : (
                                         <Input
                                             id={id}
+                                            className={
+                                                field.type === 'money'
+                                                    ? 'text-right font-medium tabular-nums'
+                                                    : undefined
+                                            }
                                             type={
                                                 field.type === 'money'
                                                     ? 'text'

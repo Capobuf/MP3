@@ -1,10 +1,15 @@
 import { router } from '@inertiajs/react';
-import { Plus, Search } from 'lucide-react';
-import { lazy, Suspense, useState } from 'react';
+import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -12,21 +17,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { EntitySheet } from './entity-sheet';
+import { ExpenseTable } from './expense-table';
+import { matchesExpenseFilters } from './helpers';
 import { Pagination } from './pagination';
 import { RecordSelect } from './record-select';
-import { matchesExpenseFilters } from './helpers';
-import type {
-    Catalog,
-    Expense,
-    ExpensePageProps,
-    Filters,
-    RecordData,
-} from './types';
+import type { Expense, ExpensePageProps, Filters, RecordData } from './types';
 
-const ExpenseGrid = lazy(() => import('./expense-grid'));
 export function applyFilters(path: string, filters: Filters) {
     const query = Object.fromEntries(
         Object.entries(filters).filter(
@@ -35,6 +32,7 @@ export function applyFilters(path: string, filters: Filters) {
     );
     router.get(path, query, { preserveState: true, preserveScroll: true });
 }
+
 export function ExpenseWorkspace({
     tenant,
     expenses,
@@ -42,296 +40,265 @@ export function ExpenseWorkspace({
     years,
     options,
     dashboard = false,
-    onCreate,
     onBusyChange,
 }: ExpensePageProps & {
     dashboard?: boolean;
-    onCreate?: () => void;
     onBusyChange?: (busy: boolean) => void;
 }) {
     const [draft, setDraft] = useState(filters);
     const [sheet, setSheet] = useState<{ record?: Expense } | null>(null);
     const [busy, setBusy] = useState(false);
-    const mobile = useIsMobile();
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const path = `/t/${tenant.slug}/${dashboard ? 'dashboard' : 'expenses'}`;
-    const year = filters.year ?? new Date().getFullYear();
-    function update(key: keyof Filters, value: string) {
-        setDraft((previous) => ({ ...previous, [key]: value }));
-    }
+    const year = filters.year;
+    const secondaryFilters = [
+        {
+            catalog: 'vendors',
+            field: 'vendor_id',
+            label: 'Fornitore',
+            all: 'Tutti i fornitori',
+            relation: 'vendor',
+        },
+        {
+            catalog: 'contracts',
+            field: 'contract_id',
+            label: 'Contratto',
+            all: 'Tutti i contratti',
+            relation: 'contract',
+        },
+        {
+            catalog: 'projects',
+            field: 'project_id',
+            label: 'Progetto',
+            all: 'Tutti i progetti',
+            relation: 'project',
+        },
+    ] as const;
+    const activeFilters = secondaryFilters.filter(
+        ({ field }) => filters[field],
+    ).length;
+
     function saved(record: RecordData) {
         setSheet(null);
-        const excluded = !matchesExpenseFilters(record, filters);
-        if (excluded)
+        if (!matchesExpenseFilters(record, filters)) {
             toast.info(
                 'Spesa salvata. Non compare nella lista perché non corrisponde ai filtri correnti.',
             );
+        }
         router.reload();
     }
+
     return (
-        <>
-            <Card className="min-w-0">
-                <CardHeader>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <CardTitle>Spese · {year}</CardTitle>
+        <section aria-label="Gestione spese" className="min-w-0 space-y-4">
+            {dashboard && (
+                <h2 className="text-base font-semibold">Spese · {year}</h2>
+            )}
+            <form
+                className="flex flex-wrap items-center gap-2"
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    applyFilters(path, draft);
+                }}
+            >
+                <div className="relative min-w-0 flex-1 basis-48">
+                    <Search
+                        aria-hidden="true"
+                        className="absolute top-2.5 left-3 size-4 text-muted-foreground"
+                    />
+                    <Input
+                        aria-label="Cerca spese per descrizione"
+                        className="pl-9"
+                        placeholder="Cerca una spesa…"
+                        value={draft.search ?? ''}
+                        disabled={busy}
+                        onChange={(event) =>
+                            setDraft({ ...draft, search: event.target.value })
+                        }
+                    />
+                </div>
+                <Button type="submit" variant="outline" disabled={busy}>
+                    Cerca
+                </Button>
+                {!dashboard && (
+                    <Select
+                        value={String(year)}
+                        disabled={busy}
+                        onValueChange={(value) =>
+                            applyFilters(path, {
+                                ...filters,
+                                year: Number(value),
+                            })
+                        }
+                    >
+                        <SelectTrigger
+                            className="w-28"
+                            aria-label="Anno di imputazione"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {years.map((value) => (
+                                <SelectItem key={value} value={String(value)}>
+                                    {value}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+                    <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" disabled={busy}>
+                            <SlidersHorizontal className="size-4" />
+                            Filtri{activeFilters > 0 && ` (${activeFilters})`}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                        align="end"
+                        className="w-80 max-w-[calc(100vw-2rem)] space-y-4"
+                    >
+                        <h3 className="text-sm font-medium">Filtra spese</h3>
+                        {secondaryFilters.map(
+                            ({ catalog, field, label, all, relation }) => (
+                                <div key={field} className="space-y-1.5">
+                                    <p className="text-xs font-medium text-muted-foreground">
+                                        {label}
+                                    </p>
+                                    <RecordSelect
+                                        slug={tenant.slug}
+                                        catalog={catalog}
+                                        value={draft[field] ?? ''}
+                                        onChange={(value) =>
+                                            setDraft({
+                                                ...draft,
+                                                [field]: value,
+                                            })
+                                        }
+                                        options={[
+                                            ...options[catalog],
+                                            ...expenses.data.flatMap(
+                                                (expense) =>
+                                                    expense[relation]
+                                                        ? [expense[relation]!]
+                                                        : [],
+                                            ),
+                                        ]}
+                                        label={all}
+                                        includeNone
+                                        disabled={busy}
+                                    />
+                                </div>
+                            ),
+                        )}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">
+                                Ordina per
+                            </Label>
+                            <Select
+                                value={`${draft.sort ?? 'title'}:${draft.direction ?? 'asc'}`}
+                                disabled={busy}
+                                onValueChange={(value) => {
+                                    const [sort, direction] = value.split(':');
+                                    setDraft({ ...draft, sort, direction });
+                                }}
+                            >
+                                <SelectTrigger aria-label="Ordinamento spese">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {[
+                                        ['title', 'Descrizione'],
+                                        ['allocated_amount', 'Allocato'],
+                                        ['actual_amount', 'Effettivo'],
+                                        ['due_on', 'Scadenza'],
+                                        ['updated_at', 'Ultima modifica'],
+                                    ].flatMap(([field, label]) =>
+                                        ['asc', 'desc'].map((direction) => (
+                                            <SelectItem
+                                                key={`${field}:${direction}`}
+                                                value={`${field}:${direction}`}
+                                            >
+                                                {label} ·{' '}
+                                                {direction === 'asc'
+                                                    ? 'crescente'
+                                                    : 'decrescente'}
+                                            </SelectItem>
+                                        )),
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <Button
+                            type="button"
+                            className="w-full"
                             disabled={busy}
                             onClick={() => {
-                                if (onCreate) onCreate();
-                                else setSheet({});
+                                setFiltersOpen(false);
+                                applyFilters(path, draft);
                             }}
                         >
-                            <Plus className="mr-2 size-4" />
-                            Nuova spesa
+                            Applica filtri
                         </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <form
-                        className="space-y-3"
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            applyFilters(path, draft);
+                    </PopoverContent>
+                </Popover>
+                {(activeFilters > 0 || filters.search) && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => {
+                            const reset = {
+                                year,
+                                sort: filters.sort,
+                                direction: filters.direction,
+                            };
+                            setDraft(reset);
+                            applyFilters(path, reset);
                         }}
                     >
-                        <fieldset
-                            disabled={busy}
-                            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
-                        >
-                            <div className="relative">
-                                <Search className="absolute top-3 left-3 size-4 text-muted-foreground" />
-                                <Input
-                                    aria-label="Cerca spese"
-                                    className="pl-9"
-                                    placeholder="Cerca una spesa…"
-                                    value={draft.search ?? ''}
-                                    onChange={(event) =>
-                                        update('search', event.target.value)
-                                    }
-                                />
-                            </div>
-                            {(
-                                [
-                                    'vendors',
-                                    'contracts',
-                                    'projects',
-                                ] as Catalog[]
-                            ).map((catalog) => (
-                                <RecordSelect
-                                    key={catalog}
-                                    slug={tenant.slug}
-                                    catalog={catalog}
-                                    value={String(
-                                        draft[
-                                            `${catalog.slice(0, -1)}_id` as keyof Filters
-                                        ] ?? '',
-                                    )}
-                                    onChange={(value) =>
-                                        update(
-                                            `${catalog.slice(0, -1)}_id` as keyof Filters,
-                                            value,
-                                        )
-                                    }
-                                    options={[
-                                        ...options[catalog],
-                                        ...expenses.data.flatMap((expense) =>
-                                            expense[
-                                                catalog.slice(0, -1) as
-                                                    | 'vendor'
-                                                    | 'contract'
-                                                    | 'project'
-                                            ]
-                                                ? [
-                                                      expense[
-                                                          catalog.slice(
-                                                              0,
-                                                              -1,
-                                                          ) as
-                                                              | 'vendor'
-                                                              | 'contract'
-                                                              | 'project'
-                                                      ]!,
-                                                  ]
-                                                : [],
-                                        ),
-                                    ]}
-                                    label={`Tutti i ${catalog === 'vendors' ? 'fornitori' : catalog === 'contracts' ? 'contratti' : 'progetti'}`}
-                                    includeNone
-                                    disabled={busy}
-                                />
-                            ))}
-                            <Select
-                                value={String(draft.year ?? year)}
-                                onValueChange={(value) => update('year', value)}
-                                disabled={busy}
-                            >
-                                <SelectTrigger aria-label="Anno di imputazione">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {[...new Set([...years, 2025, 2026, year])]
-                                        .sort((a, b) => b - a)
-                                        .map((value) => (
-                                            <SelectItem
-                                                key={value}
-                                                value={String(value)}
-                                            >
-                                                {value}
-                                            </SelectItem>
-                                        ))}
-                                </SelectContent>
-                            </Select>
-                        </fieldset>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Select
-                                value={draft.sort ?? 'title'}
-                                onValueChange={(value) => update('sort', value)}
-                                disabled={busy}
-                            >
-                                <SelectTrigger
-                                    className="w-44"
-                                    aria-label="Ordina spese"
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="updated_at">
-                                        Ultima modifica
-                                    </SelectItem>
-                                    <SelectItem value="title">
-                                        Descrizione
-                                    </SelectItem>
-                                    <SelectItem value="allocated_amount">
-                                        Allocato
-                                    </SelectItem>
-                                    <SelectItem value="actual_amount">
-                                        Effettivo
-                                    </SelectItem>
-                                    <SelectItem value="due_on">
-                                        Scadenza
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select
-                                value={draft.direction ?? 'asc'}
-                                onValueChange={(value) =>
-                                    update('direction', value)
-                                }
-                                disabled={busy}
-                            >
-                                <SelectTrigger
-                                    className="w-36"
-                                    aria-label="Direzione ordinamento"
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="asc">
-                                        Crescente
-                                    </SelectItem>
-                                    <SelectItem value="desc">
-                                        Decrescente
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Button
-                                variant="secondary"
-                                type="submit"
-                                disabled={busy}
-                            >
-                                Applica filtri
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                type="button"
-                                disabled={busy}
-                                onClick={() => {
-                                    const reset = { year };
-                                    setDraft(reset);
-                                    applyFilters(path, reset);
-                                }}
-                            >
-                                Azzera filtri
-                            </Button>
-                        </div>
-                    </form>
-                    {expenses.data.length === 0 ? (
-                        <div className="rounded-lg border border-dashed p-10 text-center">
-                            <p className="font-medium">
-                                Nessuna spesa per questi filtri
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                                Crea la prima spesa oppure amplia la ricerca.
-                            </p>
-                            <Button
-                                className="mt-4"
-                                variant="outline"
-                                onClick={() => {
-                                    if (onCreate) onCreate();
-                                    else setSheet({});
-                                }}
-                            >
-                                Aggiungi spesa
-                            </Button>
-                        </div>
-                    ) : mobile ? (
-                        <div className="space-y-3">
-                            {expenses.data.map((expense) => (
-                                <div
-                                    key={expense.id}
-                                    className="rounded-lg border p-4"
-                                >
-                                    <p className="font-medium">
-                                        {expense.title}
-                                    </p>
-                                    <p className="text-sm text-muted-foreground">
-                                        {expense.vendor?.name ??
-                                            'Senza fornitore'}
-                                    </p>
-                                    <Button
-                                        className="mt-3"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                            setSheet({ record: expense })
-                                        }
-                                    >
-                                        Apri / modifica importi
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <Suspense
-                            fallback={<Skeleton className="h-96 w-full" />}
-                        >
-                            <ExpenseGrid
-                                rows={expenses.data}
-                                options={options}
-                                slug={tenant.slug}
-                                onOpen={(record) => setSheet({ record })}
-                                onNew={() => {
-                                    if (onCreate) onCreate();
-                                    else setSheet({});
-                                }}
-                                onBusy={(value) => {
-                                    setBusy(value);
-                                    onBusyChange?.(value);
-                                }}
-                            />
-                        </Suspense>
-                    )}
-                    <div
-                        onClickCapture={(event) => {
-                            if (busy) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                            }
-                        }}
+                        Azzera filtri
+                    </Button>
+                )}
+                {!dashboard && (
+                    <Button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => setSheet({})}
                     >
-                        <Pagination page={expenses} />
-                    </div>
-                </CardContent>
-            </Card>
+                        <Plus className="size-4" />
+                        Nuova spesa
+                    </Button>
+                )}
+            </form>
+            <ExpenseTable
+                rows={expenses.data}
+                slug={tenant.slug}
+                filters={filters}
+                onSort={(sort) =>
+                    applyFilters(path, {
+                        ...filters,
+                        sort,
+                        direction:
+                            filters.sort === sort && filters.direction === 'asc'
+                                ? 'desc'
+                                : 'asc',
+                    })
+                }
+                onEdit={(record) => setSheet({ record })}
+                onBusyChange={(value) => {
+                    setBusy(value);
+                    onBusyChange?.(value);
+                }}
+            />
+            <div
+                onClickCapture={(event) => {
+                    if (busy) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                }}
+            >
+                <Pagination page={expenses} />
+            </div>
             {sheet && (
                 <EntitySheet
                     tenant={tenant}
@@ -343,6 +310,6 @@ export function ExpenseWorkspace({
                     onSaved={saved}
                 />
             )}
-        </>
+        </section>
     );
 }

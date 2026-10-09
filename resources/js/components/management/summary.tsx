@@ -29,7 +29,7 @@ export function Summary({ totals }: { totals: Totals }) {
                                 {item.label}
                             </p>
                             <p
-                                className={`mt-2 text-2xl font-semibold tabular-nums ${item.label.startsWith('Scostamento') && Number(item.value) > 0 ? 'text-destructive' : ''}`}
+                                className={`mt-2 text-right text-2xl font-semibold tabular-nums ${item.label.startsWith('Scostamento') && Number(item.value) > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}
                             >
                                 {money(item.value)}
                             </p>

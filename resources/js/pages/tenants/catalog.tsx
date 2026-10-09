@@ -311,7 +311,7 @@ export default function CatalogPage({
                                                 )}
                                             </TableCell>
                                             {catalog === 'contracts' && (
-                                                <TableCell className="text-right tabular-nums">
+                                                <TableCell className="text-right text-sm font-medium tabular-nums">
                                                     {money(
                                                         record.reference_amount,
                                                     )}

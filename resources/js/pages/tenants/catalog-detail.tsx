@@ -39,6 +39,7 @@ export default function CatalogDetail({
 }) {
     const [edit, setEdit] = useState(false);
     const [expense, setExpense] = useState<Expense | null>(null);
+    const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/${catalog}`;
     const info =
         catalog === 'vendors'
@@ -76,11 +77,17 @@ export default function CatalogDetail({
                         </h1>
                     </div>
                     <div className="flex gap-2">
-                        <Button onClick={() => setEdit(true)}>Modifica</Button>
+                        <Button
+                            disabled={tableBusy}
+                            onClick={() => setEdit(true)}
+                        >
+                            Modifica
+                        </Button>
                         <DeleteRecord
                             url={`${path}/${record.id}`}
                             redirect={path}
                             label={record.name ?? ''}
+                            disabled={tableBusy}
                         />
                     </div>
                 </header>
@@ -92,7 +99,9 @@ export default function CatalogDetail({
                                     <dt className="text-xs text-muted-foreground">
                                         {label}
                                     </dt>
-                                    <dd className="mt-1 text-sm font-medium">
+                                    <dd
+                                        className={`mt-1 font-medium ${label === 'Importo contrattuale informativo' ? 'text-right text-base tabular-nums' : 'text-sm'}`}
+                                    >
                                         {value ?? '—'}
                                     </dd>
                                 </div>
@@ -136,20 +145,29 @@ export default function CatalogDetail({
                     </h2>
                     <Summary totals={totals} />
                 </div>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Spese collegate</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ExpenseTable
-                            rows={expenses.data}
-                            slug={tenant.slug}
-                            showYear
-                            onEdit={setExpense}
-                        />
+                <section
+                    aria-label="Spese collegate"
+                    className="min-w-0 space-y-3"
+                >
+                    <h2 className="font-semibold">Spese collegate</h2>
+                    <ExpenseTable
+                        rows={expenses.data}
+                        slug={tenant.slug}
+                        showYear
+                        onEdit={setExpense}
+                        onBusyChange={setTableBusy}
+                    />
+                    <div
+                        onClickCapture={(event) => {
+                            if (tableBusy) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                            }
+                        }}
+                    >
                         <Pagination page={expenses} />
-                    </CardContent>
-                </Card>
+                    </div>
+                </section>
                 {contracts && (
                     <Card>
                         <CardHeader>

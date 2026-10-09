@@ -11,7 +11,6 @@
         "types:check": "tsc --noEmit"
     },
     "dependencies": {
-        "@glideapps/glide-data-grid": "6.0.4-alpha24",
         "@inertiajs/react": "^3.0.0",
         "@inertiajs/vite": "^3.0.0",
         "@laravel/passkeys": "^0.2.0",

@@ -101,10 +101,10 @@ export function EconomicChart({
                                             <p className="mb-2 font-medium">
                                                 {row.name}
                                             </p>
-                                            <p>
+                                            <p className="text-right text-sm font-medium tabular-nums">
                                                 Allocato: {money(row.allocated)}
                                             </p>
-                                            <p>
+                                            <p className="text-right text-sm font-medium tabular-nums">
                                                 Effettivo: {money(row.actual)}
                                             </p>
                                             <p className="mt-2 text-muted-foreground">

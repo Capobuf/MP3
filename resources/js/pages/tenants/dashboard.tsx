@@ -31,7 +31,7 @@ export default function TenantDashboard(
 ) {
     const { tenant, filters, totals, expiringContracts } = props;
     const [creating, setCreating] = useState(false);
-    const [gridBusy, setGridBusy] = useState(false);
+    const [tableBusy, setTableBusy] = useState(false);
     return (
         <>
             <Head title={`Panoramica · ${tenant.name}`} />
@@ -52,7 +52,7 @@ export default function TenantDashboard(
                     <div className="flex flex-wrap items-center gap-2">
                         <Select
                             value={String(filters.year)}
-                            disabled={gridBusy}
+                            disabled={tableBusy}
                             onValueChange={(year) =>
                                 applyFilters(`/t/${tenant.slug}/dashboard`, {
                                     ...filters,
@@ -75,13 +75,13 @@ export default function TenantDashboard(
                             </SelectContent>
                         </Select>
                         <Button
-                            disabled={gridBusy}
+                            disabled={tableBusy}
                             onClick={() => setCreating(true)}
                         >
                             <Plus className="mr-2 size-4" />
                             Nuova spesa
                         </Button>
-                        <Button variant="outline" disabled={gridBusy} asChild>
+                        <Button variant="outline" disabled={tableBusy} asChild>
                             <Link
                                 href={`/t/${tenant.slug}/contracts?expiring=1`}
                             >
@@ -117,11 +117,10 @@ export default function TenantDashboard(
                     />
                 </div>
                 <ExpenseWorkspace
-                    key={JSON.stringify(filters)}
+                    key={JSON.stringify([tenant.slug, filters])}
                     {...props}
                     dashboard
-                    onCreate={() => setCreating(true)}
-                    onBusyChange={setGridBusy}
+                    onBusyChange={setTableBusy}
                 />
             </div>
             {creating && (
