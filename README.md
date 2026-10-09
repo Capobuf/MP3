@@ -18,6 +18,7 @@ Copy-Item .env.example .env
 php artisan key:generate
 docker compose up -d --build
 docker compose exec laravel.test php artisan migrate --seed
+docker compose exec laravel.test php artisan app:create-superuser
 docker compose exec laravel.test npm ci
 docker compose exec laravel.test npm run build
 ```
@@ -34,7 +35,7 @@ Per arrestare l'ambiente senza eliminare il volume del database:
 docker compose stop
 ```
 
-Il seeder crea o aggiorna il super-admin configurato da `SUPER_ADMIN_USERNAME` e `SUPER_ADMIN_PASSWORD`. Fortify usa l'email come username: impostare entrambe le variabili allo stesso indirizzo email valido. Non viene versionata alcuna credenziale predefinita; usare una credenziale esclusivamente di sviluppo e sostituirla negli altri ambienti.
+Il comando `app:create-superuser` richiede interattivamente nome, email e password. Non promuove account già esistenti e non salva credenziali nel repository.
 
 ## Prima configurazione
 
@@ -48,6 +49,7 @@ Configurare in `.env` i valori `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME
 
 ```powershell
 php artisan migrate
+php artisan app:create-superuser
 npm ci
 npm run build
 ```

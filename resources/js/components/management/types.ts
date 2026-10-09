@@ -1,0 +1,83 @@
+import type { Tenant } from '@/types';
+
+export type Catalog = 'vendors' | 'contracts' | 'projects';
+export type Kind = Catalog | 'expenses';
+export type Option = { id: number; name: string };
+export type Options = Record<Catalog, Option[]>;
+export type RecordData = {
+    id: number;
+    name?: string;
+    title?: string;
+    year?: number;
+    vendor_id?: number | null;
+    contract_id?: number | null;
+    project_id?: number | null;
+    vendor?: Option | null;
+    contract?: Option | null;
+    project?: Option | null;
+    vat_number?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    notes?: string | null;
+    description?: string | null;
+    status?: string;
+    reference_amount?: string | null;
+    allocated_amount?: string | null;
+    actual_amount?: string | null;
+    variance?: string | null;
+    starts_on?: string | null;
+    ends_on?: string | null;
+    due_on?: string | null;
+    actual_on?: string | null;
+    expenses_count?: number;
+};
+export type Expense = RecordData & { title: string; year: number };
+export type Pagination<T> = {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    total: number;
+    from: number | null;
+    to: number | null;
+    prev_page_url: string | null;
+    next_page_url: string | null;
+};
+export type Totals = {
+    allocated: string;
+    actual: string;
+    variance: string;
+    count: number;
+    incomplete: number;
+};
+export type Filters = {
+    year?: number;
+    search?: string;
+    vendor_id?: string;
+    contract_id?: string;
+    project_id?: string;
+    sort?: string;
+    direction?: string;
+    status?: string;
+    expiring?: string;
+    linked?: string;
+};
+export type ExpensePageProps = {
+    tenant: Tenant;
+    expenses: Pagination<Expense>;
+    totals: Totals;
+    filters: Filters;
+    years: number[];
+    options: Options;
+};
+export const labels: Record<Kind, string> = {
+    vendors: 'Fornitori',
+    contracts: 'Contratti',
+    projects: 'Progetti',
+    expenses: 'Spese',
+};
+export const singular: Record<Kind, string> = {
+    vendors: 'fornitore',
+    contracts: 'contratto',
+    projects: 'progetto',
+    expenses: 'spesa',
+};

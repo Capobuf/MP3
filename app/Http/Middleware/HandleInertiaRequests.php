@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -35,12 +36,29 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $user = $request->user();
+        $tenant = $request->route('tenant');
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'auth' => [
-                'user' => $request->user(),
+                'user' => $user,
+                'tenants' => function () use ($user) {
+                    if (! $user) {
+                        return [];
+                    }
+
+                    $query = $user->is_super_admin
+                        ? Tenant::query()
+                        : $user->tenants();
+
+                    return $query->orderBy('name')->get(['tenants.id', 'name', 'slug']);
+                },
             ],
+            'currentTenant' => $tenant instanceof Tenant
+                ? $tenant->only('id', 'name', 'slug')
+                : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

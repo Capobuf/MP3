@@ -4,14 +4,22 @@ export type User = {
     email: string;
     avatar?: string;
     email_verified_at: string | null;
+    is_super_admin: boolean;
     two_factor_enabled?: boolean;
     created_at: string;
     updated_at: string;
     [key: string]: unknown;
 };
 
+export type Tenant = {
+    id: number;
+    name: string;
+    slug: string;
+};
+
 export type Auth = {
     user: User;
+    tenants: Tenant[];
 };
 
 export type Passkey = {
