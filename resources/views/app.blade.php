@@ -44,5 +44,6 @@
     </head>
     <body class="font-sans antialiased">
         <x-inertia::app />
+        <div id="portal" class="fixed top-0 left-0 z-40"></div>
     </body>
 </html>
