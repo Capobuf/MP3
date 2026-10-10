@@ -10,10 +10,12 @@ use Illuminate\Http\Request;
 final class ExpenseOverview
 {
     /** @return Builder<Expense> */
-    public static function query(Tenant $tenant, Request $request): Builder
+    public static function query(Tenant $tenant, Request $request, bool $withYear = true): Builder
     {
         $query = $tenant->expenses()->getQuery();
-        $query->where('year', $request->integer('year', (int) now()->format('Y')));
+        if ($withYear) {
+            $query->where('year', $request->integer('year', (int) now()->format('Y')));
+        }
         if ($search = $request->string('search')->trim()->toString()) {
             $query->where('title', 'like', '%'.$search.'%');
         }
@@ -75,8 +77,10 @@ final class ExpenseOverview
         ])->all();
     }
 
-    /** @return array<string, mixed> */
-    public static function page(Tenant $tenant, Request $request): array
+    /** @param array<string, string|int>|null $totals
+     * @return array<string, mixed>
+     */
+    public static function page(Tenant $tenant, Request $request, ?array $totals = null): array
     {
         $query = self::query($tenant, $request);
         $sort = in_array($request->input('sort'), ['title', 'allocated_amount', 'actual_amount', 'updated_at'], true)
@@ -86,9 +90,9 @@ final class ExpenseOverview
         return [
             'tenant' => $tenant->only('id', 'name', 'slug'),
             'expenses' => (clone $query)->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines'])->orderBy($sort, $direction)->orderBy('id')->paginate(50)->withQueryString(),
-            'totals' => self::totals($query),
+            'totals' => $totals ?? self::totals($query),
             'filters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $request->integer('year', (int) now()->format('Y')), 'sort' => $sort, 'direction' => $direction],
-            'years' => $tenant->expenses()->select('year')->distinct()->orderByDesc('year')->pluck('year')->push((int) now()->format('Y'))->unique()->values(),
+            'years' => $tenant->expenses()->select('year')->distinct()->orderByDesc('year')->pluck('year')->push((int) now()->format('Y'), $request->integer('year', (int) now()->format('Y')))->unique()->values(),
             'options' => self::options($tenant),
         ];
     }

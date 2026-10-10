@@ -1,143 +1,157 @@
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { useState } from 'react';
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+    Bar,
+    BarChart,
+    CartesianGrid,
+    ReferenceLine,
+    XAxis,
+    YAxis,
+} from 'recharts';
 import {
     ChartContainer,
     ChartLegend,
     ChartLegendContent,
     ChartTooltip,
 } from '@/components/ui/chart';
+import { compactMoney, economicConfig, topGroups } from './analytics-helpers';
+import type { EconomicGroup, GroupId, Metric } from './analytics-types';
+import { AnalyticsCard, EmptyChart, MetricSelect } from './analytics-ui';
 import { money } from './helpers';
 
-export type ChartRow = {
-    id: number | 'none';
-    name: string;
-    allocated: string | null;
-    actual: string | null;
-    count: number;
-    incomplete: number;
-};
+export type ChartRow = EconomicGroup;
 export function EconomicChart({
     title,
     rows,
     onSelect,
 }: {
     title: string;
-    rows: ChartRow[];
-    onSelect: (id: number | 'none') => void;
+    rows: EconomicGroup[];
+    onSelect: (id: GroupId) => void;
 }) {
-    const data = rows.map((row) => ({
+    const [metric, setMetric] = useState<Metric>('actual');
+    const groups = topGroups(rows, 10, metric);
+    const data = groups.map((row) => ({
         ...row,
-        allocated: row.allocated == null ? null : Number(row.allocated),
-        actual: row.actual == null ? null : Number(row.actual),
+        allocated: row.allocated === null ? null : Number(row.allocated),
+        actual: row.actual === null ? null : Number(row.actual),
     }));
+    const select = (id: GroupId) => {
+        if (id !== 'others') onSelect(id);
+    };
     return (
-        <Card className="min-w-0">
-            <CardHeader>
-                <CardTitle className="text-base">{title}</CardTitle>
-                <CardDescription>
-                    Importi presenti · fino a 12 gruppi · clic su una barra per
-                    filtrare
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                {rows.length === 0 ? (
-                    <div className="flex h-60 items-center justify-center text-sm text-muted-foreground">
-                        Aggiungi spese per visualizzare il confronto.
-                    </div>
-                ) : (
-                    <ChartContainer
-                        className="h-64 w-full"
-                        config={{
-                            allocated: {
-                                label: 'Allocato',
-                                color: 'var(--chart-2)',
-                            },
-                            actual: {
-                                label: 'Effettivo',
-                                color: 'var(--chart-1)',
-                            },
-                        }}
+        <AnalyticsCard
+            title={title}
+            description="Primi 10 per la metrica selezionata, Altri e gruppi senza associazione. Clic per filtrare."
+            controls={<MetricSelect value={metric} onChange={setMetric} />}
+        >
+            {data.every(
+                (row) => row.allocated === null && row.actual === null,
+            ) ? (
+                <EmptyChart>
+                    Nessun importo disponibile nel perimetro selezionato.
+                </EmptyChart>
+            ) : (
+                <ChartContainer
+                    className="w-full"
+                    style={{ height: Math.max(320, data.length * 48 + 65) }}
+                    config={economicConfig}
+                >
+                    <BarChart
+                        accessibilityLayer
+                        layout="vertical"
+                        data={data}
+                        margin={{ left: 0, right: 15 }}
                     >
-                        <BarChart
-                            accessibilityLayer
-                            data={data}
-                            margin={{ left: 4, right: 4 }}
+                        <CartesianGrid horizontal={false} />
+                        <XAxis
+                            type="number"
+                            tickFormatter={compactMoney}
+                            tickLine={false}
+                            axisLine={false}
+                        />
+                        <YAxis
+                            type="category"
+                            dataKey="name"
+                            width={130}
+                            interval={0}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(name: string) =>
+                                name.length > 23
+                                    ? `${name.slice(0, 22)}…`
+                                    : name
+                            }
+                        />
+                        <ReferenceLine x={0} stroke="var(--muted-foreground)" />
+                        <ChartTooltip
+                            content={({ active, payload }) => {
+                                const row = payload?.[0]?.payload as
+                                    | (typeof data)[number]
+                                    | undefined;
+                                return active && row ? (
+                                    <div className="max-w-80 rounded-lg border bg-background p-3 font-sans text-xs tabular-nums shadow-md">
+                                        <p className="mb-2 font-medium">
+                                            {row.name}
+                                        </p>
+                                        <p>
+                                            Allocato:{' '}
+                                            {row.allocated === null
+                                                ? 'Non disponibile'
+                                                : money(row.allocated)}
+                                        </p>
+                                        <p>
+                                            Effettivo:{' '}
+                                            {row.actual === null
+                                                ? 'Non disponibile'
+                                                : money(row.actual)}
+                                        </p>
+                                        <p>
+                                            Scostamento confrontabile:{' '}
+                                            {row.variance === null
+                                                ? 'Non disponibile'
+                                                : money(row.variance)}
+                                        </p>
+                                        <p className="mt-2 text-muted-foreground">
+                                            {row.count} spese · {row.incomplete}{' '}
+                                            incomplete
+                                        </p>
+                                    </div>
+                                ) : null;
+                            }}
+                        />
+                        <ChartLegend content={<ChartLegendContent />} />
+                        {(['allocated', 'actual'] as const).map((key) => (
+                            <Bar
+                                key={key}
+                                dataKey={key}
+                                fill={`var(--color-${key})`}
+                                radius={3}
+                                maxBarSize={14}
+                                className="cursor-pointer"
+                                onClick={(_row, index) =>
+                                    select(data[index].id)
+                                }
+                                isAnimationActive={false}
+                            />
+                        ))}
+                    </BarChart>
+                </ChartContainer>
+            )}
+            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                {groups
+                    .filter((row) => row.id !== 'others')
+                    .map((row) => (
+                        <button
+                            key={row.id}
+                            type="button"
+                            className="max-w-full truncate text-muted-foreground hover:text-foreground hover:underline"
+                            onClick={() => select(row.id)}
+                            title={row.name}
                         >
-                            <CartesianGrid vertical={false} />
-                            <XAxis
-                                dataKey="name"
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(name: string) =>
-                                    name.length > 16
-                                        ? `${name.slice(0, 15)}…`
-                                        : name
-                                }
-                                interval="preserveStartEnd"
-                            />
-                            <YAxis
-                                tickLine={false}
-                                axisLine={false}
-                                width={65}
-                                tickFormatter={(value: number) =>
-                                    new Intl.NumberFormat('it-IT', {
-                                        notation: 'compact',
-                                    }).format(value)
-                                }
-                            />
-                            <ChartTooltip
-                                content={({ active, payload }) => {
-                                    const row = payload?.[0]?.payload as
-                                        | ChartRow
-                                        | undefined;
-                                    return active && row ? (
-                                        <div className="rounded-lg border bg-background p-3 text-xs shadow-md">
-                                            <p className="mb-2 font-medium">
-                                                {row.name}
-                                            </p>
-                                            <p className="text-right text-sm font-medium tabular-nums">
-                                                Allocato: {money(row.allocated)}
-                                            </p>
-                                            <p className="text-right text-sm font-medium tabular-nums">
-                                                Effettivo: {money(row.actual)}
-                                            </p>
-                                            <p className="mt-2 text-muted-foreground">
-                                                {row.count} spese ·{' '}
-                                                {row.incomplete} incomplete
-                                            </p>
-                                        </div>
-                                    ) : null;
-                                }}
-                            />
-                            <ChartLegend content={<ChartLegendContent />} />
-                            <Bar
-                                dataKey="allocated"
-                                fill="var(--color-allocated)"
-                                radius={[4, 4, 0, 0]}
-                                className="cursor-pointer"
-                                onClick={(entry) =>
-                                    onSelect(entry.id as number | 'none')
-                                }
-                            />
-                            <Bar
-                                dataKey="actual"
-                                fill="var(--color-actual)"
-                                radius={[4, 4, 0, 0]}
-                                className="cursor-pointer"
-                                onClick={(entry) =>
-                                    onSelect(entry.id as number | 'none')
-                                }
-                            />
-                        </BarChart>
-                    </ChartContainer>
-                )}
-            </CardContent>
-        </Card>
+                            {row.name}
+                        </button>
+                    ))}
+            </div>
+        </AnalyticsCard>
     );
 }

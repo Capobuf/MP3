@@ -1,125 +1,139 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
-import { EntitySheet } from '@/components/management/entity-sheet';
-import { matchesExpenseFilters } from '@/components/management/helpers';
+import type {
+    EntityFilter,
+    ExpenseAnalytics,
+    GroupId,
+} from '@/components/management/analytics-types';
+import { AnnualComparisonChart } from '@/components/management/annual-comparison-chart';
+import { CompletenessChart } from '@/components/management/completeness-chart';
+import { ContractExpiryChart } from '@/components/management/contract-expiry-chart';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { EconomicChart } from '@/components/management/economic-chart';
-import type { ChartRow } from '@/components/management/economic-chart';
-import {
+    DashboardFilters,
     applyFilters,
-    ExpenseWorkspace,
-} from '@/components/management/expense-workspace';
-import { Summary } from '@/components/management/summary';
+} from '@/components/management/dashboard-filters';
+import { DashboardSummary } from '@/components/management/dashboard-summary';
+import { DistributionChart } from '@/components/management/distribution-chart';
+import { EconomicChart } from '@/components/management/economic-chart';
+import { EntitySheet } from '@/components/management/entity-sheet';
+import { ExpenseSankey } from '@/components/management/expense-sankey';
+import { ExpenseWorkspace } from '@/components/management/expense-workspace';
+import { matchesExpenseFilters } from '@/components/management/helpers';
 import type { ExpensePageProps } from '@/components/management/types';
+import { VarianceChart } from '@/components/management/variance-chart';
 
 export default function TenantDashboard(
-    props: ExpensePageProps & {
-        vendorChart: ChartRow[];
-        projectChart: ChartRow[];
-        expiringContracts: number;
-    },
+    props: ExpensePageProps & { analytics: ExpenseAnalytics },
 ) {
-    const { tenant, filters, totals, expiringContracts } = props;
+    const { tenant, filters, analytics } = props;
     const [creating, setCreating] = useState(false);
     const [tableBusy, setTableBusy] = useState(false);
+    const path = `/t/${tenant.slug}/dashboard`;
+    const year = filters.year!;
+    const select = (field: EntityFilter, id: GroupId) => {
+        if (!tableBusy && id !== 'others')
+            applyFilters(path, { ...filters, [field]: String(id) });
+    };
     return (
         <>
-            <Head title={`Panoramica · ${tenant.name}`} />
-            <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
-                <header className="flex flex-wrap items-start justify-between gap-4">
+            <Head title={`Panoramica economica · ${tenant.name}`} />
+            <div
+                className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6"
+                onClickCapture={(event) => {
+                    if (
+                        tableBusy &&
+                        event.target instanceof Element &&
+                        event.target.closest('a')
+                    ) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                    }
+                }}
+            >
+                <header className="space-y-4">
                     <div>
                         <p className="text-sm font-medium text-muted-foreground">
-                            {tenant.name} · {filters.year}
+                            {tenant.name} · {year}
                         </p>
                         <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-                            Panoramica
+                            Panoramica economica
                         </h1>
                         <p className="mt-2 text-sm text-muted-foreground">
-                            Le tue spese, gli accordi e i progetti in un unico
-                            spazio.
+                            Allocazioni, costi registrati e qualità dei dati nel
+                            perimetro selezionato.
                         </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Select
-                            value={String(filters.year)}
-                            disabled={tableBusy}
-                            onValueChange={(year) =>
-                                applyFilters(`/t/${tenant.slug}/dashboard`, {
-                                    ...filters,
-                                    year: Number(year),
-                                })
-                            }
-                        >
-                            <SelectTrigger
-                                className="w-28"
-                                aria-label="Anno panoramica"
-                            >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {props.years.map((year) => (
-                                    <SelectItem key={year} value={String(year)}>
-                                        {year}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Button
-                            disabled={tableBusy}
-                            onClick={() => setCreating(true)}
-                        >
-                            <Plus className="mr-2 size-4" />
-                            Nuova spesa
-                        </Button>
-                        <Button variant="outline" disabled={tableBusy} asChild>
-                            <Link
-                                href={`/t/${tenant.slug}/contracts?expiring=1`}
-                            >
-                                <Badge variant="secondary" className="mr-2">
-                                    {expiringContracts}
-                                </Badge>
-                                Contratti in scadenza entro 90 giorni
-                            </Link>
-                        </Button>
-                    </div>
+                    <DashboardFilters
+                        key={JSON.stringify([tenant.slug, filters])}
+                        {...props}
+                        path={path}
+                        busy={tableBusy}
+                        onCreate={() => setCreating(true)}
+                    />
                 </header>
-                <Summary totals={totals} />
-                <div className="grid gap-4 xl:grid-cols-2">
-                    <EconomicChart
-                        title="Allocato ed effettivo per fornitore"
-                        rows={props.vendorChart}
-                        onSelect={(id) =>
-                            applyFilters(`/t/${tenant.slug}/dashboard`, {
-                                ...filters,
-                                vendor_id: String(id),
-                            })
-                        }
+                <DashboardSummary analytics={analytics} year={year} />
+                <div className="grid min-w-0 gap-4 xl:grid-cols-3">
+                    <div className="min-w-0 xl:col-span-2">
+                        <AnnualComparisonChart
+                            rows={analytics.annual}
+                            year={year}
+                            onSelect={(year) => {
+                                if (!tableBusy)
+                                    applyFilters(path, { ...filters, year });
+                            }}
+                        />
+                    </div>
+                    <CompletenessChart rows={analytics.current.completeness} />
+                </div>
+                <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <DistributionChart
+                        title="Distribuzione percentuale per fornitore"
+                        rows={analytics.vendors}
+                        values={analytics.current}
+                        vendorConcentration
+                        onSelect={(id) => select('vendor_id', id)}
                     />
                     <EconomicChart
-                        title="Spese per progetto"
-                        rows={props.projectChart}
-                        onSelect={(id) =>
-                            applyFilters(`/t/${tenant.slug}/dashboard`, {
-                                ...filters,
-                                project_id: String(id),
-                            })
-                        }
+                        title="Classifica fornitori"
+                        rows={analytics.vendors}
+                        onSelect={(id) => select('vendor_id', id)}
                     />
                 </div>
+                <ExpenseSankey analytics={analytics} onSelect={select} />
+                <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <EconomicChart
+                        title="Allocato ed effettivo per progetto"
+                        rows={analytics.projects}
+                        onSelect={(id) => select('project_id', id)}
+                    />
+                    <DistributionChart
+                        title="Distribuzione per stato del progetto"
+                        rows={analytics.projectStatuses}
+                        values={analytics.current}
+                    />
+                </div>
+                <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <EconomicChart
+                        title="Spese per contratto"
+                        rows={analytics.contracts}
+                        onSelect={(id) => select('contract_id', id)}
+                    />
+                    <ContractExpiryChart
+                        expiry={analytics.expiry}
+                        slug={tenant.slug}
+                    />
+                </div>
+                <VarianceChart
+                    rows={analytics.variances}
+                    slug={tenant.slug}
+                    disabled={tableBusy}
+                />
                 <ExpenseWorkspace
                     key={JSON.stringify([tenant.slug, filters])}
                     {...props}
                     dashboard
+                    showFilters={false}
                     onBusyChange={setTableBusy}
                 />
             </div>
@@ -127,7 +141,7 @@ export default function TenantDashboard(
                 <EntitySheet
                     tenant={tenant}
                     kind="expenses"
-                    year={filters.year}
+                    year={year}
                     options={props.options}
                     onClose={() => setCreating(false)}
                     onSaved={(record) => {
@@ -144,5 +158,5 @@ export default function TenantDashboard(
     );
 }
 TenantDashboard.layout = {
-    breadcrumbs: [{ title: 'Panoramica', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Panoramica economica', href: '/dashboard' }],
 };
