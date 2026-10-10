@@ -5,7 +5,11 @@ import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseLines } from '@/components/management/expense-lines';
-import { money, varianceTextClass } from '@/components/management/helpers';
+import {
+    dateLabel,
+    money,
+    varianceTextClass,
+} from '@/components/management/helpers';
 import type { Expense, Options } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -55,6 +59,18 @@ export default function ExpenseDetail({
                         <dl className="grid gap-6 sm:grid-cols-3">
                             {[
                                 ['Anno di imputazione', expense.year],
+                                ...(expense.contract_id ||
+                                expense.period_starts_on
+                                    ? [
+                                          [
+                                              'Periodo coperto',
+                                              expense.period_starts_on &&
+                                              expense.period_ends_on
+                                                  ? `${dateLabel(expense.period_starts_on)} – ${dateLabel(expense.period_ends_on)}`
+                                                  : 'Periodo non indicato',
+                                          ],
+                                      ]
+                                    : []),
                                 ['Allocato', money(expense.allocated_amount)],
                                 ['Effettivo', money(expense.actual_amount)],
                                 [

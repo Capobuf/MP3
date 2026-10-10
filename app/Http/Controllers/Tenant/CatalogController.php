@@ -82,8 +82,12 @@ class CatalogController extends Controller
         }
         if ($item instanceof Contract) {
             $item->load('vendor:id,name');
+            $item->setAttribute('has_period_expenses', $item->expenses()->whereNotNull('period_starts_on')->exists());
         }
         $expenses = $item->expenses()->getQuery();
+        if ($item instanceof Contract) {
+            $expenses->orderByRaw('period_starts_on IS NULL')->orderBy('period_starts_on')->orderBy('period_ends_on');
+        }
         $year = null;
         $years = [];
         if ($item instanceof Project) {

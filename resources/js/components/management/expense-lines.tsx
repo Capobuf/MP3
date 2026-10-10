@@ -27,27 +27,26 @@ function lineKey(): string {
 }
 
 export function draftLines(record?: RecordData): DraftLine[] {
-    const lines =
-        record?.lines !== undefined
-            ? record.lines
-            : (['allocated', 'actual'] as const).flatMap((type) => {
-                  const amount =
-                      record?.[
-                          type === 'allocated'
-                              ? 'allocated_amount'
-                              : 'actual_amount'
-                      ];
-                  return amount == null
-                      ? []
-                      : [
-                            {
-                                description: record?.title ?? '',
-                                type,
-                                unit_price: amount,
-                                quantity: '1',
-                            },
-                        ];
-              });
+    const lines = record?.lines?.length
+        ? record.lines
+        : (['allocated', 'actual'] as const).flatMap((type) => {
+              const amount =
+                  record?.[
+                      type === 'allocated'
+                          ? 'allocated_amount'
+                          : 'actual_amount'
+                  ];
+              return amount == null
+                  ? []
+                  : [
+                        {
+                            description: record?.title ?? '',
+                            type,
+                            unit_price: amount,
+                            quantity: '1',
+                        },
+                    ];
+          });
     return lines.map((line) => ({ ...line, key: lineKey() }));
 }
 
@@ -380,7 +379,9 @@ export function ExpenseLines({
                                 >
                                     {lines.length
                                         ? 'Nessuna riga corrisponde ai filtri.'
-                                        : 'Nessuna riga. Aggiungi una riga per inserire un importo.'}
+                                        : readOnly
+                                          ? 'Non sono presenti righe dettagliate.'
+                                          : 'Nessuna riga. Aggiungi una riga per inserire un importo.'}
                                 </TableCell>
                             </TableRow>
                         )}

@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Tenant;
 use App\Services\AttachmentFiles;
 use App\Support\ExpenseOverview;
+use App\Support\ExpensePeriods;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,7 @@ class ExpenseController extends Controller
     {
         $expense = DB::transaction(function () use ($request, $tenant): Expense {
             $expense = $tenant->expenses()->make();
+            ExpensePeriods::lockContracts($tenant, [$request->validated('contract_id')]);
             $this->persist($expense, $request->validated());
 
             return $expense;
@@ -50,6 +52,7 @@ class ExpenseController extends Controller
     {
         DB::transaction(function () use ($request, $tenant, $expense): void {
             $locked = $tenant->expenses()->whereKey($expense->id)->lockForUpdate()->firstOrFail();
+            ExpensePeriods::lockContracts($tenant, [$locked->contract_id, $request->validated('contract_id')]);
             $this->persist($locked, $request->validated());
         });
 
@@ -60,6 +63,7 @@ class ExpenseController extends Controller
     {
         DB::transaction(function () use ($tenant, $expense, $files): void {
             $locked = $tenant->expenses()->whereKey($expense->id)->lockForUpdate()->firstOrFail();
+            ExpensePeriods::lockContracts($tenant, [$locked->contract_id]);
             $files->delete($locked);
         });
 
@@ -79,6 +83,7 @@ class ExpenseController extends Controller
         DB::transaction(function () use ($tenant, $data, $files): void {
             $records = $tenant->expenses()->whereIn('id', $data['ids'])->orderBy('id')->lockForUpdate()->get();
             abort_unless($records->count() === count($data['ids']), 409, 'La selezione è cambiata. Nessuna spesa eliminata.');
+            ExpensePeriods::lockContracts($tenant, $records->pluck('contract_id')->all());
 
             foreach ($records as $record) {
                 $files->delete($record);
@@ -103,25 +108,50 @@ class ExpenseController extends Controller
         ])->validate();
 
         DB::transaction(function () use ($tenant, $data): void {
-            $records = $tenant->expenses()->whereIn('id', array_column($data['updates'], 'id'))->lockForUpdate()->get()->keyBy('id');
+            $records = $tenant->expenses()->whereIn('id', array_column($data['updates'], 'id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            ExpensePeriods::lockContracts($tenant, [...$records->pluck('contract_id')->all(), ...array_column($data['updates'], 'contract_id')]);
             foreach ($data['updates'] as $update) {
                 $record = $records->get($update['id']);
                 abort_unless($record !== null, 404);
+                $record->fill(array_diff_key($update, array_flip(['id', 'lines', 'cost_center_ids', 'contract_entry'])));
+            }
+            foreach ($data['updates'] as $index => $update) {
+                $record = $records->get($update['id']);
+                abort_unless($record !== null, 404);
                 unset($update['id']);
-                $this->persist($record, $update);
+                try {
+                    $this->persist($record, $update, $records->all());
+                } catch (ValidationException $error) {
+                    $errors = [];
+                    foreach ($error->errors() as $field => $messages) {
+                        $errors["updates.{$index}.{$field}"] = $messages;
+                    }
+                    throw ValidationException::withMessages($errors);
+                }
             }
         });
 
         return response()->json(['message' => 'Modifiche salvate.']);
     }
 
-    /** @param array<string, mixed> $data */
-    private function persist(Expense $expense, array $data): void
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<int, Expense>  $pending
+     */
+    private function persist(Expense $expense, array $data, array $pending = []): void
     {
+        $hasLines = $expense->exists && $expense->lines()->exists();
+        $contractEntry = $data['contract_entry'] ?? false;
+        unset($data['contract_entry']);
+        $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
+        ExpensePeriods::validate($expense, $pending);
+        if ($contractEntry && ($expense->contract_id === null || ($expense->allocated_amount === null && $expense->actual_amount === null))) {
+            throw ValidationException::withMessages(['allocated_amount' => 'Nel contratto indica almeno un importo previsto o effettivo, anche zero.']);
+        }
         $costCenterIds = $data['cost_center_ids'] ?? null;
         unset($data['cost_center_ids']);
         if (! array_key_exists('lines', $data)) {
-            if ($expense->exists && $expense->lines()->exists() &&
+            if ($hasLines &&
                 (array_key_exists('allocated_amount', $data) || array_key_exists('actual_amount', $data))) {
                 throw ValidationException::withMessages(['lines' => 'Modifica le righe della spesa: gli importi complessivi sono calcolati automaticamente.']);
             }
@@ -162,8 +192,14 @@ class ExpenseController extends Controller
             }
         }
         unset($data['lines']);
-        $data['allocated_amount'] = Money::decimal($totals['allocated']);
-        $data['actual_amount'] = Money::decimal($totals['actual']);
+        // Keep unknown amounts when contract expenses gain lines or are detached.
+        foreach (['allocated' => 'allocated_amount', 'actual' => 'actual_amount'] as $type => $field) {
+            $hasType = in_array($type, array_column($lines, 'type'), true);
+            $data[$field] = ! $hasType &&
+                ($expense->contract_id !== null || $expense->getRawOriginal('contract_id') !== null || $hasLines) &&
+                $expense->getRawOriginal($field) === null
+                ? null : Money::decimal($totals[$type]);
+        }
         $expense->fill($data)->save();
         $expense->lines()->delete();
         $expense->lines()->createMany($lines);

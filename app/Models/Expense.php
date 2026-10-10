@@ -8,12 +8,15 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * @property string|null $allocated_amount
  * @property string|null $actual_amount
+ * @property Carbon|null $period_starts_on
+ * @property Carbon|null $period_ends_on
  */
-#[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'notes'])]
+#[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'notes', 'period_starts_on', 'period_ends_on'])]
 class Expense extends Model
 {
     use HasCostCenters;
@@ -62,6 +65,8 @@ class Expense extends Model
             'contract_id' => 'integer',
             'project_id' => 'integer',
             'year' => 'integer',
+            'period_starts_on' => 'date:Y-m-d',
+            'period_ends_on' => 'date:Y-m-d',
             'allocated_amount' => 'decimal:2',
             'actual_amount' => 'decimal:2',
         ];
