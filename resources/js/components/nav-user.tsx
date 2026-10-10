@@ -13,12 +13,10 @@ import {
 } from '@/components/ui/sidebar';
 import { UserInfo } from '@/components/user-info';
 import { UserMenuContent } from '@/components/user-menu-content';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 export function NavUser() {
     const { auth } = usePage().props;
-    const { state } = useSidebar();
-    const isMobile = useIsMobile();
+    const { state, isMobile } = useSidebar();
 
     if (!auth.user) {
         return null;
@@ -31,22 +29,22 @@ export function NavUser() {
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="group text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent"
+                            className="h-14 rounded-xl border border-sidebar-border p-2 text-sidebar-accent-foreground group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent"
+                            aria-label={`Apri menu utente: ${auth.user.name}`}
                             data-test="sidebar-menu-button"
                         >
-                            <UserInfo user={auth.user} />
-                            <ChevronsUpDown className="ml-auto size-4" />
+                            <UserInfo user={auth.user} showEmail={true} />
+                            <ChevronsUpDown
+                                className="ml-auto size-4 group-data-[collapsible=icon]:hidden"
+                                aria-hidden="true"
+                            />
                         </SidebarMenuButton>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
-                        className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                        className="w-(--radix-dropdown-menu-trigger-width) max-w-[calc(100vw-2rem)] min-w-56 rounded-xl"
                         align="end"
                         side={
-                            isMobile
-                                ? 'bottom'
-                                : state === 'collapsed'
-                                  ? 'left'
-                                  : 'bottom'
+                            !isMobile && state === 'collapsed' ? 'right' : 'top'
                         }
                     >
                         <UserMenuContent user={auth.user} />
