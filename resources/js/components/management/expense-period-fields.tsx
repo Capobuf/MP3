@@ -1,5 +1,8 @@
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+    NativeSelect,
+    NativeSelectOption,
+} from '@/components/ui/native-select';
 import { DateField } from './date-field';
 
 export function periodYear(
@@ -98,47 +101,43 @@ export function ExpensePeriodFields({
                     <FieldLabel
                         className={compact ? 'sr-only' : undefined}
                         id={`${idPrefix}-year-label`}
+                        htmlFor={`${idPrefix}-year`}
                     >
                         {yearLabel}
                     </FieldLabel>
-                    <ToggleGroup
-                        type="single"
-                        variant="outline"
+                    <NativeSelect
+                        id={`${idPrefix}-year`}
                         value={values.year}
-                        onValueChange={(value) => {
-                            if (value) onChange('year', value);
-                        }}
+                        onChange={(event) =>
+                            onChange('year', event.target.value)
+                        }
                         disabled={disabled}
                         aria-labelledby={`${idPrefix}-year-label`}
                         aria-invalid={!!errors.year}
                         aria-describedby={
                             errors.year
                                 ? `${idPrefix}-year-error`
-                                : `${idPrefix}-year-description`
+                                : compact
+                                  ? undefined
+                                  : `${idPrefix}-year-description`
                         }
                     >
-                        <ToggleGroupItem
-                            value={first}
-                            aria-label={`Anno iniziale · ${first}`}
-                        >
+                        <NativeSelectOption value={first}>
                             {compact ? first : `Anno iniziale · ${first}`}
-                        </ToggleGroupItem>
-                        <ToggleGroupItem
-                            value={last}
-                            aria-label={`Anno finale · ${last}`}
-                        >
+                        </NativeSelectOption>
+                        <NativeSelectOption value={last}>
                             {compact ? last : `Anno finale · ${last}`}
-                        </ToggleGroupItem>
-                    </ToggleGroup>
-                    <p
-                        id={`${idPrefix}-year-description`}
-                        className="text-sm text-muted-foreground"
-                        role="status"
-                    >
-                        {compact
-                            ? `Imputato al ${values.year}`
-                            : `Importo interamente imputato al ${values.year}.`}
-                    </p>
+                        </NativeSelectOption>
+                    </NativeSelect>
+                    {!compact && (
+                        <p
+                            id={`${idPrefix}-year-description`}
+                            className="text-sm text-muted-foreground"
+                            role="status"
+                        >
+                            {`Importo interamente imputato al ${values.year}.`}
+                        </p>
+                    )}
                     <FieldError id={`${idPrefix}-year-error`}>
                         {errors.year?.[0]}
                     </FieldError>

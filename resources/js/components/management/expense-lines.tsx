@@ -462,19 +462,8 @@ export function ExpenseLines({
                                 </TableHead>
                             )}
                             {!readOnly && <TableHead>Ordine</TableHead>}
-                            <TableHead>Descrizione</TableHead>
-                            {contractMode && (
-                                <>
-                                    <TableHead>Inizio</TableHead>
-                                    <TableHead>Fine</TableHead>
-                                    {showYearColumn && (
-                                        <TableHead>
-                                            Anno di imputazione
-                                        </TableHead>
-                                    )}
-                                </>
-                            )}
                             <TableHead>Tipo</TableHead>
+                            <TableHead>Descrizione</TableHead>
                             <TableHead className="text-right">
                                 Prezzo unitario (€)
                             </TableHead>
@@ -482,6 +471,17 @@ export function ExpenseLines({
                                 Quantità
                             </TableHead>
                             <TableHead className="text-right">Totale</TableHead>
+                            {contractMode && (
+                                <>
+                                    <TableHead>Inizio</TableHead>
+                                    <TableHead>Fine</TableHead>
+                                    {showYearColumn && (
+                                        <TableHead className="w-px whitespace-normal">
+                                            Anno di imputazione
+                                        </TableHead>
+                                    )}
+                                </>
+                            )}
                             {!readOnly && (
                                 <TableHead>
                                     <span className="sr-only">Azioni</span>
@@ -598,6 +598,45 @@ export function ExpenseLines({
                                             </div>
                                         </TableCell>
                                     )}
+                                    <TableCell className="min-w-32">
+                                        {readOnly ? (
+                                            line.type === 'allocated' ? (
+                                                allocatedLabel
+                                            ) : (
+                                                'Effettivo'
+                                            )
+                                        ) : (
+                                            <NativeSelect
+                                                aria-label={`Tipo ${label}`}
+                                                aria-invalid={
+                                                    !!fieldError('type')
+                                                }
+                                                value={line.type}
+                                                disabled={disabled}
+                                                onChange={(event) =>
+                                                    change(line.key, {
+                                                        type: event.target
+                                                            .value as ExpenseLine['type'],
+                                                    })
+                                                }
+                                            >
+                                                <NativeSelectOption value="allocated">
+                                                    {allocatedLabel}
+                                                </NativeSelectOption>
+                                                <NativeSelectOption value="actual">
+                                                    Effettivo
+                                                </NativeSelectOption>
+                                            </NativeSelect>
+                                        )}
+                                        {fieldError('type') && (
+                                            <p
+                                                role="alert"
+                                                className="text-sm text-destructive"
+                                            >
+                                                {fieldError('type')}
+                                            </p>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="min-w-52 whitespace-normal">
                                         {readOnly ? (
                                             line.description
@@ -639,136 +678,6 @@ export function ExpenseLines({
                                                 className="mt-1 text-sm text-destructive"
                                             >
                                                 {fieldError('description')}
-                                            </p>
-                                        )}
-                                    </TableCell>
-                                    {contractMode &&
-                                        (
-                                            [
-                                                'period_starts_on',
-                                                'period_ends_on',
-                                            ] as const
-                                        ).map((field) => (
-                                            <TableCell
-                                                key={field}
-                                                className="min-w-44"
-                                            >
-                                                {readOnly ? (
-                                                    dateLabel(line[field])
-                                                ) : (
-                                                    <DateField
-                                                        id={`${line.key}-${field}`}
-                                                        aria-label={`${field === 'period_starts_on' ? 'Inizio' : 'Fine'} ${label}`}
-                                                        value={
-                                                            line[field] ?? ''
-                                                        }
-                                                        onChange={(value) =>
-                                                            change(line.key, {
-                                                                [field]: value,
-                                                            })
-                                                        }
-                                                        disabled={disabled}
-                                                        aria-invalid={
-                                                            !!fieldError(field)
-                                                        }
-                                                        aria-describedby={
-                                                            fieldError(field)
-                                                                ? `${line.key}-${field}-error`
-                                                                : undefined
-                                                        }
-                                                    />
-                                                )}
-                                                {fieldError(field) && (
-                                                    <p
-                                                        id={`${line.key}-${field}-error`}
-                                                        role="alert"
-                                                        className="text-sm text-destructive"
-                                                    >
-                                                        {fieldError(field)}
-                                                    </p>
-                                                )}
-                                            </TableCell>
-                                        ))}
-                                    {showYearColumn && (
-                                        <TableCell className="min-w-56">
-                                            {readOnly ? (
-                                                periodCrossesYears(line) ? (
-                                                    line.year
-                                                ) : null
-                                            ) : (
-                                                <ExpensePeriodFields
-                                                    compact
-                                                    values={{
-                                                        period_starts_on:
-                                                            line.period_starts_on ??
-                                                            '',
-                                                        period_ends_on:
-                                                            line.period_ends_on ??
-                                                            '',
-                                                        year: String(
-                                                            line.year ?? '',
-                                                        ),
-                                                    }}
-                                                    onChange={(_, value) =>
-                                                        change(line.key, {
-                                                            year: value,
-                                                        })
-                                                    }
-                                                    disabled={disabled}
-                                                    errors={
-                                                        fieldError('year')
-                                                            ? {
-                                                                  year: [
-                                                                      fieldError(
-                                                                          'year',
-                                                                      )!,
-                                                                  ],
-                                                              }
-                                                            : {}
-                                                    }
-                                                    showPeriod={false}
-                                                    idPrefix={line.key}
-                                                    yearLabel={`Anno ${label}`}
-                                                />
-                                            )}
-                                        </TableCell>
-                                    )}
-                                    <TableCell className="min-w-32">
-                                        {readOnly ? (
-                                            line.type === 'allocated' ? (
-                                                allocatedLabel
-                                            ) : (
-                                                'Effettivo'
-                                            )
-                                        ) : (
-                                            <NativeSelect
-                                                aria-label={`Tipo ${label}`}
-                                                aria-invalid={
-                                                    !!fieldError('type')
-                                                }
-                                                value={line.type}
-                                                disabled={disabled}
-                                                onChange={(event) =>
-                                                    change(line.key, {
-                                                        type: event.target
-                                                            .value as ExpenseLine['type'],
-                                                    })
-                                                }
-                                            >
-                                                <NativeSelectOption value="allocated">
-                                                    {allocatedLabel}
-                                                </NativeSelectOption>
-                                                <NativeSelectOption value="actual">
-                                                    Effettivo
-                                                </NativeSelectOption>
-                                            </NativeSelect>
-                                        )}
-                                        {fieldError('type') && (
-                                            <p
-                                                role="alert"
-                                                className="text-sm text-destructive"
-                                            >
-                                                {fieldError('type')}
                                             </p>
                                         )}
                                     </TableCell>
@@ -844,6 +753,97 @@ export function ExpenseLines({
                                                 : format(cents)}
                                         </output>
                                     </TableCell>
+                                    {contractMode &&
+                                        (
+                                            [
+                                                'period_starts_on',
+                                                'period_ends_on',
+                                            ] as const
+                                        ).map((field) => (
+                                            <TableCell
+                                                key={field}
+                                                className="min-w-44"
+                                            >
+                                                {readOnly ? (
+                                                    dateLabel(line[field])
+                                                ) : (
+                                                    <DateField
+                                                        id={`${line.key}-${field}`}
+                                                        aria-label={`${field === 'period_starts_on' ? 'Inizio' : 'Fine'} ${label}`}
+                                                        value={
+                                                            line[field] ?? ''
+                                                        }
+                                                        onChange={(value) =>
+                                                            change(line.key, {
+                                                                [field]: value,
+                                                            })
+                                                        }
+                                                        disabled={disabled}
+                                                        aria-invalid={
+                                                            !!fieldError(field)
+                                                        }
+                                                        aria-describedby={
+                                                            fieldError(field)
+                                                                ? `${line.key}-${field}-error`
+                                                                : undefined
+                                                        }
+                                                    />
+                                                )}
+                                                {fieldError(field) && (
+                                                    <p
+                                                        id={`${line.key}-${field}-error`}
+                                                        role="alert"
+                                                        className="text-sm text-destructive"
+                                                    >
+                                                        {fieldError(field)}
+                                                    </p>
+                                                )}
+                                            </TableCell>
+                                        ))}
+                                    {showYearColumn && (
+                                        <TableCell className="w-px">
+                                            {readOnly ? (
+                                                periodCrossesYears(line) ? (
+                                                    line.year
+                                                ) : null
+                                            ) : (
+                                                <ExpensePeriodFields
+                                                    compact
+                                                    values={{
+                                                        period_starts_on:
+                                                            line.period_starts_on ??
+                                                            '',
+                                                        period_ends_on:
+                                                            line.period_ends_on ??
+                                                            '',
+                                                        year: String(
+                                                            line.year ?? '',
+                                                        ),
+                                                    }}
+                                                    onChange={(_, value) =>
+                                                        change(line.key, {
+                                                            year: value,
+                                                        })
+                                                    }
+                                                    disabled={disabled}
+                                                    errors={
+                                                        fieldError('year')
+                                                            ? {
+                                                                  year: [
+                                                                      fieldError(
+                                                                          'year',
+                                                                      )!,
+                                                                  ],
+                                                              }
+                                                            : {}
+                                                    }
+                                                    showPeriod={false}
+                                                    idPrefix={line.key}
+                                                    yearLabel={`Anno ${label}`}
+                                                />
+                                            )}
+                                        </TableCell>
+                                    )}
                                     {!readOnly && (
                                         <TableCell>
                                             <div className="flex gap-1">
