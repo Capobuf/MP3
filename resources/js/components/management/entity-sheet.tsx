@@ -345,6 +345,24 @@ export function EntitySheet({
                                   ? 'L’importo di riferimento è informativo. Il contratto non genera spese.'
                                   : `Dati di ${tenant.name}.`}
                         </SheetDescription>
+                        {current.kind !== 'vendors' &&
+                            (current.record ? (
+                                <Button variant="outline" size="sm" asChild>
+                                    <a
+                                        href={`/t/${tenant.slug}/${current.kind}/${current.record.id}#attachments`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        Gestisci allegati nella pagina di
+                                        dettaglio (nuova scheda)
+                                    </a>
+                                </Button>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Gli allegati saranno disponibili nella
+                                    pagina di dettaglio dopo il salvataggio.
+                                </p>
+                            ))}
                     </SheetHeader>
                     {frames.length > 1 && (
                         <Button

@@ -10,6 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['name', 'slug'])]
 class Tenant extends Model
 {
+    /** @return HasMany<Attachment, $this> */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class);
+    }
+
     /** @return HasMany<CostCenter, $this> */
     public function costCenters(): HasMany
     {

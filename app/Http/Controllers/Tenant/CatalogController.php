@@ -7,6 +7,7 @@ use App\Models\Contract;
 use App\Models\Project;
 use App\Models\Tenant;
 use App\Models\Vendor;
+use App\Services\AttachmentFiles;
 use App\Support\ExpenseOverview;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
@@ -191,16 +192,24 @@ class CatalogController extends Controller
         return response()->json(['record' => $item]);
     }
 
-    public function destroy(Tenant $tenant, string $catalog, int $record): JsonResponse
+    public function destroy(Tenant $tenant, string $catalog, int $record, AttachmentFiles $files): JsonResponse
     {
-        $item = $this->records($tenant, $catalog)->findOrFail($record);
-        $expenseCount = $item->expenses()->count();
-        $contractCount = $item instanceof Vendor ? $item->contracts()->count() : 0;
-        if ($expenseCount || $contractCount) {
-            return response()->json(['message' => "Eliminazione bloccata: sono collegati {$expenseCount} spese e {$contractCount} contratti. Rimuovi prima questi collegamenti."], 409);
-        }
-        $item->delete();
+        $response = DB::transaction(function () use ($tenant, $catalog, $record, $files): JsonResponse {
+            $item = $this->records($tenant, $catalog)->lockForUpdate()->findOrFail($record);
+            $expenseCount = $item->expenses()->count();
+            $contractCount = $item instanceof Vendor ? $item->contracts()->count() : 0;
+            if ($expenseCount || $contractCount) {
+                return response()->json(['message' => "Eliminazione bloccata: sono collegati {$expenseCount} spese e {$contractCount} contratti. Rimuovi prima questi collegamenti."], 409);
+            }
+            if ($item instanceof Contract || $item instanceof Project) {
+                $files->delete($item);
+            } else {
+                abort_unless($item->delete(), 409);
+            }
 
-        return response()->json(['message' => 'Elemento eliminato.']);
+            return response()->json(['message' => 'Elemento eliminato.']);
+        });
+
+        return $response->isSuccessful() ? $response->setData($files->result('Elemento eliminato.')) : $response;
     }
 }

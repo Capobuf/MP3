@@ -1,5 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { EntitySheet } from '@/components/management/entity-sheet';
@@ -173,6 +174,14 @@ export default function CatalogDetail({
                         )}
                     </CardContent>
                 </Card>
+                {catalog !== 'vendors' && (
+                    <AttachmentsSection
+                        key={`${tenant.id}:${catalog}:${record.id}`}
+                        tenant={tenant}
+                        resource={catalog}
+                        recordId={record.id}
+                    />
+                )}
                 <div>
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <h2 className="font-semibold">

@@ -34,7 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { CostCenterTags } from './cost-center-tags';
 import { api, money, varianceTextClass } from './helpers';
-import type { Expense, Filters } from './types';
+import type { DeletionResult, Expense, Filters } from './types';
 
 type AmountField = 'allocated_amount' | 'actual_amount';
 const amountLabels = {
@@ -106,7 +106,11 @@ export function ExpenseTable({
         setError('');
         let persisted = false;
         try {
-            await api(`/t/${slug}/expenses/batch`, 'DELETE', { ids: deleting });
+            const result = await api<DeletionResult>(
+                `/t/${slug}/expenses/batch`,
+                'DELETE',
+                { ids: deleting },
+            );
             setDeleting([]);
             setSelected([]);
             persisted = true;
@@ -137,7 +141,10 @@ export function ExpenseTable({
                     onNetworkError: () => false,
                 });
             });
-            toast.success('Spese eliminate.');
+            if (result.cleanup_failed) {
+                setError(result.message);
+                toast.error(result.message);
+            } else toast.success(result.message);
         } catch (failure) {
             const message =
                 failure instanceof Error

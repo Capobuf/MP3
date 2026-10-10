@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ExpenseRequest;
 use App\Models\Expense;
 use App\Models\Tenant;
+use App\Services\AttachmentFiles;
 use App\Support\ExpenseOverview;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
@@ -55,14 +56,17 @@ class ExpenseController extends Controller
         return response()->json(['record' => $expense->refresh()->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
     }
 
-    public function destroy(Tenant $tenant, Expense $expense): JsonResponse
+    public function destroy(Tenant $tenant, Expense $expense, AttachmentFiles $files): JsonResponse
     {
-        $expense->delete();
+        DB::transaction(function () use ($tenant, $expense, $files): void {
+            $locked = $tenant->expenses()->whereKey($expense->id)->lockForUpdate()->firstOrFail();
+            $files->delete($locked);
+        });
 
-        return response()->json(['message' => 'Spesa eliminata.']);
+        return response()->json($files->result('Spesa eliminata.'));
     }
 
-    public function destroyBatch(Request $request, Tenant $tenant): JsonResponse
+    public function destroyBatch(Request $request, Tenant $tenant, AttachmentFiles $files): JsonResponse
     {
         $data = $request->validate([
             'tenant_id' => ['prohibited'],
@@ -72,18 +76,16 @@ class ExpenseController extends Controller
             'ids.*.exists' => 'Una spesa non è disponibile in questo ambiente. Nessuna spesa eliminata.',
         ]);
 
-        DB::transaction(function () use ($tenant, $data): void {
+        DB::transaction(function () use ($tenant, $data, $files): void {
             $records = $tenant->expenses()->whereIn('id', $data['ids'])->orderBy('id')->lockForUpdate()->get();
             abort_unless($records->count() === count($data['ids']), 409, 'La selezione è cambiata. Nessuna spesa eliminata.');
 
             foreach ($records as $record) {
-                if (! $record->delete()) {
-                    abort(409, 'Eliminazione non riuscita. Nessuna spesa eliminata.');
-                }
+                $files->delete($record);
             }
         });
 
-        return response()->json(['message' => 'Spese selezionate eliminate.']);
+        return response()->json($files->result('Spese selezionate eliminate.'));
     }
 
     public function batch(Request $request, Tenant $tenant): JsonResponse
