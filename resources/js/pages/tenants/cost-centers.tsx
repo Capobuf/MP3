@@ -2,7 +2,6 @@ import { Head, router } from '@inertiajs/react';
 import { CornerDownRight, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { CostCenterSheet } from '@/components/management/cost-center-sheet';
 import { api } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import type {
@@ -44,7 +43,6 @@ import type { Tenant } from '@/types';
 export default function CostCenters({
     tenant,
     records,
-    parents,
     filters,
 }: {
     tenant: Tenant;
@@ -53,10 +51,6 @@ export default function CostCenters({
     filters: { search?: string };
 }) {
     const [search, setSearch] = useState(filters.search ?? '');
-    const [sheet, setSheet] = useState<{
-        record?: CostCenter;
-        parentId?: number;
-    } | null>(null);
     const [deleting, setDeleting] = useState<CostCenter | null>(null);
     const [deleteChildren, setDeleteChildren] = useState(false);
     const [confirmCascade, setConfirmCascade] = useState(false);
@@ -117,7 +111,9 @@ export default function CostCenters({
                                 size="icon"
                                 aria-label={`Aggiungi un figlio a ${center.name}`}
                                 onClick={() =>
-                                    setSheet({ parentId: center.id })
+                                    router.visit(
+                                        `${path}/create?parent_id=${center.id}`,
+                                    )
                                 }
                             >
                                 <Plus />
@@ -128,7 +124,9 @@ export default function CostCenters({
                             variant="ghost"
                             size="icon"
                             aria-label={`Modifica ${center.name}`}
-                            onClick={() => setSheet({ record: center })}
+                            onClick={() =>
+                                router.visit(`${path}/${center.id}/edit`)
+                            }
                         >
                             <Pencil />
                         </Button>
@@ -165,7 +163,7 @@ export default function CostCenters({
                             Sono consentiti due livelli: padre e figlio.
                         </p>
                     </div>
-                    <Button onClick={() => setSheet({})}>
+                    <Button onClick={() => router.visit(`${path}/create`)}>
                         <Plus data-icon="inline-start" />
                         Nuovo Centro di Costo
                     </Button>
@@ -231,18 +229,6 @@ export default function CostCenters({
                 </Card>
                 <Pagination page={records} />
             </div>
-            {sheet && (
-                <CostCenterSheet
-                    tenant={tenant}
-                    parents={parents}
-                    {...sheet}
-                    onClose={() => setSheet(null)}
-                    onSaved={() => {
-                        setSheet(null);
-                        router.reload();
-                    }}
-                />
-            )}
             <AlertDialog
                 open={deleting !== null}
                 onOpenChange={(open) => {

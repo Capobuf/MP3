@@ -1,13 +1,10 @@
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { DashboardFilters, applyFilters } from './dashboard-filters';
-import { EntitySheet } from './entity-sheet';
 import { ExpenseTable } from './expense-table';
-import { matchesExpenseFilters } from './helpers';
 import { Pagination } from './pagination';
-import type { Expense, ExpensePageProps, RecordData } from './types';
+import type { ExpensePageProps } from './types';
 
 export { applyFilters } from './dashboard-filters';
 
@@ -25,21 +22,10 @@ export function ExpenseWorkspace({
     showFilters?: boolean;
     onBusyChange?: (busy: boolean) => void;
 }) {
-    const [sheet, setSheet] = useState<{ record?: Expense } | null>(null);
     const [busy, setBusy] = useState(false);
     const path = `/t/${tenant.slug}/${dashboard ? 'dashboard' : 'expenses'}`;
     const year = filters.year;
     const refresh = usePageRefresh(path);
-    function saved(record: RecordData) {
-        setSheet(null);
-        if (!matchesExpenseFilters(record, filters)) {
-            toast.info(
-                'Spesa salvata. Non compare nella lista perché non corrisponde ai filtri correnti.',
-            );
-        }
-        router.reload();
-    }
-
     return (
         <section
             aria-busy={busy || refresh.pending}
@@ -60,7 +46,14 @@ export function ExpenseWorkspace({
                     options={options}
                     path={path}
                     busy={busy}
-                    onCreate={dashboard ? undefined : () => setSheet({})}
+                    onCreate={
+                        dashboard
+                            ? undefined
+                            : () =>
+                                  router.visit(
+                                      `/t/${tenant.slug}/expenses/create${year ? `?year=${year}` : ''}`,
+                                  )
+                    }
                 />
             )}
             <ExpenseTable
@@ -78,7 +71,9 @@ export function ExpenseWorkspace({
                                 : 'asc',
                     })
                 }
-                onEdit={(record) => setSheet({ record })}
+                onEdit={(record) =>
+                    router.visit(`/t/${tenant.slug}/expenses/${record.id}/edit`)
+                }
                 onBusyChange={(value) => {
                     setBusy(value);
                     onBusyChange?.(value);
@@ -94,17 +89,6 @@ export function ExpenseWorkspace({
             >
                 <Pagination page={expenses} />
             </div>
-            {sheet && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind="expenses"
-                    record={sheet.record}
-                    year={year}
-                    options={options}
-                    onClose={() => setSheet(null)}
-                    onSaved={saved}
-                />
-            )}
         </section>
     );
 }

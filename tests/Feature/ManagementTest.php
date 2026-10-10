@@ -51,6 +51,46 @@ class ManagementTest extends TestCase
         }
     }
 
+    public function test_creation_pages_use_tenant_options_and_validate_the_creation_context(): void
+    {
+        foreach (['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'] as $kind) {
+            $this->get('/t/alfa/'.$kind.'/create?year=2026')->assertInertia(fn (Assert $page) => $page
+                ->component('tenants/create')->where('kind', $kind)->where('tenant.slug', 'alfa')
+                ->where('year', 2026)->where('contractContext', null)->where('parentId', null));
+        }
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro Alfa']);
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto Alfa']);
+        $contract->costCenters()->attach($center);
+        $this->get('/t/alfa/expenses/create?contract_id='.$contract->id)->assertInertia(fn (Assert $page) => $page
+            ->where('contractContext.id', $contract->id)->where('contractContext.cost_centers.0.id', $center->id)
+            ->where('contractContext.has_period_expenses', false));
+        $this->get('/t/alfa/cost-centers/create?parent_id='.$center->id)->assertInertia(fn (Assert $page) => $page
+            ->where('parentId', $center->id));
+        $foreign = $this->other->contracts()->create(['name' => 'Contratto Beta']);
+        $this->getJson('/t/alfa/expenses/create?contract_id='.$foreign->id)->assertUnprocessable()->assertJsonValidationErrors('contract_id');
+        $this->getJson('/t/alfa/projects/create?year=1999')->assertUnprocessable()->assertJsonValidationErrors('year');
+        $this->actingAs(User::factory()->create())->get('/t/alfa/contracts/create')->assertForbidden();
+    }
+
+    public function test_edit_pages_load_the_tenant_record_and_its_relations(): void
+    {
+        foreach (['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'] as $kind) {
+            $relation = $kind === 'cost-centers' ? 'costCenters' : $kind;
+            $data = $kind === 'expenses' ? ['title' => 'Spesa Alfa', 'year' => 2027] : ['name' => 'Elemento Alfa'];
+            $item = $this->tenant->{$relation}()->create($data);
+            $this->get('/t/alfa/'.$kind.'/'.$item->id.'/edit')->assertInertia(fn (Assert $page) => $page
+                ->component('tenants/create')->where('kind', $kind)->where('record.id', $item->id));
+            $this->get('/t/beta/'.$kind.'/'.$item->id.'/edit')->assertNotFound();
+        }
+        $contract = $this->tenant->contracts()->firstOrFail();
+        $expense = $this->tenant->expenses()->create(['title' => 'Spesa collegata', 'year' => 2027, 'contract_id' => $contract->id]);
+        $this->get('/t/alfa/expenses/'.$expense->id.'/edit?contract_id='.$contract->id)->assertInertia(fn (Assert $page) => $page
+            ->where('record.contract.id', $contract->id)->where('contractContext.id', $contract->id)->where('year', 2027));
+        $otherContract = $this->tenant->contracts()->create(['name' => 'Altro contratto']);
+        $this->get('/t/alfa/expenses/'.$expense->id.'/edit?contract_id='.$otherContract->id)->assertNotFound();
+        $this->actingAs(User::factory()->create())->get('/t/alfa/expenses/'.$expense->id.'/edit')->assertForbidden();
+    }
+
     /** @return array<string, mixed> */
     private function initialExpense(): array
     {

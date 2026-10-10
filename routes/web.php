@@ -37,6 +37,8 @@ Route::middleware('auth')->group(function () {
             Route::delete('{attachment}', [AttachmentController::class, 'destroy'])->whereNumber('attachment')->name('attachments.destroy');
         });
         Route::get('creation-options', CreationOptionsController::class)->name('creation-options');
+        Route::get('{kind}/create', [CreationOptionsController::class, 'create'])->whereIn('kind', ['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'])->name('create');
+        Route::get('{kind}/{record}/edit', [CreationOptionsController::class, 'edit'])->whereIn('kind', ['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'])->whereNumber('record')->name('edit');
         Route::get('dashboard', TenantDashboardController::class)->name('dashboard');
         Route::get('cost-centers', [CostCenterController::class, 'index'])->name('cost-centers.index');
         Route::post('cost-centers', [CostCenterController::class, 'store'])->name('cost-centers.store');

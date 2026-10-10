@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
-import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseTable } from '@/components/management/expense-table';
 import { dateLabel } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
@@ -35,7 +34,6 @@ export default function CatalogDetail({
     tenant,
     catalog,
     record,
-    options,
     expenses,
     totals,
     contracts,
@@ -52,9 +50,6 @@ export default function CatalogDetail({
     year: number | null;
     years: number[];
 }) {
-    const [edit, setEdit] = useState(false);
-    const [expense, setExpense] = useState<Expense | null>(null);
-    const [addingExpense, setAddingExpense] = useState(false);
     const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/${catalog}`;
     const info =
@@ -88,7 +83,9 @@ export default function CatalogDetail({
                     <div className="flex shrink-0 flex-wrap gap-2">
                         <Button
                             disabled={tableBusy}
-                            onClick={() => setEdit(true)}
+                            onClick={() =>
+                                router.visit(`${path}/${record.id}/edit`)
+                            }
                         >
                             Modifica
                         </Button>
@@ -233,7 +230,11 @@ export default function CatalogDetail({
                         {catalog === 'contracts' && (
                             <Button
                                 disabled={tableBusy}
-                                onClick={() => setAddingExpense(true)}
+                                onClick={() =>
+                                    router.visit(
+                                        `/t/${tenant.slug}/expenses/create?contract_id=${record.id}`,
+                                    )
+                                }
                             >
                                 Aggiungi spesa
                             </Button>
@@ -244,7 +245,11 @@ export default function CatalogDetail({
                         slug={tenant.slug}
                         showYear
                         contractMode={catalog === 'contracts'}
-                        onEdit={setExpense}
+                        onEdit={(expense) =>
+                            router.visit(
+                                `/t/${tenant.slug}/expenses/${expense.id}/edit${catalog === 'contracts' ? `?contract_id=${record.id}` : ''}`,
+                            )
+                        }
                         onBusyChange={setTableBusy}
                     />
                     <div
@@ -290,39 +295,6 @@ export default function CatalogDetail({
                     </Card>
                 )}
             </div>
-            {edit && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind={catalog}
-                    record={record}
-                    options={options}
-                    onClose={() => setEdit(false)}
-                    onSaved={() => {
-                        setEdit(false);
-                        router.reload();
-                    }}
-                />
-            )}
-            {(expense || addingExpense) && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind="expenses"
-                    record={expense ?? undefined}
-                    contractContext={
-                        catalog === 'contracts' ? record : undefined
-                    }
-                    options={options}
-                    onClose={() => {
-                        setExpense(null);
-                        setAddingExpense(false);
-                    }}
-                    onSaved={() => {
-                        setExpense(null);
-                        setAddingExpense(false);
-                        router.reload();
-                    }}
-                />
-            )}
         </>
     );
 }

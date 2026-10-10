@@ -513,6 +513,7 @@ export function ExpenseLines({
                             return (
                                 <TableRow
                                     key={line.key}
+                                    className="[&>td]:align-top"
                                     data-state={
                                         selected.includes(line.key)
                                             ? 'selected'
@@ -523,6 +524,7 @@ export function ExpenseLines({
                                         <TableCell>
                                             <Checkbox
                                                 aria-label={`Seleziona ${label}`}
+                                                className="mt-2"
                                                 checked={selected.includes(
                                                     line.key,
                                                 )}
@@ -683,6 +685,7 @@ export function ExpenseLines({
                                                 line.year
                                             ) : (
                                                 <ExpensePeriodFields
+                                                    compact
                                                     values={{
                                                         period_starts_on:
                                                             line.period_starts_on ??

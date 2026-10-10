@@ -1,16 +1,14 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
-import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseLines } from '@/components/management/expense-lines';
 import {
     dateLabel,
     money,
     varianceTextClass,
 } from '@/components/management/helpers';
-import type { Expense, Options } from '@/components/management/types';
+import type { Expense } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -19,13 +17,10 @@ import type { Tenant } from '@/types';
 export default function ExpenseDetail({
     tenant,
     expense,
-    options,
 }: {
     tenant: Tenant;
     expense: Expense;
-    options: Options;
 }) {
-    const [edit, setEdit] = useState(false);
     const path = `/t/${tenant.slug}/expenses`;
     return (
         <>
@@ -44,7 +39,11 @@ export default function ExpenseDetail({
                         </h1>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                        <Button onClick={() => setEdit(true)}>
+                        <Button
+                            onClick={() =>
+                                router.visit(`${path}/${expense.id}/edit`)
+                            }
+                        >
                             Modifica spesa
                         </Button>
                         <DeleteRecord
@@ -188,19 +187,6 @@ export default function ExpenseDetail({
                     </CardContent>
                 </Card>
             </div>
-            {edit && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind="expenses"
-                    record={expense}
-                    options={options}
-                    onClose={() => setEdit(false)}
-                    onSaved={() => {
-                        setEdit(false);
-                        router.reload();
-                    }}
-                />
-            )}
         </>
     );
 }

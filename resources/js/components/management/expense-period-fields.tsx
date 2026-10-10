@@ -9,7 +9,12 @@ export function periodYear(
 ): string {
     const start = values.period_starts_on;
     const end = values.period_ends_on;
-    if (!start || !end || end < start) return values.year;
+    if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(start ?? '') ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(end ?? '') ||
+        end < start
+    )
+        return values.year;
     const first = start.slice(0, 4);
     const last = end.slice(0, 4);
     return !preferStart && [first, last].includes(values.year)
@@ -25,6 +30,7 @@ export function ExpensePeriodFields({
     showPeriod,
     idPrefix = 'entity',
     yearLabel = 'Anno di imputazione economica',
+    compact = false,
 }: {
     values: Record<string, string>;
     onChange: (key: string, value: string) => void;
@@ -33,11 +39,14 @@ export function ExpensePeriodFields({
     showPeriod: boolean;
     idPrefix?: string;
     yearLabel?: string;
+    compact?: boolean;
 }) {
     const first = values.period_starts_on?.slice(0, 4);
     const last = values.period_ends_on?.slice(0, 4);
     const validPeriod =
-        !!first && !!last && values.period_ends_on >= values.period_starts_on;
+        /^\d{4}-\d{2}-\d{2}$/.test(values.period_starts_on ?? '') &&
+        /^\d{4}-\d{2}-\d{2}$/.test(values.period_ends_on ?? '') &&
+        values.period_ends_on >= values.period_starts_on;
     const multipleYears = validPeriod && first !== last;
     return (
         <>
@@ -45,6 +54,7 @@ export function ExpensePeriodFields({
                 (['period_starts_on', 'period_ends_on'] as const).map((key) => (
                     <Field
                         key={key}
+                        className="min-w-0 gap-2"
                         data-invalid={!!errors[key]}
                         data-disabled={disabled}
                     >
@@ -70,8 +80,13 @@ export function ExpensePeriodFields({
                         </FieldError>
                     </Field>
                 ))}
-            <Field data-invalid={!!errors.year} data-disabled={disabled}>
+            <Field
+                className="min-w-0 gap-2"
+                data-invalid={!!errors.year}
+                data-disabled={disabled}
+            >
                 <FieldLabel
+                    className={compact ? 'sr-only' : undefined}
                     id={`${idPrefix}-year-label`}
                     htmlFor={multipleYears ? undefined : `${idPrefix}-year`}
                 >
@@ -94,11 +109,17 @@ export function ExpensePeriodFields({
                                 : `${idPrefix}-year-description`
                         }
                     >
-                        <ToggleGroupItem value={first}>
-                            Anno iniziale · {first}
+                        <ToggleGroupItem
+                            value={first}
+                            aria-label={`Anno iniziale · ${first}`}
+                        >
+                            {compact ? first : `Anno iniziale · ${first}`}
                         </ToggleGroupItem>
-                        <ToggleGroupItem value={last}>
-                            Anno finale · {last}
+                        <ToggleGroupItem
+                            value={last}
+                            aria-label={`Anno finale · ${last}`}
+                        >
+                            {compact ? last : `Anno finale · ${last}`}
                         </ToggleGroupItem>
                     </ToggleGroup>
                 ) : (
@@ -130,8 +151,9 @@ export function ExpensePeriodFields({
                         className="text-sm text-muted-foreground"
                         role="status"
                     >
-                        Importo interamente imputato al {values.year}
-                        {multipleYears ? '.' : ' (anno del periodo).'}{' '}
+                        {compact
+                            ? `Imputato al ${values.year}`
+                            : `Importo interamente imputato al ${values.year}${multipleYears ? '.' : ' (anno del periodo).'}`}
                     </p>
                 )}
                 <FieldError id={`${idPrefix}-year-error`}>
