@@ -2,7 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { EntitySheet } from '@/components/management/entity-sheet';
-import { dateLabel, money } from '@/components/management/helpers';
+import { money } from '@/components/management/helpers';
 import type { Expense, Options } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -58,11 +58,6 @@ export default function ExpenseDetail({
                                     expense.variance == null
                                         ? 'Non determinabile'
                                         : money(expense.variance),
-                                ],
-                                ['Scadenza', dateLabel(expense.due_on)],
-                                [
-                                    'Rilevazione effettivo',
-                                    dateLabel(expense.actual_on),
                                 ],
                             ].map(([label, value]) => (
                                 <div key={label}>

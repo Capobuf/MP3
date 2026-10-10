@@ -79,7 +79,7 @@ final class ExpenseOverview
     public static function page(Tenant $tenant, Request $request): array
     {
         $query = self::query($tenant, $request);
-        $sort = in_array($request->input('sort'), ['title', 'allocated_amount', 'actual_amount', 'due_on', 'updated_at'], true)
+        $sort = in_array($request->input('sort'), ['title', 'allocated_amount', 'actual_amount', 'updated_at'], true)
             ? $request->string('sort')->toString() : 'title';
         $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
 

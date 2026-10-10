@@ -18,6 +18,14 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import type { Tenant } from '@/types';
 
 export default function CatalogDetail({
@@ -28,6 +36,8 @@ export default function CatalogDetail({
     expenses,
     totals,
     contracts,
+    year,
+    years,
 }: {
     tenant: Tenant;
     catalog: Catalog;
@@ -36,6 +46,8 @@ export default function CatalogDetail({
     expenses: Page<Expense>;
     totals: Totals;
     contracts: Page<RecordData> | null;
+    year: number | null;
+    years: number[];
 }) {
     const [edit, setEdit] = useState(false);
     const [expense, setExpense] = useState<Expense | null>(null);
@@ -137,12 +149,66 @@ export default function CatalogDetail({
                                 dai totali delle spese qui sotto.
                             </p>
                         )}
+                        {catalog === 'projects' && (
+                            <p className="mt-4 text-sm text-muted-foreground">
+                                Gli importi allocati ed effettivi del progetto
+                                sono la somma delle spese collegate.
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
                 <div>
-                    <h2 className="mb-3 font-semibold">
-                        Totali delle spese collegate · tutti gli anni
-                    </h2>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <h2 className="font-semibold">
+                            Totali delle spese collegate ·{' '}
+                            {year ?? 'tutti gli anni'}
+                        </h2>
+                        {catalog === 'projects' && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Label htmlFor="project-expense-year">
+                                    Anno di imputazione
+                                </Label>
+                                <Select
+                                    value={year === null ? 'all' : String(year)}
+                                    disabled={tableBusy}
+                                    onValueChange={(value) => {
+                                        router.get(
+                                            `${path}/${record.id}`,
+                                            value === 'all'
+                                                ? {}
+                                                : { year: Number(value) },
+                                            {
+                                                preserveState: true,
+                                                preserveScroll: true,
+                                            },
+                                        );
+                                    }}
+                                >
+                                    <SelectTrigger
+                                        id="project-expense-year"
+                                        className="w-40"
+                                    >
+                                        <SelectValue>
+                                            {year ?? 'Tutti gli anni'}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">
+                                            Tutti gli anni
+                                        </SelectItem>
+                                        {years.map((value) => (
+                                            <SelectItem
+                                                key={value}
+                                                value={String(value)}
+                                            >
+                                                {value}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
                     <Summary totals={totals} />
                 </div>
                 <section

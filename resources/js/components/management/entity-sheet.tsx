@@ -85,12 +85,6 @@ const fields: Record<Kind, Field[]> = {
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
         { key: 'contract_id', label: 'Contratto', catalog: 'contracts' },
         { key: 'project_id', label: 'Progetto', catalog: 'projects' },
-        { key: 'due_on', label: 'Scadenza', type: 'date' },
-        {
-            key: 'actual_on',
-            label: 'Data di rilevazione effettivo',
-            type: 'date',
-        },
         { key: 'notes', label: 'Note', type: 'textarea' },
     ],
 };

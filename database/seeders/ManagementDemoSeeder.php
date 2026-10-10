@@ -66,8 +66,6 @@ class ManagementDemoSeeder extends Seeder
                         },
                         'allocated_amount' => $allocated === null ? null : (string) ($allocated + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
                         'actual_amount' => $actual === null ? null : (string) ($actual + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
-                        'due_on' => $year.'-'.str_pad((string) ($i % 12 + 1), 2, '0', STR_PAD_LEFT).'-20',
-                        'actual_on' => $actual === null ? null : $year.'-'.str_pad((string) ($i % 12 + 1), 2, '0', STR_PAD_LEFT).'-18',
                         'notes' => $year === 2026 && $vendorIndex === 1 ? 'Costo imputato manualmente al 2026; contratto stipulato nel dicembre 2025.' : 'Dato fittizio; importi inseriti manualmente.',
                     ]);
                 }

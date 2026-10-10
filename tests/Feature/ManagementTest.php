@@ -58,9 +58,9 @@ class ManagementTest extends TestCase
         $contract = $this->tenant->contracts()->create(['name' => 'Contratto', 'vendor_id' => $otherVendor->id, 'starts_on' => '2025-01-01', 'reference_amount' => '99999.99']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $this->postJson('/t/alfa/expenses', [])->assertUnprocessable()->assertJsonValidationErrors(['title', 'year']);
-        $response = $this->postJson('/t/alfa/expenses', ['title' => 'Costo', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '0', 'actual_amount' => null, 'actual_on' => '2025-12-31'])->assertCreated();
+        $response = $this->postJson('/t/alfa/expenses', ['title' => 'Costo', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '0', 'actual_amount' => null])->assertCreated();
         $id = $response->json('record.id');
-        $response->assertJsonPath('record.variance', null)->assertJsonPath('record.year', 2026);
+        $response->assertJsonPath('record.variance', null)->assertJsonPath('record.year', 2026)->assertJsonMissingPath('record.due_on')->assertJsonMissingPath('record.actual_on');
         $this->patchJson('/t/alfa/expenses/'.$id, ['actual_amount' => '10.01'])->assertOk()->assertJsonPath('record.variance', '10.01')->assertJsonPath('record.vendor_id', $vendor->id)->assertJsonPath('record.year', 2026);
         $expense = Expense::findOrFail($id);
         $this->assertTrue($expense->vendor->is($vendor));
@@ -157,7 +157,7 @@ class ManagementTest extends TestCase
         $own = $this->tenant->expenses()->create(['title' => 'Own', 'year' => 2026]);
         $foreign = $this->other->expenses()->create(['title' => 'Foreign', 'year' => 2026]);
         $vendor = $this->other->vendors()->create(['name' => 'Foreign']);
-        foreach ([['id' => $foreign->id, 'title' => 'No'], ['id' => $own->id, 'vendor_id' => $vendor->id], ['id' => $own->id, 'tenant_id' => $this->other->id], ['id' => $own->id, 'unexpected' => 'value']] as $update) {
+        foreach ([['id' => $foreign->id, 'title' => 'No'], ['id' => $own->id, 'vendor_id' => $vendor->id], ['id' => $own->id, 'tenant_id' => $this->other->id], ['id' => $own->id, 'unexpected' => 'value'], ['id' => $own->id, 'due_on' => '2026-10-10'], ['id' => $own->id, 'actual_on' => '2026-10-10']] as $update) {
             $this->patchJson('/t/alfa/expenses/batch', ['updates' => [$update]])->assertUnprocessable();
         }
         $this->assertSame('Foreign', $foreign->refresh()->title);
@@ -229,11 +229,11 @@ class ManagementTest extends TestCase
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Vendor']);
         for ($i = 0; $i < 51; $i++) {
-            $this->tenant->expenses()->create(['title' => sprintf('Cost %02d', $i), 'year' => 2026, 'vendor_id' => $vendor->id, 'allocated_amount' => (string) $i, 'actual_amount' => (string) (50 - $i), 'due_on' => now()->addDays($i)->toDateString()]);
+            $this->tenant->expenses()->create(['title' => sprintf('Cost %02d', $i), 'year' => 2026, 'vendor_id' => $vendor->id, 'allocated_amount' => (string) $i, 'actual_amount' => (string) (50 - $i)]);
         }
         $this->tenant->expenses()->create(['title' => 'Excluded year', 'year' => 2025, 'vendor_id' => $vendor->id]);
         $this->tenant->expenses()->create(['title' => 'Excluded vendor', 'year' => 2026]);
-        foreach (['title', 'allocated_amount', 'due_on'] as $sort) {
+        foreach (['title', 'allocated_amount'] as $sort) {
             $this->get('/t/alfa/expenses?year=2026&vendor_id='.$vendor->id.'&search=Cost&sort='.$sort.'&direction=desc')->assertInertia(fn (Assert $page) => $page
                 ->where('expenses.total', 51)->where('expenses.data.0.title', 'Cost 50')->where('filters.sort', $sort)
                 ->where('filters.direction', 'desc')->where('totals.count', 51));
@@ -241,6 +241,7 @@ class ManagementTest extends TestCase
         $this->get('/t/alfa/expenses?year=2026&vendor_id='.$vendor->id.'&search=Cost&sort=actual_amount&direction=desc&page=2')->assertInertia(fn (Assert $page) => $page
             ->has('expenses.data', 1)->where('expenses.data.0.title', 'Cost 50')->where('expenses.current_page', 2)->where('totals.count', 51));
         $this->get('/t/alfa/expenses?year=2026&sort=variance&direction=invalid')->assertInertia(fn (Assert $page) => $page->where('filters.sort', 'title')->where('filters.direction', 'asc'));
+        $this->get('/t/alfa/expenses?year=2026&sort=due_on&direction=desc')->assertInertia(fn (Assert $page) => $page->where('filters.sort', 'title')->where('filters.direction', 'desc'));
     }
 
     public function test_large_amounts_and_decimal_validation(): void
@@ -259,6 +260,38 @@ class ManagementTest extends TestCase
             $this->tenant->expenses()->create(['title' => 'Year '.$year, 'year' => $year, 'project_id' => $project->id, 'allocated_amount' => '10', 'actual_amount' => '9']);
         }
         $this->get('/t/alfa/projects/'.$project->id)->assertInertia(fn (Assert $page) => $page->has('expenses.data', 2)->where('totals.allocated', '20.00')->where('totals.actual', '18.00')->where('totals.variance', '-2.00'));
+    }
+
+    public function test_project_year_filter_updates_expenses_and_totals_across_pages(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Budget', 'status' => 'attivo']);
+        for ($i = 0; $i < 26; $i++) {
+            $this->tenant->expenses()->create(['title' => 'Costo '.$i, 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => '10.10', 'actual_amount' => '9']);
+        }
+        $this->tenant->expenses()->create(['title' => 'Anno precedente', 'year' => 2025, 'project_id' => $project->id, 'allocated_amount' => '20', 'actual_amount' => '30']);
+        $this->tenant->expenses()->create(['title' => 'Da completare', 'year' => 2025, 'project_id' => $project->id, 'allocated_amount' => '0', 'actual_amount' => null]);
+        $this->tenant->expenses()->create(['title' => 'Non collegata', 'year' => 2024, 'allocated_amount' => '999']);
+        $otherProject = $this->other->projects()->create(['name' => 'Altro ambiente', 'status' => 'attivo']);
+        $this->other->expenses()->create(['title' => 'Altro ambiente', 'year' => 2024, 'project_id' => $otherProject->id, 'allocated_amount' => '999']);
+        $path = '/t/alfa/projects/'.$project->id;
+
+        $this->get($path)->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('year', null)->where('years', [2026, 2025])->where('expenses.total', 28)
+            ->where('totals.allocated', '282.60')->where('totals.actual', '264.00')->where('totals.variance', '-18.60')->where('totals.incomplete', 1));
+        $response = $this->get($path.'?year=2026')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('year', 2026)->where('years', [2026, 2025])->has('expenses.data', 25)->where('expenses.total', 26)
+            ->where('totals.count', 26)->where('totals.allocated', '262.60')->where('totals.actual', '234.00')->where('totals.variance', '-28.60')->where('totals.incomplete', 0));
+        $this->get($response->inertiaProps('expenses.next_page_url'))->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('year', 2026)->has('expenses.data', 1)->where('expenses.data.0.year', 2026)->where('expenses.current_page', 2)
+            ->where('totals.count', 26)->where('totals.allocated', '262.60')->where('totals.actual', '234.00'));
+        $this->get($path.'?year=2025')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('year', 2025)->has('expenses.data', 2)->where('expenses.data.0.year', 2025)->where('expenses.data.1.year', 2025)
+            ->where('totals.count', 2)->where('totals.allocated', '20.00')->where('totals.actual', '30.00')->where('totals.variance', '10.00')->where('totals.incomplete', 1));
+        $this->get($path.'?year=2024')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('years', [2026, 2025])->has('expenses.data', 0)->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00'));
+        foreach (['invalid', '1999', '2101', '2026.5'] as $year) {
+            $this->getJson($path.'?year='.$year)->assertUnprocessable()->assertJsonValidationErrors('year');
+        }
     }
 
     public function test_batch_rolls_back_when_a_later_update_fails(): void

@@ -209,7 +209,6 @@ export function ExpenseWorkspace({
                                         ['title', 'Descrizione'],
                                         ['allocated_amount', 'Allocato'],
                                         ['actual_amount', 'Effettivo'],
-                                        ['due_on', 'Scadenza'],
                                         ['updated_at', 'Ultima modifica'],
                                     ].flatMap(([field, label]) =>
                                         ['asc', 'desc'].map((direction) => (

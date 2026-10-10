@@ -27,8 +27,6 @@ export type RecordData = {
     variance?: string | null;
     starts_on?: string | null;
     ends_on?: string | null;
-    due_on?: string | null;
-    actual_on?: string | null;
     expenses_count?: number;
 };
 export type Expense = RecordData & { title: string; year: number };

@@ -76,12 +76,24 @@ class CatalogController extends Controller
             $item->load('vendor:id,name');
         }
         $expenses = $item->expenses()->getQuery();
+        $year = null;
+        $years = [];
+        if ($item instanceof Project) {
+            $data = $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
+            $year = isset($data['year']) ? (int) $data['year'] : null;
+            $years = (clone $expenses)->select('year')->distinct()->orderByDesc('year')->pluck('year')->all();
+            if ($year !== null) {
+                $expenses->where('year', $year);
+            }
+        }
 
         return Inertia::render('tenants/catalog-detail', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
             'catalog' => $catalog,
             'record' => $item,
             'options' => ExpenseOverview::options($tenant),
+            'year' => $year,
+            'years' => $years,
             'totals' => ExpenseOverview::totals($expenses),
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,

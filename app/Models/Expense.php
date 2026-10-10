@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $allocated_amount
  * @property string|null $actual_amount
  */
-#[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'due_on', 'actual_on', 'notes'])]
+#[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'notes'])]
 class Expense extends Model
 {
     /** @return BelongsTo<Tenant, $this> */
@@ -48,8 +48,6 @@ class Expense extends Model
             'year' => 'integer',
             'allocated_amount' => 'decimal:2',
             'actual_amount' => 'decimal:2',
-            'due_on' => 'date:Y-m-d',
-            'actual_on' => 'date:Y-m-d',
         ];
     }
 

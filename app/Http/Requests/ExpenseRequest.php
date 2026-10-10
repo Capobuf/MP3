@@ -34,8 +34,6 @@ class ExpenseRequest extends FormRequest
             'year' => [...$required, 'integer', 'between:2000,2100'],
             'allocated_amount' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
             'actual_amount' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
-            'due_on' => ['nullable', 'date_format:Y-m-d'],
-            'actual_on' => ['nullable', 'date_format:Y-m-d'],
             'notes' => ['nullable', 'string', 'max:10000'],
         ];
         foreach (['vendor' => 'vendors', 'contract' => 'contracts', 'project' => 'projects'] as $field => $table) {

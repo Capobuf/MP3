@@ -30,7 +30,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { api, dateLabel, decimalInput, money } from './helpers';
+import { api, decimalInput, money } from './helpers';
 import type { Expense, Filters } from './types';
 
 type AmountField = 'allocated_amount' | 'actual_amount';
@@ -415,14 +415,6 @@ export function ExpenseTable({
                         <TableHead className="hidden w-36 text-right text-xs text-muted-foreground lg:table-cell">
                             Scostamento
                         </TableHead>
-                        <TableHead
-                            aria-sort={
-                                onSort ? sortDirection('due_on') : undefined
-                            }
-                            className="hidden w-28 text-xs text-muted-foreground lg:table-cell"
-                        >
-                            {heading('Scadenza', 'due_on')}
-                        </TableHead>
                         <TableHead className="w-10">
                             <span className="sr-only">Azioni</span>
                         </TableHead>
@@ -432,7 +424,7 @@ export function ExpenseTable({
                     {!rows.length && (
                         <TableRow className="block lg:table-row">
                             <TableCell
-                                colSpan={7}
+                                colSpan={6}
                                 className="block py-10 text-center whitespace-normal text-muted-foreground lg:table-cell"
                             >
                                 Nessuna spesa in questo perimetro. Aggiungi una
@@ -507,12 +499,6 @@ export function ExpenseTable({
                                         ? 'Non determinabile'
                                         : money(expense.variance)}
                                 </span>
-                            </TableCell>
-                            <TableCell
-                                className={`${amountCell} text-xs text-muted-foreground lg:text-left`}
-                            >
-                                <span className="lg:hidden">Scadenza</span>
-                                {dateLabel(expense.due_on)}
                             </TableCell>
                             <TableCell className="col-start-3 row-start-1 px-0 text-right lg:px-2">
                                 <DropdownMenu>
