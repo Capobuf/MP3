@@ -6,13 +6,40 @@ use App\Models\Expense;
 use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 final class ExpenseOverview
 {
+    /**
+     * One economic row per expense and attribution year, retaining legacy expenses without dated lines.
+     *
+     * @return Builder<Expense>
+     */
+    public static function economicQuery(Tenant $tenant): Builder
+    {
+        $fields = array_diff(['id', 'tenant_id', ...(new Expense)->getFillable(), 'created_at', 'updated_at'], ['year', 'allocated_amount', 'actual_amount']);
+        $columns = array_map(fn ($field) => 'expenses.'.$field, $fields);
+        $legacy = DB::table('expenses')->where('tenant_id', $tenant->id)->select($columns)->addSelect('year', 'allocated_amount', 'actual_amount')
+            ->whereNotExists(fn ($query) => $query->selectRaw('1')->from('expense_lines')->whereColumn('expense_id', 'expenses.id')->whereNotNull('expense_lines.year'));
+        $amounts = DB::table('expense_lines')->join('expenses', 'expenses.id', '=', 'expense_lines.expense_id')->where('expenses.tenant_id', $tenant->id)
+            ->whereExists(fn ($query) => $query->selectRaw('1')->from('expense_lines as dated')->whereColumn('dated.expense_id', 'expenses.id')->whereNotNull('dated.year'))
+            ->selectRaw("expense_id, COALESCE(expense_lines.year, expenses.year) as year,
+                SUM(CASE WHEN type = 'allocated' THEN total END) as allocated_amount,
+                SUM(CASE WHEN type = 'actual' THEN total END) as actual_amount")
+            ->groupBy('expense_id')->groupByRaw('COALESCE(expense_lines.year, expenses.year)');
+        $detailed = DB::table('expenses')->joinSub($amounts, 'amounts', 'amounts.expense_id', '=', 'expenses.id')->select($columns)->addSelect('amounts.year');
+        foreach (['allocated', 'actual'] as $type) {
+            $field = $type.'_amount';
+            $detailed->selectRaw("CASE WHEN expenses.contract_id IS NULL AND expenses.$field IS NOT NULL THEN COALESCE(amounts.$field, 0) ELSE amounts.$field END as $field");
+        }
+
+        return Expense::query()->fromSub($legacy->unionAll($detailed), 'expenses');
+    }
+
     /** @return Builder<Expense> */
     public static function query(Tenant $tenant, Request $request, bool $withYear = true): Builder
     {
-        $query = $tenant->expenses()->getQuery();
+        $query = self::economicQuery($tenant);
         if ($withYear) {
             $query->where('year', $request->integer('year', (int) now()->format('Y')));
         }
@@ -92,7 +119,7 @@ final class ExpenseOverview
             'expenses' => (clone $query)->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderBy($sort, $direction)->orderBy('id')->paginate(50)->withQueryString(),
             'totals' => $totals ?? self::totals($query),
             'filters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $request->integer('year', (int) now()->format('Y')), 'sort' => $sort, 'direction' => $direction],
-            'years' => $tenant->expenses()->select('year')->distinct()->orderByDesc('year')->pluck('year')->push((int) now()->format('Y'), $request->integer('year', (int) now()->format('Y')))->unique()->values(),
+            'years' => self::economicQuery($tenant)->select('year')->distinct()->orderByDesc('year')->pluck('year')->push((int) now()->format('Y'), $request->integer('year', (int) now()->format('Y')))->unique()->values(),
             'options' => self::options($tenant),
         ];
     }

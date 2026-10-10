@@ -51,6 +51,198 @@ class ManagementTest extends TestCase
         }
     }
 
+    public function test_creation_pages_use_tenant_options_and_validate_the_creation_context(): void
+    {
+        foreach (['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'] as $kind) {
+            $this->get('/t/alfa/'.$kind.'/create?year=2026')->assertInertia(fn (Assert $page) => $page
+                ->component('tenants/create')->where('kind', $kind)->where('tenant.slug', 'alfa')
+                ->where('year', 2026)->where('contractContext', null)->where('parentId', null));
+        }
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro Alfa']);
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto Alfa']);
+        $contract->costCenters()->attach($center);
+        $this->get('/t/alfa/expenses/create?contract_id='.$contract->id)->assertInertia(fn (Assert $page) => $page
+            ->where('contractContext.id', $contract->id)->where('contractContext.cost_centers.0.id', $center->id)
+            ->where('contractContext.has_period_expenses', false));
+        $this->get('/t/alfa/cost-centers/create?parent_id='.$center->id)->assertInertia(fn (Assert $page) => $page
+            ->where('parentId', $center->id));
+        $foreign = $this->other->contracts()->create(['name' => 'Contratto Beta']);
+        $this->getJson('/t/alfa/expenses/create?contract_id='.$foreign->id)->assertUnprocessable()->assertJsonValidationErrors('contract_id');
+        $this->getJson('/t/alfa/projects/create?year=1999')->assertUnprocessable()->assertJsonValidationErrors('year');
+        $this->actingAs(User::factory()->create())->get('/t/alfa/contracts/create')->assertForbidden();
+    }
+
+    public function test_edit_pages_load_the_tenant_record_and_its_relations(): void
+    {
+        foreach (['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'] as $kind) {
+            $relation = $kind === 'cost-centers' ? 'costCenters' : $kind;
+            $data = $kind === 'expenses' ? ['title' => 'Spesa Alfa', 'year' => 2027] : ['name' => 'Elemento Alfa'];
+            $item = $this->tenant->{$relation}()->create($data);
+            $this->get('/t/alfa/'.$kind.'/'.$item->id.'/edit')->assertInertia(fn (Assert $page) => $page
+                ->component('tenants/create')->where('kind', $kind)->where('record.id', $item->id));
+            $this->get('/t/beta/'.$kind.'/'.$item->id.'/edit')->assertNotFound();
+        }
+        $contract = $this->tenant->contracts()->firstOrFail();
+        $expense = $this->tenant->expenses()->create(['title' => 'Spesa collegata', 'year' => 2027, 'contract_id' => $contract->id]);
+        $this->get('/t/alfa/expenses/'.$expense->id.'/edit?contract_id='.$contract->id)->assertInertia(fn (Assert $page) => $page
+            ->where('record.contract.id', $contract->id)->where('contractContext.id', $contract->id)->where('year', 2027));
+        $otherContract = $this->tenant->contracts()->create(['name' => 'Altro contratto']);
+        $this->get('/t/alfa/expenses/'.$expense->id.'/edit?contract_id='.$otherContract->id)->assertNotFound();
+        $this->actingAs(User::factory()->create())->get('/t/alfa/expenses/'.$expense->id.'/edit')->assertForbidden();
+    }
+
+    /** @return array<string, mixed> */
+    private function initialExpense(): array
+    {
+        return ['title' => 'Prima spesa', 'year' => 2027, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2027-12-31',
+            'lines' => [
+                ['description' => 'Licenze', 'type' => 'allocated', 'unit_price' => '100', 'quantity' => '5'],
+                ['description' => 'Assistenza', 'type' => 'actual', 'unit_price' => '280', 'quantity' => '1'],
+            ]];
+    }
+
+    public function test_contract_creation_can_save_the_first_expense_with_shared_relations_and_totals(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $response = $this->postJson('/t/alfa/contracts', ['name' => 'Nuovo contratto', 'vendor_id' => $vendor->id,
+            'starts_on' => '2026-01-01', 'ends_on' => '2027-12-31', 'cost_center_ids' => [$center->id],
+            'initial_expense' => $this->initialExpense(),
+        ])->assertCreated();
+        $expense = $this->tenant->expenses()->with(['lines', 'costCenters'])->sole();
+        $this->assertSame($response->json('record.id'), $expense->contract_id);
+        $this->assertSame($vendor->id, $expense->vendor_id);
+        $this->assertSame([$center->id], $expense->costCenters->modelKeys());
+        $this->assertSame('500.00', $expense->allocated_amount);
+        $this->assertSame('280.00', $expense->actual_amount);
+        $this->assertCount(2, $expense->lines);
+        $this->get('/t/alfa/contracts/'.$expense->contract_id)->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '500.00')->where('totals.actual', '280.00')->has('expenses.data.0.lines', 2)
+            ->where('expenses.data.0.year', 2027)->where('record.has_period_expenses', true));
+        $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '500.00')->where('totals.actual', '280.00'));
+        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0));
+    }
+
+    public function test_contract_initial_expense_reuses_zero_and_missing_type_semantics(): void
+    {
+        foreach (['allocated', 'actual'] as $type) {
+            $data = $this->initialExpense();
+            $data['lines'] = [['description' => 'Zero valido', 'type' => $type, 'unit_price' => '0', 'quantity' => '1']];
+            $response = $this->postJson('/t/alfa/contracts', ['name' => 'Contratto '.$type, 'initial_expense' => $data])->assertCreated();
+            $expense = $this->tenant->expenses()->where('contract_id', $response->json('record.id'))->sole();
+            $this->assertSame($type === 'allocated' ? '0.00' : null, $expense->allocated_amount);
+            $this->assertSame($type === 'actual' ? '0.00' : null, $expense->actual_amount);
+            $this->assertNull($expense->variance);
+        }
+    }
+
+    public function test_conditions_have_independent_periods_and_attribution_years_in_every_summary(): void
+    {
+        $initial = $this->initialExpense();
+        $initial['lines'][0] += ['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31', 'year' => 2026];
+        $initial['lines'][1] += ['period_starts_on' => '2026-06-05', 'period_ends_on' => '2027-02-18', 'year' => 2027];
+        $response = $this->postJson('/t/alfa/contracts', ['name' => 'Condizioni', 'initial_expense' => $initial])->assertCreated();
+        $expense = $this->tenant->expenses()->with('lines')->sole();
+        $this->assertSame([2026, 2027], $expense->lines->pluck('year')->all());
+        $this->assertSame('2026-01-01', $expense->period_starts_on->toDateString());
+        $this->assertSame('2027-02-18', $expense->period_ends_on->toDateString());
+        foreach ([2026 => ['500.00', '0.00'], 2027 => ['0.00', '280.00']] as $year => [$allocated, $actual]) {
+            foreach (['dashboard', 'expenses'] as $path) {
+                $this->get('/t/alfa/'.$path.'?year='.$year)->assertInertia(fn (Assert $page) => $page
+                    ->where('totals.allocated', $allocated)->where('totals.actual', $actual)->where('totals.count', 1)
+                    ->has('expenses.data', 1)->where('expenses.data.0.year', $year)->has('expenses.data.0.lines', 2));
+            }
+        }
+        $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page
+            ->where('analytics.current.actual', '280.00')->where('analytics.current.allocated', null)
+            ->where('analytics.previous.allocated', '500.00')->where('analytics.previous.actual', null));
+        $this->get('/t/alfa/contracts/'.$response->json('record.id'))->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '500.00')->where('totals.actual', '280.00')->has('expenses.data', 1));
+        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
+        $expense->update(['project_id' => $project->id]);
+        $this->get('/t/alfa/projects/'.$project->id.'?year=2027')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '0.00')->where('totals.actual', '280.00')->where('years', [2027, 2026]));
+        $initial['lines'][1]['year'] = 2026;
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['lines' => $initial['lines']])->assertOk();
+        $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0));
+        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '500.00')->where('totals.actual', '280.00'));
+    }
+
+    public function test_invalid_condition_dates_and_years_roll_back_contract_creation(): void
+    {
+        $base = ['description' => 'Condizione', 'type' => 'allocated', 'unit_price' => '0', 'quantity' => '1',
+            'period_starts_on' => '2026-06-05', 'period_ends_on' => '2027-02-18', 'year' => 2027];
+        foreach ([
+            [['period_starts_on' => null], 'period_starts_on'],
+            [['period_ends_on' => null], 'period_ends_on'],
+            [['period_ends_on' => '2026-01-01'], 'period_ends_on'],
+            [['period_starts_on' => 'not-a-date'], 'period_starts_on'],
+            [['year' => 2025], 'year'],
+            [['year' => 2101], 'year'],
+            [['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31', 'year' => 2027], 'year'],
+        ] as [$invalid, $error]) {
+            $this->postJson('/t/alfa/contracts', ['name' => 'Non salvare', 'initial_expense' => [
+                'title' => 'Non salvare', 'year' => 2026, 'lines' => [[...$base, ...$invalid]],
+            ]])->assertUnprocessable()->assertJsonValidationErrors('initial_expense.lines.0.'.$error);
+            $this->assertDatabaseCount('contracts', 0);
+            $this->assertDatabaseCount('expenses', 0);
+            $this->assertDatabaseCount('expense_lines', 0);
+        }
+    }
+
+    public function test_metadata_edits_preserve_conditions_whose_year_is_between_the_container_years(): void
+    {
+        $data = $this->initialExpense();
+        $data['lines'][0] += ['period_starts_on' => '2026-06-05', 'period_ends_on' => '2027-02-18', 'year' => 2027];
+        $data['lines'][1] += ['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31', 'year' => 2026];
+        $data['lines'][] = ['description' => 'Futura', 'type' => 'allocated', 'unit_price' => '0', 'period_starts_on' => '2028-01-01', 'period_ends_on' => '2028-12-31', 'year' => 2028];
+        $this->postJson('/t/alfa/contracts', ['name' => 'Condizioni', 'initial_expense' => $data])->assertCreated();
+        $expense = $this->tenant->expenses()->with('lines')->sole();
+        $lines = $expense->lines->toArray();
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['title' => 'Titolo aggiornato', 'notes' => 'Nota'])->assertOk();
+        $this->assertSame($lines, $expense->fresh()->lines->toArray());
+        $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page->where('totals.allocated', '500.00'));
+    }
+
+    public function test_invalid_initial_expenses_do_not_leave_contracts_or_lines_behind(): void
+    {
+        $valid = $this->initialExpense();
+        foreach ([
+            [[], 'initial_expense.title'],
+            [array_diff_key($valid, ['lines' => true]), 'initial_expense.lines'],
+            [[...$valid, 'lines' => []], 'initial_expense.lines'],
+            [[...$valid, 'lines' => [['description' => '', 'type' => 'allocated', 'unit_price' => '100']]], 'initial_expense.lines.0.description'],
+            [[...$valid, 'lines' => [['description' => 'Overflow', 'type' => 'allocated', 'unit_price' => '999999999999.99', 'quantity' => '2']]], 'initial_expense.lines.0.unit_price'],
+            [[...$valid, 'year' => 2025], 'initial_expense.year'],
+            [[...$valid, 'period_ends_on' => null], 'initial_expense.period_ends_on'],
+            [[...$valid, 'contract_id' => 999], 'initial_expense'],
+        ] as [$data, $error]) {
+            $this->postJson('/t/alfa/contracts', ['name' => 'Non salvare', 'initial_expense' => $data])
+                ->assertUnprocessable()->assertJsonValidationErrors($error);
+            $this->assertDatabaseCount('contracts', 0);
+            $this->assertDatabaseCount('expenses', 0);
+            $this->assertDatabaseCount('expense_lines', 0);
+        }
+    }
+
+    public function test_initial_expense_cannot_link_foreign_relations_or_create_expenses_on_updates(): void
+    {
+        $vendor = $this->other->vendors()->create(['name' => 'Esterno']);
+        $center = $this->other->costCenters()->create(['name' => 'Esterno']);
+        foreach ([['vendor_id' => $vendor->id], ['cost_center_ids' => [$center->id]]] as $foreign) {
+            $this->postJson('/t/alfa/contracts', ['name' => 'Non salvare', 'initial_expense' => $this->initialExpense(), ...$foreign])->assertUnprocessable();
+        }
+        $contract = $this->tenant->contracts()->create(['name' => 'Esistente', 'reference_amount' => '123']);
+        $this->patchJson('/t/alfa/contracts/'.$contract->id, ['name' => 'Non salvare', 'initial_expense' => $this->initialExpense()])
+            ->assertUnprocessable()->assertJsonValidationErrors('initial_expense');
+        $this->assertSame('Esistente', $contract->refresh()->name);
+        $this->patchJson('/t/alfa/contracts/'.$contract->id, ['name' => 'Aggiornato'])->assertOk();
+        $this->assertSame('123.00', $contract->refresh()->reference_amount);
+        $this->assertDatabaseCount('expenses', 0);
+    }
+
     public function test_expense_crud_keeps_year_vendor_and_money_independent(): void
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Scelto']);

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['description', 'type', 'unit_price', 'quantity', 'total', 'position'])]
+#[Fillable(['description', 'type', 'unit_price', 'quantity', 'total', 'position', 'period_starts_on', 'period_ends_on', 'year'])]
 class ExpenseLine extends Model
 {
     /** @return BelongsTo<Expense, $this> */
@@ -18,6 +18,6 @@ class ExpenseLine extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['unit_price' => 'decimal:2', 'quantity' => 'decimal:4', 'total' => 'decimal:2', 'position' => 'integer'];
+        return ['unit_price' => 'decimal:2', 'quantity' => 'decimal:4', 'total' => 'decimal:2', 'position' => 'integer', 'period_starts_on' => 'date:Y-m-d', 'period_ends_on' => 'date:Y-m-d', 'year' => 'integer'];
     }
 }

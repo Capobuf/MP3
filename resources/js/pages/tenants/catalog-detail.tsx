@@ -3,9 +3,8 @@ import { useState } from 'react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
-import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseTable } from '@/components/management/expense-table';
-import { dateLabel, money } from '@/components/management/helpers';
+import { dateLabel } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import { Summary } from '@/components/management/summary';
 import { labels } from '@/components/management/types';
@@ -35,7 +34,6 @@ export default function CatalogDetail({
     tenant,
     catalog,
     record,
-    options,
     expenses,
     totals,
     contracts,
@@ -52,9 +50,6 @@ export default function CatalogDetail({
     year: number | null;
     years: number[];
 }) {
-    const [edit, setEdit] = useState(false);
-    const [expense, setExpense] = useState<Expense | null>(null);
-    const [addingExpense, setAddingExpense] = useState(false);
     const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/${catalog}`;
     const info =
@@ -67,14 +62,7 @@ export default function CatalogDetail({
             : [
                   ['Data iniziale', dateLabel(record.starts_on)],
                   ['Data finale', dateLabel(record.ends_on)],
-                  ...(catalog === 'contracts'
-                      ? [
-                            [
-                                'Importo contrattuale informativo',
-                                money(record.reference_amount),
-                            ],
-                        ]
-                      : [['Stato', record.status]]),
+                  ...(catalog === 'projects' ? [['Stato', record.status]] : []),
               ];
     return (
         <>
@@ -95,7 +83,9 @@ export default function CatalogDetail({
                     <div className="flex shrink-0 flex-wrap gap-2">
                         <Button
                             disabled={tableBusy}
-                            onClick={() => setEdit(true)}
+                            onClick={() =>
+                                router.visit(`${path}/${record.id}/edit`)
+                            }
                         >
                             Modifica
                         </Button>
@@ -115,9 +105,7 @@ export default function CatalogDetail({
                                     <dt className="text-sm text-muted-foreground">
                                         {label}
                                     </dt>
-                                    <dd
-                                        className={`mt-1 font-medium ${label === 'Importo contrattuale informativo' ? 'text-base tracking-normal tabular-nums' : 'text-sm'}`}
-                                    >
+                                    <dd className="mt-1 text-sm font-medium">
                                         {value ?? '—'}
                                     </dd>
                                 </div>
@@ -160,12 +148,6 @@ export default function CatalogDetail({
                                     <p className="text-sm">Nessuno</p>
                                 )}
                             </div>
-                        )}
-                        {catalog === 'contracts' && (
-                            <p className="mt-4 text-sm text-muted-foreground">
-                                L’importo del contratto è informativo e distinto
-                                dai totali delle spese qui sotto.
-                            </p>
                         )}
                         {catalog === 'projects' && (
                             <p className="mt-4 text-sm text-muted-foreground">
@@ -248,7 +230,11 @@ export default function CatalogDetail({
                         {catalog === 'contracts' && (
                             <Button
                                 disabled={tableBusy}
-                                onClick={() => setAddingExpense(true)}
+                                onClick={() =>
+                                    router.visit(
+                                        `/t/${tenant.slug}/expenses/create?contract_id=${record.id}`,
+                                    )
+                                }
                             >
                                 Aggiungi spesa
                             </Button>
@@ -259,7 +245,11 @@ export default function CatalogDetail({
                         slug={tenant.slug}
                         showYear
                         contractMode={catalog === 'contracts'}
-                        onEdit={setExpense}
+                        onEdit={(expense) =>
+                            router.visit(
+                                `/t/${tenant.slug}/expenses/${expense.id}/edit${catalog === 'contracts' ? `?contract_id=${record.id}` : ''}`,
+                            )
+                        }
                         onBusyChange={setTableBusy}
                     />
                     <div
@@ -305,39 +295,6 @@ export default function CatalogDetail({
                     </Card>
                 )}
             </div>
-            {edit && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind={catalog}
-                    record={record}
-                    options={options}
-                    onClose={() => setEdit(false)}
-                    onSaved={() => {
-                        setEdit(false);
-                        router.reload();
-                    }}
-                />
-            )}
-            {(expense || addingExpense) && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind="expenses"
-                    record={expense ?? undefined}
-                    contractContext={
-                        catalog === 'contracts' ? record : undefined
-                    }
-                    options={options}
-                    onClose={() => {
-                        setExpense(null);
-                        setAddingExpense(false);
-                    }}
-                    onSaved={() => {
-                        setExpense(null);
-                        setAddingExpense(false);
-                        router.reload();
-                    }}
-                />
-            )}
         </>
     );
 }

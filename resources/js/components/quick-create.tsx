@@ -8,16 +8,8 @@ import {
     Receipt,
     Tags,
 } from 'lucide-react';
-import { lazy, Suspense, useState } from 'react';
-import { toast } from 'sonner';
-import { api, matchesExpenseFilters } from '@/components/management/helpers';
-import type {
-    Expense,
-    Filters,
-    Kind,
-    Options,
-    RecordData,
-} from '@/components/management/types';
+import { useState } from 'react';
+import type { Expense, Filters, Kind } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -27,17 +19,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
-
-const EntitySheet = lazy(() =>
-    import('@/components/management/entity-sheet').then((module) => ({
-        default: module.EntitySheet,
-    })),
-);
-const CostCenterSheet = lazy(() =>
-    import('@/components/management/cost-center-sheet').then((module) => ({
-        default: module.CostCenterSheet,
-    })),
-);
 
 type CreationKind = Kind | 'cost-centers';
 const items = [
@@ -60,44 +41,15 @@ export function QuickCreate() {
         year?: number | null;
     }>().props;
     const [loading, setLoading] = useState(false);
-    const [sheet, setSheet] = useState<{
-        kind: CreationKind;
-        options: Options;
-    } | null>(null);
     const year =
         filters?.year ?? expense?.year ?? pageYear ?? new Date().getFullYear();
 
-    async function create(kind: CreationKind) {
+    function create(kind: CreationKind) {
         if (!tenant || loading) return;
-        setLoading(true);
-        try {
-            const { options } = await api<{ options: Options }>(
-                `/t/${tenant.slug}/creation-options`,
-            );
-            setSheet({ kind, options });
-        } catch (error) {
-            toast.error(
-                error instanceof Error
-                    ? error.message
-                    : 'Impossibile aprire il modulo. Riprova.',
-            );
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    function saved(record: RecordData) {
-        if (
-            sheet?.kind === 'expenses' &&
-            filters?.year !== undefined &&
-            !matchesExpenseFilters(record, filters)
-        ) {
-            toast.info(
-                'Spesa salvata. Non compare nella lista perché non corrisponde ai filtri correnti.',
-            );
-        }
-        setSheet(null);
-        router.reload();
+        router.visit(`/t/${tenant.slug}/${kind}/create?year=${year}`, {
+            onStart: () => setLoading(true),
+            onFinish: () => setLoading(false),
+        });
     }
 
     if (!tenant) return null;
@@ -126,7 +78,7 @@ export function QuickCreate() {
                         {items.map((item) => (
                             <DropdownMenuItem
                                 key={item.kind}
-                                onSelect={() => void create(item.kind)}
+                                onSelect={() => create(item.kind)}
                             >
                                 <item.icon aria-hidden="true" />
                                 {item.label}
@@ -135,30 +87,6 @@ export function QuickCreate() {
                     </DropdownMenuGroup>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <Suspense fallback={<Spinner aria-label="Caricamento modulo" />}>
-                {sheet?.kind === 'cost-centers' ? (
-                    <CostCenterSheet
-                        tenant={tenant}
-                        parents={sheet.options.cost_centers.filter(
-                            (center) => center.parent_id === null,
-                        )}
-                        onClose={() => setSheet(null)}
-                        onSaved={() => {
-                            setSheet(null);
-                            router.reload();
-                        }}
-                    />
-                ) : sheet ? (
-                    <EntitySheet
-                        tenant={tenant}
-                        kind={sheet.kind}
-                        year={year}
-                        options={sheet.options}
-                        onClose={() => setSheet(null)}
-                        onSaved={saved}
-                    />
-                ) : null}
-            </Suspense>
         </>
     );
 }

@@ -41,11 +41,14 @@ class ExpenseRequest extends FormRequest
             'cost_center_ids' => ['sometimes', 'array', 'list'],
             'cost_center_ids.*' => ['required', 'integer', 'distinct', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)],
             'lines' => ['sometimes', 'array', 'list', 'max:500'],
-            'lines.*' => ['required', 'array:description,type,unit_price,quantity'],
+            'lines.*' => ['required', 'array:description,type,unit_price,quantity,period_starts_on,period_ends_on,year'],
             'lines.*.description' => ['required', 'string', 'max:255'],
             'lines.*.type' => ['required', Rule::in(['allocated', 'actual'])],
             'lines.*.unit_price' => ['required', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
             'lines.*.quantity' => ['sometimes', 'required', 'numeric', 'gt:0', 'regex:/^\d{1,6}(\.\d{1,4})?$/'],
+            'lines.*.period_starts_on' => ['nullable', 'date_format:Y-m-d', 'required_with:lines.*.period_ends_on'],
+            'lines.*.period_ends_on' => ['nullable', 'date_format:Y-m-d', 'required_with:lines.*.period_starts_on', 'after_or_equal:lines.*.period_starts_on'],
+            'lines.*.year' => ['sometimes', 'required', 'integer', 'between:2000,2100'],
         ];
         foreach (['vendor' => 'vendors', 'contract' => 'contracts', 'project' => 'projects'] as $field => $table) {
             $rules[$field.'_id'] = ['nullable', 'integer', Rule::exists($table, 'id')->where('tenant_id', $tenant->id)];
@@ -64,6 +67,9 @@ class ExpenseRequest extends FormRequest
             'lines.*.quantity.regex' => 'Inserisci una quantità con massimo quattro decimali.',
             'lines.*.quantity.gt' => 'La quantità deve essere maggiore di zero.',
             'lines.max' => 'Una spesa può contenere al massimo 500 righe.',
+            'lines.*.period_starts_on.required_with' => 'Indica anche la data iniziale della condizione economica.',
+            'lines.*.period_ends_on.required_with' => 'Indica anche la data finale della condizione economica.',
+            'lines.*.period_ends_on.after_or_equal' => 'La data finale deve essere uguale o successiva alla data iniziale.',
             '*.exists' => 'Il collegamento selezionato non appartiene a questo ambiente.',
             '*.regex' => 'Inserisci un importo con al massimo due decimali (es. 1250.50).',
             'title.required' => 'Inserisci la descrizione della spesa.',

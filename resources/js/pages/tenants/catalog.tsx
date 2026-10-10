@@ -3,9 +3,8 @@ import { Plus, Ellipsis, Search } from 'lucide-react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
-import { EntitySheet } from '@/components/management/entity-sheet';
 import { applyFilters } from '@/components/management/expense-workspace';
-import { dateLabel, money } from '@/components/management/helpers';
+import { dateLabel } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import { RecordSelect } from '@/components/management/record-select';
 import { labels, singular } from '@/components/management/types';
@@ -70,7 +69,6 @@ export default function CatalogPage({
     filters: Filters;
     options: Options;
 }) {
-    const [sheet, setSheet] = useState<{ record?: RecordData } | null>(null);
     const [deleting, setDeleting] = useState<RecordData | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
     const path = `/t/${tenant.slug}/${catalog}`;
@@ -97,7 +95,7 @@ export default function CatalogPage({
                             }
                         </p>
                     </div>
-                    <Button onClick={() => setSheet({})}>
+                    <Button onClick={() => router.visit(`${path}/create`)}>
                         <Plus className="mr-2 size-4" />
                         Nuovo {singular[catalog]}
                     </Button>
@@ -275,7 +273,9 @@ export default function CatalogPage({
                                 <EmptyContent>
                                     <Button
                                         variant="outline"
-                                        onClick={() => setSheet({})}
+                                        onClick={() =>
+                                            router.visit(`${path}/create`)
+                                        }
                                     >
                                         Aggiungi {singular[catalog]}
                                     </Button>
@@ -293,11 +293,6 @@ export default function CatalogPage({
                                                   ? 'Fornitore / periodo'
                                                   : 'Stato / periodo'}
                                         </TableHead>
-                                        {catalog === 'contracts' && (
-                                            <TableHead className="text-right">
-                                                Riferimento informativo
-                                            </TableHead>
-                                        )}
                                         <TableHead className="text-right">
                                             Spese collegate
                                         </TableHead>
@@ -363,13 +358,6 @@ export default function CatalogPage({
                                                     </>
                                                 )}
                                             </TableCell>
-                                            {catalog === 'contracts' && (
-                                                <TableCell className="text-right text-sm font-medium tracking-normal tabular-nums">
-                                                    {money(
-                                                        record.reference_amount,
-                                                    )}
-                                                </TableCell>
-                                            )}
                                             <TableCell className="text-right tabular-nums">
                                                 {record.expenses_count}
                                             </TableCell>
@@ -400,9 +388,9 @@ export default function CatalogPage({
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
                                                                 onSelect={() =>
-                                                                    setSheet({
-                                                                        record,
-                                                                    })
+                                                                    router.visit(
+                                                                        `${path}/${record.id}/edit`,
+                                                                    )
                                                                 }
                                                             >
                                                                 Modifica
@@ -438,19 +426,6 @@ export default function CatalogPage({
                     open
                     onOpenChange={(open) => {
                         if (!open) setDeleting(null);
-                    }}
-                />
-            )}
-            {sheet && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind={catalog}
-                    record={sheet.record}
-                    options={options}
-                    onClose={() => setSheet(null)}
-                    onSaved={() => {
-                        setSheet(null);
-                        router.reload();
                     }}
                 />
             )}

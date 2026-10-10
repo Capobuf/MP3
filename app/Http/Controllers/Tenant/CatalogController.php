@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ExpenseRequest;
 use App\Models\Contract;
 use App\Models\Project;
 use App\Models\Tenant;
@@ -14,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -91,6 +93,7 @@ class CatalogController extends Controller
         $year = null;
         $years = [];
         if ($item instanceof Project) {
+            $expenses = ExpenseOverview::economicQuery($tenant)->where('project_id', $item->id);
             $data = $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
             $year = isset($data['year']) ? (int) $data['year'] : null;
             $years = (clone $expenses)->select('year')->distinct()->orderByDesc('year')->pluck('year')->all();
@@ -117,6 +120,7 @@ class CatalogController extends Controller
     {
         $rules = [
             'tenant_id' => ['prohibited'],
+            'initial_expense' => ['prohibited'],
             'name' => ['required', 'string', 'max:255'],
         ];
         $rules += match ($catalog) {
@@ -149,13 +153,31 @@ class CatalogController extends Controller
             $rules['cost_center_ids.*'] = ['required', 'integer', 'distinct', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)];
         }
 
-        return $request->validate($rules, [
+        $messages = [
             'name.required' => 'Inserisci il nome.',
             '*.exists' => 'Il collegamento selezionato non appartiene a questo ambiente.',
             '*.regex' => 'Inserisci un importo con massimo due decimali.',
             'ends_on.after_or_equal' => 'La data finale deve essere uguale o successiva alla data iniziale.',
             'email.email' => 'Inserisci un indirizzo email valido.',
-        ]);
+        ];
+        if ($catalog === 'contracts' && $request->isMethod('post')) {
+            $expenseFields = ['title', 'year', 'period_starts_on', 'period_ends_on', 'lines'];
+            $rules['initial_expense'] = ['nullable', 'array:'.implode(',', $expenseFields)];
+            if ($request->input('initial_expense') !== null) {
+                foreach (ExpenseRequest::forTenant($tenant) as $field => $rule) {
+                    if (in_array($field, $expenseFields, true) || str_starts_with($field, 'lines.')) {
+                        $rules['initial_expense.'.$field] = array_map(fn ($part) => is_string($part) ? str_replace(':lines.', ':initial_expense.lines.', $part) : $part, $rule);
+                    }
+                }
+                $rules['initial_expense.lines'] = ['required', 'min:1', ...array_diff($rules['initial_expense.lines'], ['sometimes'])];
+                foreach ((new ExpenseRequest)->messages() as $field => $message) {
+                    $messages['initial_expense.'.$field] = $message;
+                }
+                $messages['initial_expense.lines.required'] = 'Inserisci almeno una riga economica completa, anche di valore zero.';
+            }
+        }
+
+        return $request->validate($rules, $messages);
     }
 
     public function store(Request $request, Tenant $tenant, string $catalog): JsonResponse
@@ -163,11 +185,29 @@ class CatalogController extends Controller
         $data = $this->validated($request, $tenant, $catalog);
         $record = DB::transaction(function () use ($tenant, $catalog, $data) {
             $ids = $data['cost_center_ids'] ?? [];
-            unset($data['cost_center_ids']);
+            $initialExpense = $data['initial_expense'] ?? null;
+            unset($data['cost_center_ids'], $data['initial_expense']);
             $record = $this->records($tenant, $catalog)->create($data);
             if ($record instanceof Contract || $record instanceof Project) {
                 $record->costCenters()->sync($ids);
                 $record->load('costCenters.parent:id,name');
+            }
+            if ($record instanceof Contract && $initialExpense !== null) {
+                try {
+                    app(ExpenseController::class)->createForTenant($tenant, [
+                        ...$initialExpense,
+                        'contract_id' => $record->id,
+                        'contract_entry' => true,
+                        'vendor_id' => $record->vendor_id,
+                        'cost_center_ids' => $ids,
+                    ]);
+                } catch (ValidationException $error) {
+                    $errors = [];
+                    foreach ($error->errors() as $field => $messages) {
+                        $errors['initial_expense.'.$field] = $messages;
+                    }
+                    throw ValidationException::withMessages($errors);
+                }
             }
 
             return $record;

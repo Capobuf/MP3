@@ -16,7 +16,7 @@ class ExpensePeriods
     }
 
     /** @param array<int, Expense> $pending Final states of all expenses in a batch. */
-    public static function validate(Expense $expense, array $pending = []): void
+    public static function validate(Expense $expense, array $pending = [], bool $validateYear = true): void
     {
         $start = $expense->period_starts_on;
         $end = $expense->period_ends_on;
@@ -29,7 +29,7 @@ class ExpensePeriods
         if ($end->lt($start)) {
             throw ValidationException::withMessages(['period_ends_on' => 'La data finale deve essere uguale o successiva alla data iniziale.']);
         }
-        if (! in_array($expense->year, [$start->year, $end->year], true)) {
+        if ($validateYear && ! in_array($expense->year, [$start->year, $end->year], true)) {
             throw ValidationException::withMessages(['year' => $start->year === $end->year
                 ? "Il periodo deve essere imputato all’anno {$start->year}."
                 : "Scegli l’anno iniziale ({$start->year}) o finale ({$end->year}) del periodo."]);

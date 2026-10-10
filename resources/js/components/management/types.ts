@@ -22,6 +22,9 @@ export type ExpenseLine = {
     quantity: string;
     total?: string;
     position?: number;
+    period_starts_on?: string | null;
+    period_ends_on?: string | null;
+    year?: number | string | null;
 };
 export type RecordData = {
     id: number;
