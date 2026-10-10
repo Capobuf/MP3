@@ -14,15 +14,12 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
     Field,
     FieldGroup,
     FieldLabel,
     FieldError,
-    FieldSet,
-    FieldLegend,
 } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
@@ -77,8 +74,6 @@ const fields: Record<Kind, FormField[]> = {
     contracts: [
         { key: 'name', label: 'Nome', required: true },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
-        { key: 'starts_on', label: 'Data iniziale', type: 'date' },
-        { key: 'ends_on', label: 'Data finale', type: 'date' },
         { key: 'notes', label: 'Note', type: 'textarea' },
     ],
     projects: [
@@ -107,7 +102,6 @@ const fields: Record<Kind, FormField[]> = {
     ],
 };
 type InitialExpense = {
-    enabled: boolean;
     values: Record<string, string>;
     lines: DraftLine[];
 };
@@ -177,7 +171,6 @@ function frame(
     const initialExpense =
         kind === 'contracts' && !record
             ? {
-                  enabled: !returnField,
                   values: {
                       title: '',
                       year: String(year),
@@ -265,7 +258,7 @@ export function EntitySheet({
     const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
     const current = frames[frames.length - 1];
     const initialExpense = current.initialExpense;
-    const editingInitialExpense = !!initialExpense?.enabled;
+    const editingInitialExpense = !!initialExpense;
     const contractLines =
         current.kind === 'expenses' &&
         (!!current.values.contract_id || !!current.record?.contract_id);
@@ -322,63 +315,22 @@ export function EntitySheet({
                                 !item.values.period_ends_on),
                     );
                 let initialExpense = item.initialExpense;
-                if (initialExpense) {
-                    const expenseKeys: Record<string, string> = {
-                        name: 'title',
-                        starts_on: 'period_starts_on',
-                        ends_on: 'period_ends_on',
-                    };
-                    const expenseKey = expenseKeys[key];
-                    if (
-                        expenseKey &&
-                        initialExpense.values[expenseKey] === item.values[key]
-                    ) {
-                        const expenseValues = {
+                if (initialExpense && key === 'name') {
+                    initialExpense = {
+                        ...initialExpense,
+                        values: {
                             ...initialExpense.values,
-                            [expenseKey]: value,
-                        };
-                        if (expenseKey.startsWith('period_'))
-                            expenseValues.year = periodYear(
-                                expenseValues,
-                                !initialExpense.values.period_starts_on ||
-                                    !initialExpense.values.period_ends_on,
-                            );
-                        initialExpense = {
-                            ...initialExpense,
-                            values: expenseValues,
-                        };
-                    }
-                    if (expenseKey) {
-                        const lineField =
-                            key === 'name' ? 'description' : expenseKey;
-                        initialExpense = {
-                            ...initialExpense,
-                            lines: initialExpense.lines.map((line) => {
-                                if (
-                                    (line[lineField as keyof DraftLine] ??
-                                        '') !== item.values[key]
-                                )
-                                    return line;
-                                const next = { ...line, [lineField]: value };
-                                if (key !== 'name')
-                                    next.year = periodYear(
-                                        {
-                                            year: String(
-                                                next.year ??
-                                                    initialExpense!.values.year,
-                                            ),
-                                            period_starts_on:
-                                                next.period_starts_on ?? '',
-                                            period_ends_on:
-                                                next.period_ends_on ?? '',
-                                        },
-                                        !line.period_starts_on ||
-                                            !line.period_ends_on,
-                                    );
-                                return next;
-                            }),
-                        };
-                    }
+                            title:
+                                initialExpense.values.title === item.values.name
+                                    ? value
+                                    : initialExpense.values.title,
+                        },
+                        lines: initialExpense.lines.map((line) =>
+                            line.description === item.values.name
+                                ? { ...line, description: value }
+                                : line,
+                        ),
+                    };
                 }
                 return { ...item, values, lines, initialExpense };
             }),
@@ -464,11 +416,27 @@ export function EntitySheet({
             }
             if (contractContext) payload.contract_entry = true;
         }
-        if (initialExpense?.enabled) {
+        // Proposed descriptions and default quantities do not create a condition.
+        const initialLines =
+            initialExpense?.lines
+                .map((line, index) => ({ line, index }))
+                .filter(
+                    ({ line }) =>
+                        line.unit_price.trim() !== '' ||
+                        !!line.period_starts_on ||
+                        !!line.period_ends_on ||
+                        (line.description.trim() !== '' &&
+                            line.description !== current.values.name) ||
+                        Number(decimalInput(line.quantity)) !== 1 ||
+                        line.type !== 'allocated' ||
+                        String(line.year ?? initialExpense.values.year) !==
+                            initialExpense.values.year,
+                ) ?? [];
+        if (initialExpense && initialLines.length > 0) {
             payload.initial_expense = {
                 ...initialExpense.values,
                 lines: linePayload(
-                    initialExpense.lines,
+                    initialLines.map(({ line }) => line),
                     initialExpense.values.year,
                 ),
             };
@@ -531,9 +499,24 @@ export function EntitySheet({
                 error instanceof Error
                     ? error.message
                     : 'Salvataggio non riuscito.';
+            const mappedErrors =
+                error instanceof ApiError
+                    ? Object.fromEntries(
+                          Object.entries(error.errors).map(
+                              ([key, messages]) => [
+                                  key.replace(
+                                      /^initial_expense\.lines\.(\d+)\./,
+                                      (prefix, index) =>
+                                          `initial_expense.lines.${initialLines[Number(index)]?.index ?? index}.`,
+                                  ),
+                                  messages,
+                              ],
+                          ),
+                      )
+                    : {};
             setErrors(
                 error instanceof ApiError
-                    ? { ...error.errors, _form: [message] }
+                    ? { ...mappedErrors, _form: [message] }
                     : { _form: [message] },
             );
             toast.error(message);
@@ -668,7 +651,8 @@ export function EntitySheet({
                             )}
                             <FieldGroup
                                 className={
-                                    current.kind === 'expenses'
+                                    current.kind === 'expenses' ||
+                                    current.kind === 'contracts'
                                         ? 'grid gap-4 sm:grid-cols-2'
                                         : 'gap-5'
                                 }
@@ -684,6 +668,11 @@ export function EntitySheet({
                                 }
                             >
                                 {fields[current.kind].map((field) => {
+                                    if (
+                                        current.kind === 'contracts' &&
+                                        field.key === 'notes'
+                                    )
+                                        return null;
                                     if (current.kind === 'expenses') {
                                         if (
                                             [
@@ -768,6 +757,9 @@ export function EntitySheet({
                                             data-disabled={formBusy}
                                             className={cn(
                                                 'min-w-0 gap-2',
+                                                current.kind === 'contracts' &&
+                                                    field.key === 'name' &&
+                                                    'sm:col-span-2',
                                                 current.kind === 'expenses' &&
                                                     ['title', 'notes'].includes(
                                                         field.key,
@@ -1057,102 +1049,48 @@ export function EntitySheet({
                                 </FieldError>
                             )}
                             {initialExpense && (
-                                <FieldSet>
-                                    <FieldLegend>
-                                        Prima spesa collegata
-                                    </FieldLegend>
-                                    <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                                        <Field
-                                            orientation="horizontal"
-                                            className="sm:col-span-2"
-                                        >
-                                            <Checkbox
-                                                id="include-initial-expense"
-                                                checked={initialExpense.enabled}
-                                                disabled={formBusy}
-                                                onCheckedChange={(checked) =>
-                                                    setFrames((previous) =>
-                                                        previous.map(
-                                                            (item, index) =>
-                                                                index ===
-                                                                    previous.length -
-                                                                        1 &&
-                                                                item.initialExpense
-                                                                    ? {
-                                                                          ...item,
-                                                                          initialExpense:
-                                                                              {
-                                                                                  ...item.initialExpense,
-                                                                                  enabled:
-                                                                                      checked ===
-                                                                                      true,
-                                                                              },
-                                                                      }
-                                                                    : item,
-                                                        ),
-                                                    )
-                                                }
-                                            />
-                                            <FieldLabel htmlFor="include-initial-expense">
-                                                Registra la prima spesa insieme
-                                                al contratto
-                                            </FieldLabel>
-                                        </Field>
-                                        {initialExpense.enabled && (
-                                            <>
-                                                <p className="text-sm text-muted-foreground sm:col-span-2">
-                                                    La spesa usa il fornitore e
-                                                    i centri di costo del
-                                                    contratto ed è inclusa nei
-                                                    totali.
-                                                </p>
-                                                <Field
-                                                    className="sm:col-span-2"
-                                                    data-invalid={
-                                                        !!initialExpenseErrors.title
-                                                    }
-                                                >
-                                                    <FieldLabel htmlFor="initial-expense-title">
-                                                        Descrizione spesa *
-                                                    </FieldLabel>
-                                                    <Input
-                                                        id="initial-expense-title"
-                                                        value={
-                                                            initialExpense
-                                                                .values.title
-                                                        }
-                                                        onChange={(event) =>
-                                                            changeInitialExpense(
-                                                                'title',
-                                                                event.target
-                                                                    .value,
-                                                            )
-                                                        }
-                                                        required
-                                                        disabled={formBusy}
-                                                        aria-invalid={
-                                                            !!initialExpenseErrors.title
-                                                        }
-                                                        aria-describedby={
-                                                            initialExpenseErrors.title
-                                                                ? 'initial-expense-title-error'
-                                                                : undefined
-                                                        }
-                                                    />
-                                                    <FieldError id="initial-expense-title-error">
-                                                        {
-                                                            initialExpenseErrors
-                                                                .title?.[0]
-                                                        }
-                                                    </FieldError>
-                                                </Field>
-                                            </>
-                                        )}
-                                        <FieldError>
-                                            {errors.initial_expense?.[0]}
+                                <FieldGroup>
+                                    <p className="text-sm text-muted-foreground">
+                                        Compila le condizioni economiche per
+                                        registrare una spesa inclusa nei totali.
+                                        Se le lasci vuote, viene creato solo il
+                                        contratto.
+                                    </p>
+                                    <Field
+                                        data-invalid={
+                                            !!initialExpenseErrors.title
+                                        }
+                                    >
+                                        <FieldLabel htmlFor="initial-expense-title">
+                                            Descrizione spesa
+                                        </FieldLabel>
+                                        <Input
+                                            id="initial-expense-title"
+                                            value={initialExpense.values.title}
+                                            onChange={(event) =>
+                                                changeInitialExpense(
+                                                    'title',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            disabled={formBusy}
+                                            aria-invalid={
+                                                !!initialExpenseErrors.title
+                                            }
+                                            aria-describedby={
+                                                initialExpenseErrors.title
+                                                    ? 'initial-expense-title-error'
+                                                    : undefined
+                                            }
+                                        />
+                                        <FieldError id="initial-expense-title-error">
+                                            {initialExpenseErrors.title?.[0]}
                                         </FieldError>
-                                    </FieldGroup>
-                                </FieldSet>
+                                    </Field>
+                                    <FieldError>
+                                        {errors.initial_expense?.[0]}
+                                    </FieldError>
+                                </FieldGroup>
                             )}
                             {current.kind === 'expenses' &&
                                 !current.detailed && (
@@ -1235,6 +1173,38 @@ export function EntitySheet({
                                         );
                                     }}
                                 />
+                            )}
+                            {current.kind === 'contracts' && (
+                                <FieldGroup>
+                                    <Field
+                                        data-invalid={!!errors.notes}
+                                        data-disabled={formBusy}
+                                    >
+                                        <FieldLabel htmlFor="field-notes">
+                                            Note
+                                        </FieldLabel>
+                                        <Textarea
+                                            id="field-notes"
+                                            value={current.values.notes}
+                                            onChange={(event) =>
+                                                change(
+                                                    'notes',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            disabled={formBusy}
+                                            aria-invalid={!!errors.notes}
+                                            aria-describedby={
+                                                errors.notes
+                                                    ? 'field-notes-error'
+                                                    : undefined
+                                            }
+                                        />
+                                        <FieldError id="field-notes-error">
+                                            {errors.notes?.[0]}
+                                        </FieldError>
+                                    </Field>
+                                </FieldGroup>
                             )}
                             {current.kind !== 'vendors' &&
                                 (current.record ? (
