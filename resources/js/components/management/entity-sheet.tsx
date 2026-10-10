@@ -46,6 +46,7 @@ import type { DraftLine } from './expense-lines';
 import { api, ApiError, decimalInput } from './helpers';
 import { RecordSelect } from './record-select';
 import { CostCenterSelect } from './cost-center-select';
+import { CostCenterSheet } from './cost-center-sheet';
 import { singular } from './types';
 import type { Catalog, Kind, Options, RecordData } from './types';
 
@@ -162,6 +163,9 @@ export function EntitySheet({
         frame(kind, year, record),
     ]);
     const [localOptions, setLocalOptions] = useState(options);
+    const [creatingCostCenter, setCreatingCostCenter] = useState<string | null>(
+        null,
+    );
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [busy, setBusy] = useState(false);
     const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
@@ -271,6 +275,39 @@ export function EntitySheet({
             setBusy(false);
         }
     }
+    if (creatingCostCenter !== null) {
+        return (
+            <CostCenterSheet
+                tenant={tenant}
+                initialName={creatingCostCenter}
+                parents={localOptions.cost_centers.filter(
+                    (center) => center.parent_id === null,
+                )}
+                onClose={() => setCreatingCostCenter(null)}
+                onSaved={(center) => {
+                    setLocalOptions((previous) => ({
+                        ...previous,
+                        cost_centers: [...previous.cost_centers, center],
+                    }));
+                    setFrames((previous) =>
+                        previous.map((item, index) =>
+                            index === previous.length - 1
+                                ? {
+                                      ...item,
+                                      costCenterIds: [
+                                          ...item.costCenterIds,
+                                          center.id,
+                                      ],
+                                  }
+                                : item,
+                        ),
+                    );
+                    setCreatingCostCenter(null);
+                }}
+            />
+        );
+    }
+
     return (
         <>
             <Sheet
@@ -627,6 +664,7 @@ export function EntitySheet({
                                             id="entity-cost-centers"
                                             options={localOptions.cost_centers}
                                             value={current.costCenterIds}
+                                            onCreate={setCreatingCostCenter}
                                             disabled={busy}
                                             invalid={
                                                 !!errors.cost_center_ids ||

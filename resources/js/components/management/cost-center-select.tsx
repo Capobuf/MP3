@@ -1,4 +1,5 @@
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { defaultFilter } from 'cmdk';
+import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +24,7 @@ export function CostCenterSelect({
     options,
     value,
     onChange,
+    onCreate,
     disabled,
     invalid,
     describedBy,
@@ -31,11 +33,17 @@ export function CostCenterSelect({
     options: CostCenter[];
     value: number[];
     onChange: (value: number[]) => void;
+    onCreate: (name: string) => void;
     disabled?: boolean;
     invalid?: boolean;
     describedBy?: string;
 }) {
     const [open, setOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const query = search.trim();
+    const results = options.filter(
+        (center) => !query || defaultFilter(costCenterLabel(center), query) > 0,
+    );
     const selected = options.filter((option) => value.includes(option.id));
     return (
         <div className="flex min-w-0 flex-col gap-2">
@@ -59,14 +67,18 @@ export function CostCenterSelect({
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80 max-w-[90vw] p-0" align="start">
-                    <Command>
-                        <CommandInput placeholder="Cerca un Centro di Costo…" />
+                    <Command shouldFilter={false}>
+                        <CommandInput
+                            placeholder="Cerca un Centro di Costo…"
+                            value={search}
+                            onValueChange={setSearch}
+                        />
                         <CommandList>
                             <CommandEmpty>
                                 Nessun Centro di Costo trovato.
                             </CommandEmpty>
                             <CommandGroup heading="Centri di Costo">
-                                {options.map((center) => (
+                                {results.map((center) => (
                                     <CommandItem
                                         key={center.id}
                                         value={`${costCenterLabel(center)} ${center.id}`}
@@ -100,6 +112,24 @@ export function CostCenterSelect({
                                     </CommandItem>
                                 ))}
                             </CommandGroup>
+                            {query && results.length === 0 && (
+                                <CommandGroup heading="Nessun Centro di Costo trovato">
+                                    <CommandItem
+                                        value={`create-${query}`}
+                                        disabled={disabled}
+                                        onSelect={() => {
+                                            setOpen(false);
+                                            setSearch('');
+                                            onCreate(query);
+                                        }}
+                                    >
+                                        <Plus aria-hidden="true" />
+                                        <span className="min-w-0 break-words whitespace-normal">
+                                            Crea “{query}”
+                                        </span>
+                                    </CommandItem>
+                                </CommandGroup>
+                            )}
                         </CommandList>
                     </Command>
                 </PopoverContent>

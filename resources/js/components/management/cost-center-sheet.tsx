@@ -42,6 +42,7 @@ export function CostCenterSheet({
     tenant,
     record,
     parentId,
+    initialName = '',
     parents,
     onClose,
     onSaved,
@@ -49,11 +50,12 @@ export function CostCenterSheet({
     tenant: Tenant;
     record?: CostCenter;
     parentId?: number;
+    initialName?: string;
     parents: Option[];
     onClose: () => void;
-    onSaved: () => void;
+    onSaved: (record: CostCenter) => void;
 }) {
-    const [name, setName] = useState(record?.name ?? '');
+    const [name, setName] = useState(record?.name ?? initialName);
     const [parent, setParent] = useState(
         String(record?.parent_id ?? parentId ?? 'none'),
     );
@@ -62,7 +64,7 @@ export function CostCenterSheet({
     const [discard, setDiscard] = useState(false);
     const hasChildren = !!record?.children?.length;
     const dirty =
-        name !== (record?.name ?? '') ||
+        name !== (record?.name ?? initialName) ||
         parent !== String(record?.parent_id ?? parentId ?? 'none');
     function close() {
         if (busy) return;
@@ -75,7 +77,7 @@ export function CostCenterSheet({
         setBusy(true);
         setErrors({});
         try {
-            await api(
+            const { record: savedRecord } = await api<{ record: CostCenter }>(
                 `/t/${tenant.slug}/cost-centers${record ? `/${record.id}` : ''}`,
                 record ? 'PATCH' : 'POST',
                 {
@@ -84,7 +86,7 @@ export function CostCenterSheet({
                 },
             );
             toast.success('Centro di Costo salvato.');
-            onSaved();
+            onSaved(savedRecord);
         } catch (error) {
             const message =
                 error instanceof Error
