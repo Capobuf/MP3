@@ -56,10 +56,18 @@ export function AttachmentsSection({
     tenant,
     resource,
     recordId,
+    id = 'attachments',
+    disabled = false,
+    onBusyChange,
+    onChanged,
 }: {
     tenant: Tenant;
     resource: AttachmentResource;
     recordId: number;
+    id?: string;
+    disabled?: boolean;
+    onBusyChange?: (busy: boolean) => void;
+    onChanged?: () => void;
 }) {
     const path = `/t/${tenant.slug}/${resource}/${recordId}/attachments`;
     const input = useRef<HTMLInputElement>(null);
@@ -75,7 +83,7 @@ export function AttachmentsSection({
     const [dragging, setDragging] = useState(false);
     const [selected, setSelected] = useState<Attachment | null>(null);
     const [deleting, setDeleting] = useState(false);
-    const busy = !!uploading || deleting;
+    const busy = !!uploading || deleting || disabled;
 
     useEffect(() => {
         let active = true;
@@ -110,6 +118,9 @@ export function AttachmentsSection({
     }, [path, reload]);
 
     useEffect(() => {
+        const refresh = router.on('success', () => {
+            setReload((value) => value + 1);
+        });
         const stop = router.on('before', (event) => {
             if (operation.current) {
                 event.preventDefault();
@@ -123,13 +134,15 @@ export function AttachmentsSection({
         };
         window.addEventListener('beforeunload', leave);
         return () => {
+            refresh();
             stop();
             window.removeEventListener('beforeunload', leave);
         };
     }, []);
 
     async function upload(files: File[]) {
-        if (operation.current || !limits || loading || loadError) return;
+        if (disabled || operation.current || !limits || loading || loadError)
+            return;
         if (files.length > limits.max_files) {
             setErrors([
                 `Seleziona al massimo ${limits.max_files} file per volta.`,
@@ -137,6 +150,7 @@ export function AttachmentsSection({
             return;
         }
         operation.current = true;
+        onBusyChange?.(true);
         setErrors([]);
         const failures: string[] = [];
         const seen = new Set<string>();
@@ -169,6 +183,7 @@ export function AttachmentsSection({
                     }>(path, file);
                     completed.current.set(key, data.attachment.id);
                     setList((current) => [data.attachment, ...current]);
+                    onChanged?.();
                     saved++;
                 } catch (error) {
                     failures.push(
@@ -192,12 +207,14 @@ export function AttachmentsSection({
         } finally {
             operation.current = false;
             setUploading('');
+            onBusyChange?.(false);
         }
     }
 
     async function remove() {
-        if (!selected || operation.current) return;
+        if (!selected || disabled || operation.current) return;
         operation.current = true;
+        onBusyChange?.(true);
         setDeleting(true);
         try {
             const result = await api<DeletionResult>(
@@ -207,6 +224,7 @@ export function AttachmentsSection({
             setList((current) =>
                 current.filter((file) => file.id !== selected.id),
             );
+            onChanged?.();
             if (result.cleanup_failed) {
                 toast.error(result.message);
                 setErrors([result.message]);
@@ -224,12 +242,13 @@ export function AttachmentsSection({
         } finally {
             operation.current = false;
             setDeleting(false);
+            onBusyChange?.(false);
         }
     }
 
     return (
         <Card
-            id="attachments"
+            id={id}
             role="region"
             aria-label="Allegati"
             className="min-w-0 scroll-mt-6"

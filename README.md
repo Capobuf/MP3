@@ -115,15 +115,18 @@ e paginata sul server.
 
 ## Allegati di contratti, spese e progetti
 
-Le pagine di dettaglio includono una sezione Allegati condivisa: selezione multipla
+Le pagine di dettaglio e i pannelli laterali di modifica includono una sezione
+Allegati condivisa: selezione multipla
 (fino a 10 file), trascinamento, elenco, download ed eliminazione con conferma.
 Ogni file viene caricato con una richiesta indipendente, senza retry automatici:
 se un file fallisce, quelli completati rimangono salvati. La stessa selezione e i
 file già completati nella sessione della sezione vengono deduplicati. In caso di
 interruzione di rete, aggiornare l’elenco prima di riprovare.
 Durante la creazione gli allegati diventano disponibili solo dopo il salvataggio;
-dal pannello di modifica si apre il dettaglio in una nuova scheda. I salvataggi
-sono indipendenti dal form economico e dal suo pulsante Annulla.
+dal pannello di modifica si gestiscono direttamente con la drop zone. I
+salvataggi sono indipendenti dal form economico e dal suo pulsante Annulla.
+Il pannello non si chiude durante un caricamento o un’eliminazione; quando viene
+chiuso, il dettaglio viene aggiornato per mostrare le modifiche agli allegati.
 
 Formati ammessi: PDF, JPG/JPEG, PNG, WEBP, DOCX, XLSX, CSV e TXT. Il server verifica
 estensione e MIME del contenuto; i pacchetti Office con macro vengono respinti,
