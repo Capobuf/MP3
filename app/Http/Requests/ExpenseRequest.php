@@ -35,6 +35,12 @@ class ExpenseRequest extends FormRequest
             'allocated_amount' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
             'actual_amount' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
             'notes' => ['nullable', 'string', 'max:10000'],
+            'lines' => ['sometimes', 'array', 'list', 'max:500'],
+            'lines.*' => ['required', 'array:description,type,unit_price,quantity'],
+            'lines.*.description' => ['required', 'string', 'max:255'],
+            'lines.*.type' => ['required', Rule::in(['allocated', 'actual'])],
+            'lines.*.unit_price' => ['required', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
+            'lines.*.quantity' => ['sometimes', 'required', 'numeric', 'gt:0', 'regex:/^\d{1,6}(\.\d{1,4})?$/'],
         ];
         foreach (['vendor' => 'vendors', 'contract' => 'contracts', 'project' => 'projects'] as $field => $table) {
             $rules[$field.'_id'] = ['nullable', 'integer', Rule::exists($table, 'id')->where('tenant_id', $tenant->id)];
@@ -47,6 +53,12 @@ class ExpenseRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'lines.*.description.required' => 'Inserisci la descrizione della riga.',
+            'lines.*.type.in' => 'Seleziona allocato o effettivo.',
+            'lines.*.unit_price.required' => 'Inserisci il prezzo unitario della riga.',
+            'lines.*.quantity.regex' => 'Inserisci una quantità con massimo quattro decimali.',
+            'lines.*.quantity.gt' => 'La quantità deve essere maggiore di zero.',
+            'lines.max' => 'Una spesa può contenere al massimo 500 righe.',
             '*.exists' => 'Il collegamento selezionato non appartiene a questo ambiente.',
             '*.regex' => 'Inserisci un importo con al massimo due decimali (es. 1250.50).',
             'title.required' => 'Inserisci la descrizione della spesa.',

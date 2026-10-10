@@ -33,13 +33,15 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import type { Tenant } from '@/types';
 import { DateField } from './date-field';
+import { draftLines, ExpenseLines } from './expense-lines';
+import type { DraftLine } from './expense-lines';
 import { api, ApiError, decimalInput } from './helpers';
 import { RecordSelect } from './record-select';
 import { singular } from './types';
 import type { Catalog, Kind, Options, RecordData } from './types';
 
 type Field = {
-    key: Exclude<keyof RecordData, 'vendor' | 'contract' | 'project'>;
+    key: Exclude<keyof RecordData, 'vendor' | 'contract' | 'project' | 'lines'>;
     label: string;
     type?: string;
     required?: boolean;
@@ -80,8 +82,6 @@ const fields: Record<Kind, Field[]> = {
             type: 'number',
             required: true,
         },
-        { key: 'allocated_amount', label: 'Allocato (€)', type: 'money' },
-        { key: 'actual_amount', label: 'Effettivo (€)', type: 'money' },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
         { key: 'contract_id', label: 'Contratto', catalog: 'contracts' },
         { key: 'project_id', label: 'Progetto', catalog: 'projects' },
@@ -92,6 +92,7 @@ type Frame = {
     kind: Kind;
     record?: RecordData;
     values: Record<string, string>;
+    lines: DraftLine[];
     original: string;
     returnField?: string;
 };
@@ -114,11 +115,13 @@ function frame(
             ),
         ]),
     );
+    const lines = kind === 'expenses' ? draftLines(record) : [];
     return {
         kind,
         record,
         values,
-        original: JSON.stringify(values),
+        lines,
+        original: JSON.stringify({ values, lines }),
         returnField,
     };
 }
@@ -148,7 +151,9 @@ export function EntitySheet({
     const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
     const current = frames[frames.length - 1];
     const dirty = frames.some(
-        (item) => JSON.stringify(item.values) !== item.original,
+        (item) =>
+            JSON.stringify({ values: item.values, lines: item.lines }) !==
+            item.original,
     );
     useEffect(() => {
         const listener = (event: BeforeUnloadEvent) => {
@@ -179,7 +184,7 @@ export function EntitySheet({
         event.preventDefault();
         setBusy(true);
         setErrors({});
-        const payload = Object.fromEntries(
+        const payload: Record<string, unknown> = Object.fromEntries(
             fields[current.kind].map((field) => [
                 field.key,
                 field.type === 'money'
@@ -189,6 +194,14 @@ export function EntitySheet({
                       : current.values[field.key],
             ]),
         );
+        if (current.kind === 'expenses') {
+            payload.lines = current.lines.map((line) => ({
+                description: line.description,
+                type: line.type,
+                unit_price: decimalInput(line.unit_price),
+                quantity: decimalInput(line.quantity),
+            }));
+        }
         try {
             const data = await api<{ record: RecordData }>(
                 `/t/${tenant.slug}/${current.kind}${current.record ? `/${current.record.id}` : ''}`,
@@ -245,7 +258,7 @@ export function EntitySheet({
                 }}
             >
                 <SheetContent
-                    className="w-full overflow-y-auto sm:max-w-xl"
+                    className={`w-full overflow-y-auto ${current.kind === 'expenses' ? 'sm:max-w-6xl' : 'sm:max-w-xl'}`}
                     onEscapeKeyDown={(event) => {
                         event.preventDefault();
                         requestClose();
@@ -262,7 +275,7 @@ export function EntitySheet({
                         </SheetTitle>
                         <SheetDescription>
                             {current.kind === 'expenses'
-                                ? 'Anno e importi sono scelti da te. Un campo vuoto indica un importo da completare; zero è un valore esplicito.'
+                                ? 'Inserisci i dati generali della spesa, poi aggiungi le righe economiche. Puoi avere solo allocati, solo effettivi o entrambi. I tipi senza righe valgono zero.'
                                 : current.kind === 'contracts'
                                   ? 'L’importo di riferimento è informativo. Il contratto non genera spese.'
                                   : `Dati di ${tenant.name}.`}
@@ -276,8 +289,10 @@ export function EntitySheet({
                             disabled={busy}
                             onClick={() => {
                                 if (
-                                    JSON.stringify(current.values) !==
-                                    current.original
+                                    JSON.stringify({
+                                        values: current.values,
+                                        lines: current.lines,
+                                    }) !== current.original
                                 )
                                     setDiscard('back');
                                 else back();
@@ -302,171 +317,227 @@ export function EntitySheet({
                                 form.
                             </p>
                         )}
-                        {fields[current.kind].map((field) => {
-                            const value = current.values[field.key];
-                            const id = `field-${field.key}`;
-                            const selectOptions = field.catalog
-                                ? [
-                                      ...localOptions[field.catalog],
-                                      ...(current.record?.[
-                                          field.catalog.slice(0, -1) as
-                                              | 'vendor'
-                                              | 'contract'
-                                              | 'project'
+                        {current.kind === 'expenses' && (
+                            <h2 className="font-semibold">
+                                Dati generali della spesa
+                            </h2>
+                        )}
+                        <div
+                            className={
+                                current.kind === 'expenses'
+                                    ? 'grid gap-4 sm:grid-cols-2'
+                                    : 'space-y-5'
+                            }
+                            role={
+                                current.kind === 'expenses'
+                                    ? 'group'
+                                    : undefined
+                            }
+                            aria-label={
+                                current.kind === 'expenses'
+                                    ? 'Dati generali della spesa'
+                                    : undefined
+                            }
+                        >
+                            {fields[current.kind].map((field) => {
+                                const value = current.values[field.key];
+                                const id = `field-${field.key}`;
+                                const selectOptions = field.catalog
+                                    ? [
+                                          ...localOptions[field.catalog],
+                                          ...(current.record?.[
+                                              field.catalog.slice(0, -1) as
+                                                  | 'vendor'
+                                                  | 'contract'
+                                                  | 'project'
+                                          ]
+                                              ? [
+                                                    current.record[
+                                                        field.catalog.slice(
+                                                            0,
+                                                            -1,
+                                                        ) as
+                                                            | 'vendor'
+                                                            | 'contract'
+                                                            | 'project'
+                                                    ]!,
+                                                ]
+                                              : []),
                                       ]
-                                          ? [
-                                                current.record[
-                                                    field.catalog.slice(
-                                                        0,
-                                                        -1,
-                                                    ) as
-                                                        | 'vendor'
-                                                        | 'contract'
-                                                        | 'project'
-                                                ]!,
-                                            ]
-                                          : []),
-                                  ]
-                                : [];
-                            return (
-                                <div key={field.key} className="space-y-2">
-                                    <Label htmlFor={id}>
-                                        {field.label}
-                                        {field.required && ' *'}
-                                    </Label>
-                                    {field.catalog ? (
-                                        <div className="flex gap-2">
-                                            <RecordSelect
-                                                slug={tenant.slug}
-                                                catalog={field.catalog}
+                                    : [];
+                                return (
+                                    <div
+                                        key={field.key}
+                                        className={`min-w-0 space-y-2 ${current.kind === 'expenses' && ['title', 'notes'].includes(field.key) ? 'sm:col-span-2' : ''}`}
+                                    >
+                                        <Label htmlFor={id}>
+                                            {field.label}
+                                            {field.required && ' *'}
+                                        </Label>
+                                        {field.catalog ? (
+                                            <div className="flex gap-2">
+                                                <RecordSelect
+                                                    slug={tenant.slug}
+                                                    catalog={field.catalog}
+                                                    value={value}
+                                                    options={selectOptions}
+                                                    label={`Seleziona ${singular[field.catalog]}`}
+                                                    onChange={(selected) =>
+                                                        change(
+                                                            field.key,
+                                                            selected,
+                                                        )
+                                                    }
+                                                    disabled={busy}
+                                                />
+                                                {current.kind ===
+                                                    'expenses' && (
+                                                    <Button
+                                                        variant="outline"
+                                                        type="button"
+                                                        size="icon"
+                                                        disabled={busy}
+                                                        aria-label={`Crea ${singular[field.catalog]}`}
+                                                        onClick={() => {
+                                                            setErrors({});
+                                                            setFrames(
+                                                                (previous) => [
+                                                                    ...previous,
+                                                                    frame(
+                                                                        field.catalog!,
+                                                                        year,
+                                                                        undefined,
+                                                                        field.key,
+                                                                    ),
+                                                                ],
+                                                            );
+                                                        }}
+                                                    >
+                                                        <Plus className="size-4" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        ) : field.type === 'status' ? (
+                                            <Select
                                                 value={value}
-                                                options={selectOptions}
-                                                label={`Seleziona ${singular[field.catalog]}`}
+                                                onValueChange={(selected) =>
+                                                    change(field.key, selected)
+                                                }
+                                                disabled={busy}
+                                            >
+                                                <SelectTrigger id={id}>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {[
+                                                        'pianificato',
+                                                        'attivo',
+                                                        'completato',
+                                                    ].map((status) => (
+                                                        <SelectItem
+                                                            key={status}
+                                                            value={status}
+                                                        >
+                                                            {status}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : field.type === 'textarea' ? (
+                                            <Textarea
+                                                id={id}
+                                                value={value}
+                                                onChange={(event) =>
+                                                    change(
+                                                        field.key,
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                disabled={busy}
+                                                rows={3}
+                                            />
+                                        ) : field.type === 'date' ? (
+                                            <DateField
+                                                id={id}
+                                                value={value}
                                                 onChange={(selected) =>
                                                     change(field.key, selected)
                                                 }
                                                 disabled={busy}
                                             />
-                                            {current.kind === 'expenses' && (
-                                                <Button
-                                                    variant="outline"
-                                                    type="button"
-                                                    size="icon"
-                                                    disabled={busy}
-                                                    aria-label={`Crea ${singular[field.catalog]}`}
-                                                    onClick={() => {
-                                                        setErrors({});
-                                                        setFrames(
-                                                            (previous) => [
-                                                                ...previous,
-                                                                frame(
-                                                                    field.catalog!,
-                                                                    year,
-                                                                    undefined,
-                                                                    field.key,
-                                                                ),
-                                                            ],
-                                                        );
-                                                    }}
-                                                >
-                                                    <Plus className="size-4" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    ) : field.type === 'status' ? (
-                                        <Select
-                                            value={value}
-                                            onValueChange={(selected) =>
-                                                change(field.key, selected)
-                                            }
-                                            disabled={busy}
-                                        >
-                                            <SelectTrigger id={id}>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {[
-                                                    'pianificato',
-                                                    'attivo',
-                                                    'completato',
-                                                ].map((status) => (
-                                                    <SelectItem
-                                                        key={status}
-                                                        value={status}
-                                                    >
-                                                        {status}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : field.type === 'textarea' ? (
-                                        <Textarea
-                                            id={id}
-                                            value={value}
-                                            onChange={(event) =>
-                                                change(
-                                                    field.key,
-                                                    event.target.value,
-                                                )
-                                            }
-                                            disabled={busy}
-                                            rows={3}
-                                        />
-                                    ) : field.type === 'date' ? (
-                                        <DateField
-                                            id={id}
-                                            value={value}
-                                            onChange={(selected) =>
-                                                change(field.key, selected)
-                                            }
-                                            disabled={busy}
-                                        />
-                                    ) : (
-                                        <Input
-                                            id={id}
-                                            className={
-                                                field.type === 'money'
-                                                    ? 'text-right font-medium tabular-nums'
-                                                    : undefined
-                                            }
-                                            type={
-                                                field.type === 'money'
-                                                    ? 'text'
-                                                    : (field.type ?? 'text')
-                                            }
-                                            inputMode={
-                                                field.type === 'money'
-                                                    ? 'decimal'
-                                                    : undefined
-                                            }
-                                            placeholder={
-                                                field.type === 'money'
-                                                    ? 'Da inserire'
-                                                    : undefined
-                                            }
-                                            value={value}
-                                            onChange={(event) =>
-                                                change(
-                                                    field.key,
-                                                    event.target.value,
-                                                )
-                                            }
-                                            required={field.required}
-                                            disabled={busy}
-                                            aria-invalid={!!errors[field.key]}
-                                        />
-                                    )}
-                                    {errors[field.key] && (
-                                        <p
-                                            role="alert"
-                                            className="text-sm text-destructive"
-                                        >
-                                            {errors[field.key][0]}
-                                        </p>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                        ) : (
+                                            <Input
+                                                id={id}
+                                                className={
+                                                    field.type === 'money'
+                                                        ? 'text-right font-medium tabular-nums'
+                                                        : undefined
+                                                }
+                                                type={
+                                                    field.type === 'money'
+                                                        ? 'text'
+                                                        : (field.type ?? 'text')
+                                                }
+                                                inputMode={
+                                                    field.type === 'money'
+                                                        ? 'decimal'
+                                                        : undefined
+                                                }
+                                                placeholder={
+                                                    field.type === 'money'
+                                                        ? 'Da inserire'
+                                                        : undefined
+                                                }
+                                                value={value}
+                                                onChange={(event) =>
+                                                    change(
+                                                        field.key,
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                required={field.required}
+                                                disabled={busy}
+                                                aria-invalid={
+                                                    !!errors[field.key]
+                                                }
+                                            />
+                                        )}
+                                        {errors[field.key] && (
+                                            <p
+                                                role="alert"
+                                                className="text-sm text-destructive"
+                                            >
+                                                {errors[field.key][0]}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {current.kind === 'expenses' && (
+                            <ExpenseLines
+                                lines={current.lines}
+                                disabled={busy}
+                                errors={errors}
+                                onChange={(lines) => {
+                                    setErrors((previous) =>
+                                        Object.fromEntries(
+                                            Object.entries(previous).filter(
+                                                ([key]) =>
+                                                    !key.startsWith('lines'),
+                                            ),
+                                        ),
+                                    );
+                                    setFrames((previous) =>
+                                        previous.map((item, index) =>
+                                            index === previous.length - 1
+                                                ? { ...item, lines }
+                                                : item,
+                                        ),
+                                    );
+                                }}
+                            />
+                        )}
                         <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
                             {current.kind === 'expenses' &&
                                 current.record &&

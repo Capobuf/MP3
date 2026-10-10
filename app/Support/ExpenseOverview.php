@@ -85,7 +85,7 @@ final class ExpenseOverview
 
         return [
             'tenant' => $tenant->only('id', 'name', 'slug'),
-            'expenses' => (clone $query)->with(['vendor:id,name', 'contract:id,name', 'project:id,name'])->orderBy($sort, $direction)->orderBy('id')->paginate(50)->withQueryString(),
+            'expenses' => (clone $query)->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines'])->orderBy($sort, $direction)->orderBy('id')->paginate(50)->withQueryString(),
             'totals' => self::totals($query),
             'filters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $request->integer('year', (int) now()->format('Y')), 'sort' => $sort, 'direction' => $direction],
             'years' => $tenant->expenses()->select('year')->distinct()->orderByDesc('year')->pluck('year')->push((int) now()->format('Y'))->unique()->values(),

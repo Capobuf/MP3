@@ -4,6 +4,15 @@ export type Catalog = 'vendors' | 'contracts' | 'projects';
 export type Kind = Catalog | 'expenses';
 export type Option = { id: number; name: string };
 export type Options = Record<Catalog, Option[]>;
+export type ExpenseLine = {
+    id?: number;
+    description: string;
+    type: 'allocated' | 'actual';
+    unit_price: string;
+    quantity: string;
+    total?: string;
+    position?: number;
+};
 export type RecordData = {
     id: number;
     name?: string;
@@ -28,6 +37,7 @@ export type RecordData = {
     starts_on?: string | null;
     ends_on?: string | null;
     expenses_count?: number;
+    lines?: ExpenseLine[];
 };
 export type Expense = RecordData & { title: string; year: number };
 export type Pagination<T> = {

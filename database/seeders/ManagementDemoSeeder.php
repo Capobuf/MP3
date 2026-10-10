@@ -53,7 +53,7 @@ class ManagementDemoSeeder extends Seeder
                     $year = $i < 16 ? 2025 : 2026;
                     $allocated = [1200, 2400, 3600, 1800, 0, null, 750, 4200][$i % 8];
                     $actual = [1200, 2750, 3100, null, 650, 920, null, 4200][$i % 8];
-                    $tenant->expenses()->create([
+                    $expense = $tenant->expenses()->create([
                         'title' => $titles[$i % 8].' · '.($i % 16 + 1),
                         'year' => $year,
                         'vendor_id' => $vendors[$vendorIndex]->id,
@@ -64,10 +64,24 @@ class ManagementDemoSeeder extends Seeder
                             3 => $projects[2]->id,
                             default => null,
                         },
-                        'allocated_amount' => $allocated === null ? null : (string) ($allocated + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
-                        'actual_amount' => $actual === null ? null : (string) ($actual + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
+                        'allocated_amount' => $allocated === null ? '0' : (string) ($allocated + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
+                        'actual_amount' => $actual === null ? '0' : (string) ($actual + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
                         'notes' => $year === 2026 && $vendorIndex === 1 ? 'Costo imputato manualmente al 2026; contratto stipulato nel dicembre 2025.' : 'Dato fittizio; importi inseriti manualmente.',
                     ]);
+                    $position = 0;
+                    foreach (['allocated' => $allocated, 'actual' => $actual] as $type => $amount) {
+                        if ($amount !== null) {
+                            $price = $type === 'allocated' ? $expense->allocated_amount : $expense->actual_amount;
+                            $expense->lines()->create([
+                                'description' => $expense->title,
+                                'type' => $type,
+                                'unit_price' => $price,
+                                'quantity' => '1',
+                                'total' => $price,
+                                'position' => $position++,
+                            ]);
+                        }
+                    }
                 }
             });
             $this->command->info($name.': creato con 6 fornitori, 5 contratti, 4 progetti e 32 spese.');

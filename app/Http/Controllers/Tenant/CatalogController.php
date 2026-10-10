@@ -95,7 +95,7 @@ class CatalogController extends Controller
             'year' => $year,
             'years' => $years,
             'totals' => ExpenseOverview::totals($expenses),
-            'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
+            'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
         ]);
     }

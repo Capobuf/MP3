@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { EntitySheet } from '@/components/management/entity-sheet';
+import { ExpenseLines } from '@/components/management/expense-lines';
 import { money } from '@/components/management/helpers';
 import type { Expense, Options } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
@@ -102,6 +103,17 @@ export default function ExpenseDetail({
                                 {expense.notes}
                             </p>
                         )}
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="pt-6">
+                        <ExpenseLines
+                            readOnly
+                            lines={(expense.lines ?? []).map((line, index) => ({
+                                ...line,
+                                key: String(line.id ?? index),
+                            }))}
+                        />
                     </CardContent>
                 </Card>
             </div>

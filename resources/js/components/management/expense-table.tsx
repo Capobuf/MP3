@@ -1,5 +1,5 @@
 import { Link, router, usePage } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, Check, Ellipsis, Loader2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Ellipsis } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -21,7 +21,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import {
     Table,
     TableBody,
@@ -30,7 +29,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { api, decimalInput, money } from './helpers';
+import { api, money } from './helpers';
 import type { Expense, Filters } from './types';
 
 type AmountField = 'allocated_amount' | 'actual_amount';
@@ -60,22 +59,14 @@ export function ExpenseTable({
     const scope = JSON.stringify([slug, url, rows.map((row) => row.id)]);
     const [previousScope, setPreviousScope] = useState(scope);
     const [selected, setSelected] = useState<number[]>([]);
-    const [editing, setEditing] = useState<{
-        id: number;
-        field: AmountField;
-        value: string;
-    } | null>(null);
     const [deleting, setDeleting] = useState<number[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const lock = useRef(false);
     const refreshing = useRef(false);
-    const amountButton = useRef<HTMLButtonElement | null>(null);
-    const amountInput = useRef<HTMLInputElement | null>(null);
     if (previousScope !== scope) {
         setPreviousScope(scope);
         setSelected([]);
-        setEditing(null);
         setDeleting([]);
         setError('');
     }
@@ -101,32 +92,17 @@ export function ExpenseTable({
         };
     }, []);
 
-    function cancelEdit() {
-        setEditing(null);
-        setError('');
-        requestAnimationFrame(() => amountButton.current?.focus());
-    }
-
-    async function mutate(action: 'save' | 'delete') {
-        if (lock.current || (action === 'save' && !editing)) return;
+    async function mutate() {
+        if (lock.current) return;
         lock.current = true;
         setBusy(true);
         onBusyChange?.(true);
         setError('');
         let persisted = false;
         try {
-            if (action === 'save' && editing) {
-                await api(`/t/${slug}/expenses/${editing.id}`, 'PATCH', {
-                    [editing.field]: decimalInput(editing.value),
-                });
-                setEditing(null);
-            } else {
-                await api(`/t/${slug}/expenses/batch`, 'DELETE', {
-                    ids: deleting,
-                });
-                setDeleting([]);
-                setSelected([]);
-            }
+            await api(`/t/${slug}/expenses/batch`, 'DELETE', { ids: deleting });
+            setDeleting([]);
+            setSelected([]);
             persisted = true;
             refreshing.current = true;
             const pageNumber = Number(
@@ -136,9 +112,7 @@ export function ExpenseTable({
             await new Promise<void>((resolve, reject) => {
                 let refreshed = false;
                 router.reload({
-                    ...(action === 'delete' &&
-                    deleting.length === rows.length &&
-                    pageNumber > 1
+                    ...(deleting.length === rows.length && pageNumber > 1
                         ? { data: { page: pageNumber - 1 } }
                         : {}),
                     onSuccess: () => {
@@ -157,9 +131,7 @@ export function ExpenseTable({
                     onNetworkError: () => false,
                 });
             });
-            toast.success(
-                action === 'save' ? 'Importo salvato.' : 'Spese eliminate.',
-            );
+            toast.success('Spese eliminate.');
         } catch (failure) {
             const message =
                 failure instanceof Error
@@ -167,7 +139,7 @@ export function ExpenseTable({
                     : 'Operazione non riuscita.';
             const detail = persisted
                 ? 'Operazione completata sul server, ma i dati visualizzati non sono aggiornati. Ricarica la pagina prima di continuare.'
-                : `${message} ${action === 'save' ? 'Modifica non confermata: il valore inserito resta nell’input. Correggi e premi Invio, oppure Esc per annullare.' : 'Eliminazione non confermata. La selezione è conservata.'}`;
+                : `${message} Eliminazione non confermata. La selezione è conservata.`;
             setError(detail);
             toast.error(detail);
         } finally {
@@ -175,107 +147,20 @@ export function ExpenseTable({
             refreshing.current = false;
             setBusy(false);
             onBusyChange?.(false);
-            if (action === 'save' && persisted) {
-                requestAnimationFrame(() => amountButton.current?.focus());
-            } else if (action === 'save') {
-                requestAnimationFrame(() => amountInput.current?.focus());
-            }
         }
     }
 
     function amount(expense: Expense, field: AmountField) {
-        const active = editing?.id === expense.id && editing.field === field;
         return (
-            <div className="flex min-w-0 items-center justify-end gap-1">
-                {active ? (
-                    <Input
-                        ref={amountInput}
-                        autoFocus
-                        inputMode="decimal"
-                        aria-label={`${amountLabels[field]} per ${expense.title}`}
-                        aria-describedby="expense-edit-help"
-                        aria-invalid={!!error}
-                        className="h-8 w-full max-w-40 min-w-0 text-right text-sm font-medium tabular-nums"
-                        value={editing.value}
-                        disabled={busy}
-                        onFocus={(event) => event.target.select()}
-                        onChange={(event) =>
-                            setEditing({
-                                ...editing,
-                                value: event.target.value,
-                            })
-                        }
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                                event.preventDefault();
-                                if (!event.nativeEvent.isComposing)
-                                    void mutate('save');
-                            }
-                            if (event.key === 'Escape') {
-                                event.preventDefault();
-                                cancelEdit();
-                            }
-                        }}
-                    />
-                ) : (
-                    <button
-                        type="button"
-                        disabled={busy}
-                        aria-label={`Modifica ${amountLabels[field].toLowerCase()} per ${expense.title}: ${money(expense[field])}`}
-                        className={`min-h-8 max-w-full rounded px-1 text-right text-sm font-medium wrap-anywhere tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-60 ${expense[field] == null ? 'text-muted-foreground' : ''}`}
-                        onClick={(event) => {
-                            if (editing) {
-                                toast.info(
-                                    'Premi Invio per salvare l’importo in modifica, oppure Esc per annullare.',
-                                );
-                                return;
-                            }
-                            amountButton.current = event.currentTarget;
-                            setError('');
-                            setEditing({
-                                id: expense.id,
-                                field,
-                                value: String(expense[field] ?? '').replace(
-                                    '.',
-                                    ',',
-                                ),
-                            });
-                        }}
-                    >
-                        {money(expense[field])}
-                    </button>
-                )}
-                {active && (
-                    <>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 shrink-0"
-                            aria-label="Salva importo"
-                            disabled={busy}
-                            onClick={() => void mutate('save')}
-                        >
-                            {busy ? (
-                                <Loader2 className="size-3 animate-spin" />
-                            ) : (
-                                <Check className="size-3" />
-                            )}
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-7 shrink-0"
-                            aria-label="Annulla modifica importo"
-                            disabled={busy}
-                            onClick={cancelEdit}
-                        >
-                            <X className="size-3" />
-                        </Button>
-                    </>
-                )}
-            </div>
+            <button
+                type="button"
+                disabled={busy}
+                aria-label={`Modifica le righe ${amountLabels[field].toLowerCase()} per ${expense.title}`}
+                className="min-h-8 rounded px-1 text-right text-sm font-medium tabular-nums hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                onClick={() => onEdit(expense)}
+            >
+                {money(expense[field])}
+            </button>
         );
     }
 
@@ -338,7 +223,7 @@ export function ExpenseTable({
                         variant="outline"
                         size="sm"
                         className="text-destructive"
-                        disabled={busy || !!editing}
+                        disabled={busy}
                         onClick={() => setDeleting([...selected])}
                     >
                         Elimina selezionate
@@ -352,9 +237,7 @@ export function ExpenseTable({
             >
                 {busy
                     ? 'Operazione in corso…'
-                    : editing
-                      ? 'Invio per salvare · Esc per annullare. Il valore in modifica non è ancora confermato.'
-                      : 'Clic su allocato o effettivo per modificare · Importo vuoto = da inserire.'}
+                    : 'Clic su allocato o effettivo per modificare le righe della spesa.'}
             </p>
             {error && (
                 <p role="alert" className="text-sm text-destructive">
@@ -508,7 +391,7 @@ export function ExpenseTable({
                                             size="icon"
                                             className="size-8"
                                             aria-label={`Azioni per ${expense.title}`}
-                                            disabled={busy || !!editing}
+                                            disabled={busy}
                                         >
                                             <Ellipsis className="size-4" />
                                         </Button>
@@ -579,7 +462,7 @@ export function ExpenseTable({
                             disabled={busy}
                             onClick={(event) => {
                                 event.preventDefault();
-                                void mutate('delete');
+                                void mutate();
                             }}
                         >
                             {busy ? 'Eliminazione…' : 'Elimina'}

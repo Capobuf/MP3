@@ -6,6 +6,7 @@ use App\Support\Money;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * @property string|null $allocated_amount
@@ -14,6 +15,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'notes'])]
 class Expense extends Model
 {
+    /** @return HasMany<ExpenseLine, $this> */
+    public function lines(): HasMany
+    {
+        return $this->hasMany(ExpenseLine::class)->orderBy('position')->orderBy('id');
+    }
+
     /** @return BelongsTo<Tenant, $this> */
     public function tenant(): BelongsTo
     {
