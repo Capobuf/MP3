@@ -29,9 +29,19 @@ export function dateLabel(value: string | null | undefined): string {
 export function decimalInput(value: string): string | null {
     const trimmed = value.trim().replace(/\s/g, '').replace(/€/g, '');
     if (trimmed === '') return null;
-    return trimmed.includes(',')
-        ? trimmed.replace(/\./g, '').replace(',', '.')
-        : trimmed;
+    if (trimmed.includes(',') && trimmed.includes('.')) {
+        // With both separators, the last one is decimal; groups must have 3 digits.
+        const decimalComma =
+            trimmed.lastIndexOf(',') > trimmed.lastIndexOf('.');
+        const grouped = decimalComma
+            ? /^-?\d{1,3}(?:\.\d{3})+,\d+$/
+            : /^-?\d{1,3}(?:,\d{3})+\.\d+$/;
+        if (!grouped.test(trimmed)) return trimmed;
+        return decimalComma
+            ? trimmed.replace(/\./g, '').replace(',', '.')
+            : trimmed.replace(/,/g, '');
+    }
+    return trimmed.replace(',', '.');
 }
 export class ApiError extends Error {
     constructor(

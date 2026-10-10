@@ -464,10 +464,10 @@ export function ExpenseLines({
                             {!readOnly && <TableHead>Ordine</TableHead>}
                             <TableHead>Tipo</TableHead>
                             <TableHead>Descrizione</TableHead>
-                            <TableHead className="text-right">
+                            <TableHead className="w-32 text-right whitespace-normal">
                                 Prezzo unitario (€)
                             </TableHead>
-                            <TableHead className="text-right">
+                            <TableHead className="w-24 text-right">
                                 Quantità
                             </TableHead>
                             <TableHead className="text-right">Totale</TableHead>
@@ -637,7 +637,7 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="min-w-52 whitespace-normal">
+                                    <TableCell className="w-full min-w-80 whitespace-normal">
                                         {readOnly ? (
                                             line.description
                                         ) : (
@@ -681,7 +681,7 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="min-w-44 text-right font-medium tracking-normal tabular-nums">
+                                    <TableCell className="w-32 min-w-32 text-right font-medium tracking-normal tabular-nums">
                                         {readOnly ? (
                                             money(line.unit_price)
                                         ) : (
@@ -712,7 +712,7 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="min-w-32 text-right font-medium tracking-normal tabular-nums">
+                                    <TableCell className="w-24 min-w-24 text-right font-medium tracking-normal tabular-nums">
                                         {readOnly ? (
                                             Number(
                                                 line.quantity,
