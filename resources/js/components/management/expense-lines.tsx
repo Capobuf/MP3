@@ -18,6 +18,7 @@ import {
 import { cn } from '@/lib/utils';
 import { dateLabel, decimalInput, money, varianceTextClass } from './helpers';
 import { DateField } from './date-field';
+import { MoneyField, MoneyOutput } from './money-field';
 import {
     ExpensePeriodFields,
     periodCrossesYears,
@@ -465,7 +466,7 @@ export function ExpenseLines({
                             <TableHead>Tipo</TableHead>
                             <TableHead>Descrizione</TableHead>
                             <TableHead className="w-32 text-right whitespace-normal">
-                                Prezzo unitario (€)
+                                Prezzo unitario
                             </TableHead>
                             <TableHead className="w-24 text-right">
                                 Quantità
@@ -523,7 +524,11 @@ export function ExpenseLines({
                             return (
                                 <TableRow
                                     key={line.key}
-                                    className="[&>td]:align-top"
+                                    className={
+                                        readOnly
+                                            ? '[&>td]:align-middle'
+                                            : '[&>td]:align-top'
+                                    }
                                     data-state={
                                         selected.includes(line.key)
                                             ? 'selected'
@@ -683,9 +688,12 @@ export function ExpenseLines({
                                     </TableCell>
                                     <TableCell className="w-32 min-w-32 text-right font-medium tracking-normal tabular-nums">
                                         {readOnly ? (
-                                            money(line.unit_price)
+                                            <MoneyOutput
+                                                value={line.unit_price}
+                                                label={`Prezzo unitario ${label}`}
+                                            />
                                         ) : (
-                                            <Input
+                                            <MoneyField
                                                 aria-label={`Prezzo unitario ${label}`}
                                                 aria-invalid={
                                                     !!fieldError('unit_price')
@@ -695,10 +703,9 @@ export function ExpenseLines({
                                                 value={line.unit_price}
                                                 disabled={disabled}
                                                 placeholder="0,00"
-                                                onChange={(event) =>
+                                                onChange={(value) =>
                                                     change(line.key, {
-                                                        unit_price:
-                                                            event.target.value,
+                                                        unit_price: value,
                                                     })
                                                 }
                                             />
@@ -746,12 +753,19 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-right font-medium tracking-normal tabular-nums">
-                                        <output aria-label={`Totale ${label}`}>
-                                            {cents === null
-                                                ? 'Da completare'
-                                                : format(cents)}
-                                        </output>
+                                    <TableCell className="min-w-36 text-right font-medium tracking-normal tabular-nums">
+                                        <MoneyOutput
+                                            label={`Totale ${label}`}
+                                            value={
+                                                cents !== null
+                                                    ? Number(cents) / 100
+                                                    : decimalInput(
+                                                            line.unit_price,
+                                                        ) === null
+                                                      ? 0
+                                                      : null
+                                            }
+                                        />
                                     </TableCell>
                                     {contractMode &&
                                         (

@@ -36,6 +36,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Tenant } from '@/types';
 import { AttachmentsSection } from './attachments-section';
 import { DateField } from './date-field';
+import { MoneyField } from './money-field';
 import { FormSurface } from './form-surface';
 import { draftLines, emptyDraftLine, ExpenseLines } from './expense-lines';
 import { ExpensePeriodFields, periodYear } from './expense-period-fields';
@@ -88,8 +89,8 @@ const fields: Record<Kind, FormField[]> = {
             type: 'number',
             required: true,
         },
-        { key: 'allocated_amount', label: 'Previsto (€)', type: 'money' },
-        { key: 'actual_amount', label: 'Effettivo (€)', type: 'money' },
+        { key: 'allocated_amount', label: 'Previsto', type: 'money' },
+        { key: 'actual_amount', label: 'Effettivo', type: 'money' },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
         { key: 'contract_id', label: 'Contratto', catalog: 'contracts' },
         { key: 'project_id', label: 'Progetto', catalog: 'projects' },
@@ -879,6 +880,25 @@ export function EntityForm({
                                                 }
                                                 disabled={formBusy}
                                             />
+                                        ) : field.type === 'money' ? (
+                                            <MoneyField
+                                                id={id}
+                                                aria-describedby={
+                                                    errors[field.key]
+                                                        ? `${id}-error`
+                                                        : undefined
+                                                }
+                                                placeholder="0,00"
+                                                value={value}
+                                                onChange={(value) =>
+                                                    change(field.key, value)
+                                                }
+                                                required={field.required}
+                                                disabled={formBusy}
+                                                aria-invalid={
+                                                    !!errors[field.key]
+                                                }
+                                            />
                                         ) : (
                                             <Input
                                                 id={id}
@@ -887,26 +907,7 @@ export function EntityForm({
                                                         ? `${id}-error`
                                                         : undefined
                                                 }
-                                                className={
-                                                    field.type === 'money'
-                                                        ? 'text-right font-medium tabular-nums'
-                                                        : undefined
-                                                }
-                                                type={
-                                                    field.type === 'money'
-                                                        ? 'text'
-                                                        : (field.type ?? 'text')
-                                                }
-                                                inputMode={
-                                                    field.type === 'money'
-                                                        ? 'decimal'
-                                                        : undefined
-                                                }
-                                                placeholder={
-                                                    field.type === 'money'
-                                                        ? 'Da inserire'
-                                                        : undefined
-                                                }
+                                                type={field.type ?? 'text'}
                                                 value={value}
                                                 onChange={(event) =>
                                                     change(
