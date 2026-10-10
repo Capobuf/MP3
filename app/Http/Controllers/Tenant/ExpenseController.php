@@ -37,15 +37,21 @@ class ExpenseController extends Controller
 
     public function store(ExpenseRequest $request, Tenant $tenant): JsonResponse
     {
-        $expense = DB::transaction(function () use ($request, $tenant): Expense {
+        $expense = $this->createForTenant($tenant, $request->validated());
+
+        return response()->json(['record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
+    }
+
+    /** @param array<string, mixed> $data Validated expense fields. */
+    public function createForTenant(Tenant $tenant, array $data): Expense
+    {
+        return DB::transaction(function () use ($data, $tenant): Expense {
             $expense = $tenant->expenses()->make();
-            ExpensePeriods::lockContracts($tenant, [$request->validated('contract_id')]);
-            $this->persist($expense, $request->validated());
+            ExpensePeriods::lockContracts($tenant, [$data['contract_id'] ?? null]);
+            $this->persist($expense, $data);
 
             return $expense;
         });
-
-        return response()->json(['record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
     }
 
     public function update(ExpenseRequest $request, Tenant $tenant, Expense $expense): JsonResponse

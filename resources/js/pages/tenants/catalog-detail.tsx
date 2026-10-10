@@ -5,7 +5,7 @@ import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseTable } from '@/components/management/expense-table';
-import { dateLabel, money } from '@/components/management/helpers';
+import { dateLabel } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import { Summary } from '@/components/management/summary';
 import { labels } from '@/components/management/types';
@@ -67,14 +67,7 @@ export default function CatalogDetail({
             : [
                   ['Data iniziale', dateLabel(record.starts_on)],
                   ['Data finale', dateLabel(record.ends_on)],
-                  ...(catalog === 'contracts'
-                      ? [
-                            [
-                                'Importo contrattuale informativo',
-                                money(record.reference_amount),
-                            ],
-                        ]
-                      : [['Stato', record.status]]),
+                  ...(catalog === 'projects' ? [['Stato', record.status]] : []),
               ];
     return (
         <>
@@ -115,9 +108,7 @@ export default function CatalogDetail({
                                     <dt className="text-sm text-muted-foreground">
                                         {label}
                                     </dt>
-                                    <dd
-                                        className={`mt-1 font-medium ${label === 'Importo contrattuale informativo' ? 'text-base tracking-normal tabular-nums' : 'text-sm'}`}
-                                    >
+                                    <dd className="mt-1 text-sm font-medium">
                                         {value ?? '—'}
                                     </dd>
                                 </div>
@@ -160,12 +151,6 @@ export default function CatalogDetail({
                                     <p className="text-sm">Nessuno</p>
                                 )}
                             </div>
-                        )}
-                        {catalog === 'contracts' && (
-                            <p className="mt-4 text-sm text-muted-foreground">
-                                L’importo del contratto è informativo e distinto
-                                dai totali delle spese qui sotto.
-                            </p>
                         )}
                         {catalog === 'projects' && (
                             <p className="mt-4 text-sm text-muted-foreground">

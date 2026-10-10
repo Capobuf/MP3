@@ -14,12 +14,15 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
     Field,
     FieldGroup,
     FieldLabel,
     FieldError,
+    FieldSet,
+    FieldLegend,
 } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
@@ -74,11 +77,6 @@ const fields: Record<Kind, FormField[]> = {
     contracts: [
         { key: 'name', label: 'Nome', required: true },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
-        {
-            key: 'reference_amount',
-            label: 'Importo contrattuale informativo',
-            type: 'money',
-        },
         { key: 'starts_on', label: 'Data iniziale', type: 'date' },
         { key: 'ends_on', label: 'Data finale', type: 'date' },
         { key: 'notes', label: 'Note', type: 'textarea' },
@@ -108,6 +106,11 @@ const fields: Record<Kind, FormField[]> = {
         { key: 'notes', label: 'Note', type: 'textarea' },
     ],
 };
+type InitialExpense = {
+    enabled: boolean;
+    values: Record<string, string>;
+    lines: DraftLine[];
+};
 type Frame = {
     kind: Kind;
     record?: RecordData;
@@ -117,7 +120,30 @@ type Frame = {
     costCenterIds: number[];
     original: string;
     returnField?: string;
+    initialExpense?: InitialExpense;
 };
+function snapshot(
+    item: Pick<
+        Frame,
+        'values' | 'lines' | 'costCenterIds' | 'detailed' | 'initialExpense'
+    >,
+): string {
+    return JSON.stringify({
+        values: item.values,
+        lines: item.lines,
+        costCenterIds: item.costCenterIds,
+        detailed: item.detailed,
+        initialExpense: item.initialExpense,
+    });
+}
+function linePayload(lines: DraftLine[]) {
+    return lines.map((line) => ({
+        description: line.description,
+        type: line.type,
+        unit_price: decimalInput(line.unit_price),
+        quantity: decimalInput(line.quantity),
+    }));
+}
 function frame(
     kind: Kind,
     year: number,
@@ -141,6 +167,19 @@ function frame(
     const detailed = kind === 'expenses' && (!record || !!record.lines?.length);
     const costCenterIds =
         record?.cost_centers?.map((center) => center.id) ?? [];
+    const initialExpense =
+        kind === 'contracts' && !record
+            ? {
+                  enabled: !returnField,
+                  values: {
+                      title: '',
+                      year: String(year),
+                      period_starts_on: '',
+                      period_ends_on: '',
+                  },
+                  lines: [emptyDraftLine()],
+              }
+            : undefined;
     return {
         kind,
         record,
@@ -148,7 +187,14 @@ function frame(
         lines,
         detailed,
         costCenterIds,
-        original: JSON.stringify({ values, lines, costCenterIds, detailed }),
+        initialExpense,
+        original: snapshot({
+            values,
+            lines,
+            costCenterIds,
+            detailed,
+            initialExpense,
+        }),
         returnField,
     };
 }
@@ -189,12 +235,7 @@ export function EntitySheet({
                 );
                 initial.values.year = periodYear(initial.values, true);
             }
-            initial.original = JSON.stringify({
-                values: initial.values,
-                lines: initial.lines,
-                costCenterIds: initial.costCenterIds,
-                detailed: initial.detailed,
-            });
+            initial.original = snapshot(initial);
         }
         return [initial];
     });
@@ -209,15 +250,17 @@ export function EntitySheet({
     const formBusy = busy || attachmentsBusy;
     const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
     const current = frames[frames.length - 1];
-    const dirty = frames.some(
-        (item) =>
-            JSON.stringify({
-                values: item.values,
-                lines: item.lines,
-                costCenterIds: item.costCenterIds,
-                detailed: item.detailed,
-            }) !== item.original,
+    const initialExpense = current.initialExpense;
+    const editingInitialExpense = !!initialExpense?.enabled;
+    const initialExpenseErrors = Object.fromEntries(
+        Object.entries(errors)
+            .filter(([key]) => key.startsWith('initial_expense.'))
+            .map(([key, messages]) => [
+                key.slice('initial_expense.'.length),
+                messages,
+            ]),
     );
+    const dirty = frames.some((item) => snapshot(item) !== item.original);
     useEffect(() => {
         const listener = (event: BeforeUnloadEvent) => {
             if (dirty || formBusy) event.preventDefault();
@@ -237,7 +280,54 @@ export function EntitySheet({
                             (!item.values.period_starts_on ||
                                 !item.values.period_ends_on),
                     );
-                return { ...item, values };
+                let initialExpense = item.initialExpense;
+                if (initialExpense) {
+                    const expenseKeys: Record<string, string> = {
+                        name: 'title',
+                        starts_on: 'period_starts_on',
+                        ends_on: 'period_ends_on',
+                    };
+                    const expenseKey = expenseKeys[key];
+                    if (
+                        expenseKey &&
+                        initialExpense.values[expenseKey] === item.values[key]
+                    ) {
+                        const expenseValues = {
+                            ...initialExpense.values,
+                            [expenseKey]: value,
+                        };
+                        if (expenseKey.startsWith('period_'))
+                            expenseValues.year = periodYear(
+                                expenseValues,
+                                !initialExpense.values.period_starts_on ||
+                                    !initialExpense.values.period_ends_on,
+                            );
+                        initialExpense = {
+                            ...initialExpense,
+                            values: expenseValues,
+                        };
+                    }
+                }
+                return { ...item, values, initialExpense };
+            }),
+        );
+    }
+    function changeInitialExpense(key: string, value: string) {
+        setFrames((previous) =>
+            previous.map((item, index) => {
+                if (index !== previous.length - 1 || !item.initialExpense)
+                    return item;
+                const values = { ...item.initialExpense.values, [key]: value };
+                if (key.startsWith('period_'))
+                    values.year = periodYear(
+                        values,
+                        !item.initialExpense.values.period_starts_on ||
+                            !item.initialExpense.values.period_ends_on,
+                    );
+                return {
+                    ...item,
+                    initialExpense: { ...item.initialExpense, values },
+                };
             }),
         );
     }
@@ -292,14 +382,15 @@ export function EntitySheet({
             if (current.detailed) {
                 delete payload.allocated_amount;
                 delete payload.actual_amount;
-                payload.lines = current.lines.map((line) => ({
-                    description: line.description,
-                    type: line.type,
-                    unit_price: decimalInput(line.unit_price),
-                    quantity: decimalInput(line.quantity),
-                }));
+                payload.lines = linePayload(current.lines);
             }
             if (contractContext) payload.contract_entry = true;
+        }
+        if (initialExpense?.enabled) {
+            payload.initial_expense = {
+                ...initialExpense.values,
+                lines: linePayload(initialExpense.lines),
+            };
         }
         if (current.kind !== 'vendors') {
             payload.cost_center_ids = current.costCenterIds;
@@ -395,7 +486,7 @@ export function EntitySheet({
                 <SheetContent
                     className={cn(
                         'w-full gap-0 overflow-hidden bg-popover',
-                        current.kind === 'expenses'
+                        current.kind === 'expenses' || editingInitialExpense
                             ? 'sm:max-w-5xl'
                             : 'sm:max-w-xl',
                     )}
@@ -420,7 +511,9 @@ export function EntitySheet({
                                     ? 'Modifica i dati generali e le righe economiche della spesa.'
                                     : 'Inserisci il previsto, l’effettivo oppure entrambi. Un campo vuoto indica un importo non disponibile; zero è un importo valorizzato.'
                                 : current.kind === 'contracts'
-                                  ? 'L’importo di riferimento è informativo. Il contratto non genera spese.'
+                                  ? current.record
+                                      ? 'Modifica i dati del contratto. Le condizioni economiche sono nelle spese collegate.'
+                                      : 'Inserisci il contratto e le condizioni economiche della prima spesa.'
                                   : `Dati di ${tenant.name}.`}
                         </SheetDescription>
                     </SheetHeader>
@@ -431,14 +524,7 @@ export function EntitySheet({
                             className="mx-4 justify-start"
                             disabled={formBusy}
                             onClick={() => {
-                                if (
-                                    JSON.stringify({
-                                        values: current.values,
-                                        lines: current.lines,
-                                        costCenterIds: current.costCenterIds,
-                                        detailed: current.detailed,
-                                    }) !== current.original
-                                )
+                                if (snapshot(current) !== current.original)
                                     setDiscard('back');
                                 else back();
                             }}
@@ -856,6 +942,117 @@ export function EntitySheet({
                                         </Field>
                                     )}
                             </FieldGroup>
+                            {initialExpense && (
+                                <FieldSet>
+                                    <FieldLegend>
+                                        Condizioni economiche
+                                    </FieldLegend>
+                                    <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                                        <Field
+                                            orientation="horizontal"
+                                            className="sm:col-span-2"
+                                        >
+                                            <Checkbox
+                                                id="include-initial-expense"
+                                                checked={initialExpense.enabled}
+                                                disabled={formBusy}
+                                                onCheckedChange={(checked) =>
+                                                    setFrames((previous) =>
+                                                        previous.map(
+                                                            (item, index) =>
+                                                                index ===
+                                                                    previous.length -
+                                                                        1 &&
+                                                                item.initialExpense
+                                                                    ? {
+                                                                          ...item,
+                                                                          initialExpense:
+                                                                              {
+                                                                                  ...item.initialExpense,
+                                                                                  enabled:
+                                                                                      checked ===
+                                                                                      true,
+                                                                              },
+                                                                      }
+                                                                    : item,
+                                                        ),
+                                                    )
+                                                }
+                                            />
+                                            <FieldLabel htmlFor="include-initial-expense">
+                                                Registra la prima spesa insieme
+                                                al contratto
+                                            </FieldLabel>
+                                        </Field>
+                                        {initialExpense.enabled && (
+                                            <>
+                                                <p className="text-sm text-muted-foreground sm:col-span-2">
+                                                    La spesa usa il fornitore e
+                                                    i centri di costo del
+                                                    contratto ed è inclusa nei
+                                                    totali.
+                                                </p>
+                                                <Field
+                                                    className="sm:col-span-2"
+                                                    data-invalid={
+                                                        !!initialExpenseErrors.title
+                                                    }
+                                                >
+                                                    <FieldLabel htmlFor="initial-expense-title">
+                                                        Descrizione spesa *
+                                                    </FieldLabel>
+                                                    <Input
+                                                        id="initial-expense-title"
+                                                        value={
+                                                            initialExpense
+                                                                .values.title
+                                                        }
+                                                        onChange={(event) =>
+                                                            changeInitialExpense(
+                                                                'title',
+                                                                event.target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                        required
+                                                        disabled={formBusy}
+                                                        aria-invalid={
+                                                            !!initialExpenseErrors.title
+                                                        }
+                                                        aria-describedby={
+                                                            initialExpenseErrors.title
+                                                                ? 'initial-expense-title-error'
+                                                                : undefined
+                                                        }
+                                                    />
+                                                    <FieldError id="initial-expense-title-error">
+                                                        {
+                                                            initialExpenseErrors
+                                                                .title?.[0]
+                                                        }
+                                                    </FieldError>
+                                                </Field>
+                                                <ExpensePeriodFields
+                                                    values={
+                                                        initialExpense.values
+                                                    }
+                                                    onChange={
+                                                        changeInitialExpense
+                                                    }
+                                                    disabled={formBusy}
+                                                    errors={
+                                                        initialExpenseErrors
+                                                    }
+                                                    showPeriod
+                                                />
+                                            </>
+                                        )}
+                                        <FieldError>
+                                            {errors.initial_expense?.[0]}
+                                        </FieldError>
+                                    </FieldGroup>
+                                </FieldSet>
+                            )}
                             {current.kind === 'expenses' &&
                                 !current.detailed && (
                                     <Button
@@ -867,40 +1064,58 @@ export function EntitySheet({
                                         Passa alle righe economiche
                                     </Button>
                                 )}
-                            {current.kind === 'expenses' &&
-                                current.detailed && (
-                                    <ExpenseLines
-                                        lines={current.lines}
-                                        contractMode={
-                                            !!current.values.contract_id ||
-                                            !!current.record?.contract_id
-                                        }
-                                        disabled={formBusy}
-                                        errors={errors}
-                                        onChange={(lines) => {
-                                            setErrors((previous) =>
-                                                Object.fromEntries(
-                                                    Object.entries(
-                                                        previous,
-                                                    ).filter(
-                                                        ([key]) =>
-                                                            !key.startsWith(
-                                                                'lines',
-                                                            ),
-                                                    ),
+                            {((current.kind === 'expenses' &&
+                                current.detailed) ||
+                                editingInitialExpense) && (
+                                <ExpenseLines
+                                    lines={
+                                        editingInitialExpense
+                                            ? initialExpense!.lines
+                                            : current.lines
+                                    }
+                                    contractMode={
+                                        editingInitialExpense ||
+                                        !!current.values.contract_id ||
+                                        !!current.record?.contract_id
+                                    }
+                                    disabled={formBusy}
+                                    errors={
+                                        editingInitialExpense
+                                            ? initialExpenseErrors
+                                            : errors
+                                    }
+                                    onChange={(lines) => {
+                                        setErrors((previous) =>
+                                            Object.fromEntries(
+                                                Object.entries(previous).filter(
+                                                    ([key]) =>
+                                                        !key.startsWith(
+                                                            editingInitialExpense
+                                                                ? 'initial_expense.lines'
+                                                                : 'lines',
+                                                        ),
                                                 ),
-                                            );
-                                            setFrames((previous) =>
-                                                previous.map((item, index) =>
-                                                    index ===
-                                                    previous.length - 1
-                                                        ? { ...item, lines }
-                                                        : item,
-                                                ),
-                                            );
-                                        }}
-                                    />
-                                )}
+                                            ),
+                                        );
+                                        setFrames((previous) =>
+                                            previous.map((item, index) =>
+                                                index === previous.length - 1
+                                                    ? editingInitialExpense &&
+                                                      item.initialExpense
+                                                        ? {
+                                                              ...item,
+                                                              initialExpense: {
+                                                                  ...item.initialExpense,
+                                                                  lines,
+                                                              },
+                                                          }
+                                                        : { ...item, lines }
+                                                    : item,
+                                            ),
+                                        );
+                                    }}
+                                />
+                            )}
                             {current.kind !== 'vendors' &&
                                 (current.record ? (
                                     <div className="flex min-w-0 flex-col gap-2">
