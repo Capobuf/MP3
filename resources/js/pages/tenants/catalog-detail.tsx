@@ -54,6 +54,7 @@ export default function CatalogDetail({
 }) {
     const [edit, setEdit] = useState(false);
     const [expense, setExpense] = useState<Expense | null>(null);
+    const [addingExpense, setAddingExpense] = useState(false);
     const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/${catalog}`;
     const info =
@@ -240,13 +241,24 @@ export default function CatalogDetail({
                 </div>
                 <section
                     aria-label="Spese collegate"
-                    className="min-w-0 space-y-3"
+                    className="flex min-w-0 flex-col gap-3"
                 >
-                    <h2 className="font-semibold">Spese collegate</h2>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="font-semibold">Spese collegate</h2>
+                        {catalog === 'contracts' && (
+                            <Button
+                                disabled={tableBusy}
+                                onClick={() => setAddingExpense(true)}
+                            >
+                                Aggiungi spesa
+                            </Button>
+                        )}
+                    </div>
                     <ExpenseTable
                         rows={expenses.data}
                         slug={tenant.slug}
                         showYear
+                        contractMode={catalog === 'contracts'}
                         onEdit={setExpense}
                         onBusyChange={setTableBusy}
                     />
@@ -306,15 +318,22 @@ export default function CatalogDetail({
                     }}
                 />
             )}
-            {expense && (
+            {(expense || addingExpense) && (
                 <EntitySheet
                     tenant={tenant}
                     kind="expenses"
-                    record={expense}
+                    record={expense ?? undefined}
+                    contractContext={
+                        catalog === 'contracts' ? record : undefined
+                    }
                     options={options}
-                    onClose={() => setExpense(null)}
+                    onClose={() => {
+                        setExpense(null);
+                        setAddingExpense(false);
+                    }}
                     onSaved={() => {
                         setExpense(null);
+                        setAddingExpense(false);
                         router.reload();
                     }}
                 />

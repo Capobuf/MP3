@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { CostCenterTags } from './cost-center-tags';
-import { api, money, varianceTextClass } from './helpers';
+import { api, dateLabel, money, varianceTextClass } from './helpers';
 import type { DeletionResult, Expense, Filters } from './types';
 
 type AmountField = 'allocated_amount' | 'actual_amount';
@@ -48,6 +48,7 @@ export function ExpenseTable({
     slug,
     onEdit,
     showYear = false,
+    contractMode = false,
     filters,
     onSort,
     onBusyChange,
@@ -57,6 +58,7 @@ export function ExpenseTable({
     slug: string;
     onEdit: (expense: Expense) => void;
     showYear?: boolean;
+    contractMode?: boolean;
     filters?: Filters;
     onSort?: (field: string) => void;
     onBusyChange?: (busy: boolean) => void;
@@ -168,7 +170,7 @@ export function ExpenseTable({
             <button
                 type="button"
                 disabled={busy}
-                aria-label={`Modifica le righe ${amountLabels[field].toLowerCase()} per ${expense.title}`}
+                aria-label={`Modifica ${amountLabels[field].toLowerCase()} per ${expense.title}`}
                 className="min-h-9 rounded px-1 text-right text-sm font-medium tracking-normal whitespace-nowrap text-foreground tabular-nums hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 onClick={() => onEdit(expense)}
             >
@@ -255,7 +257,7 @@ export function ExpenseTable({
                     ? 'Operazione in corso…'
                     : loading
                       ? 'Aggiornamento delle spese…'
-                      : 'Clic su allocato o effettivo per modificare le righe della spesa.'}
+                      : 'Clic sugli importi per modificare la spesa.'}
             </p>
             {error && (
                 <p role="alert" className="text-sm text-destructive">
@@ -294,6 +296,16 @@ export function ExpenseTable({
                             >
                                 {heading('Descrizione', 'title')}
                             </TableHead>
+                            {contractMode && (
+                                <>
+                                    <TableHead className="hidden w-52 xl:table-cell">
+                                        Periodo coperto
+                                    </TableHead>
+                                    <TableHead className="hidden w-24 xl:table-cell">
+                                        Anno di imputazione
+                                    </TableHead>
+                                </>
+                            )}
                             <TableHead
                                 aria-sort={
                                     onSort
@@ -302,7 +314,10 @@ export function ExpenseTable({
                                 }
                                 className="hidden w-44 text-right text-sm text-muted-foreground xl:table-cell"
                             >
-                                {heading('Allocato', 'allocated_amount')}
+                                {heading(
+                                    contractMode ? 'Previsto' : 'Allocato',
+                                    'allocated_amount',
+                                )}
                             </TableHead>
                             <TableHead
                                 aria-sort={
@@ -314,9 +329,11 @@ export function ExpenseTable({
                             >
                                 {heading('Effettivo', 'actual_amount')}
                             </TableHead>
-                            <TableHead className="hidden w-44 text-right text-sm text-muted-foreground xl:table-cell">
-                                Scostamento
-                            </TableHead>
+                            {!contractMode && (
+                                <TableHead className="hidden w-44 text-right text-sm text-muted-foreground xl:table-cell">
+                                    Scostamento
+                                </TableHead>
+                            )}
                             <TableHead className="w-10">
                                 <span className="sr-only">Azioni</span>
                             </TableHead>
@@ -326,7 +343,7 @@ export function ExpenseTable({
                         {!rows.length && (
                             <TableRow className="block xl:table-row">
                                 <TableCell
-                                    colSpan={6}
+                                    colSpan={contractMode ? 7 : 6}
                                     className="block py-10 text-center whitespace-normal text-muted-foreground xl:table-cell"
                                 >
                                     {loading ? (
@@ -381,15 +398,38 @@ export function ExpenseTable({
                                         ·{' '}
                                         {expense.project?.name ??
                                             'Senza progetto'}
-                                        {showYear && ` · ${expense.year}`}
+                                        {showYear &&
+                                            !contractMode &&
+                                            ` · ${expense.year}`}
                                     </p>
                                     <CostCenterTags
                                         centers={expense.cost_centers}
                                     />
                                 </TableCell>
+                                {contractMode && (
+                                    <>
+                                        <TableCell className={amountCell}>
+                                            <span className="text-sm text-muted-foreground xl:hidden">
+                                                Periodo coperto
+                                            </span>
+                                            <span>
+                                                {expense.period_starts_on &&
+                                                expense.period_ends_on
+                                                    ? `${dateLabel(expense.period_starts_on)} – ${dateLabel(expense.period_ends_on)}`
+                                                    : 'Periodo non indicato'}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className={amountCell}>
+                                            <span className="text-sm text-muted-foreground xl:hidden">
+                                                Anno di imputazione
+                                            </span>
+                                            {expense.year}
+                                        </TableCell>
+                                    </>
+                                )}
                                 <TableCell className={amountCell}>
                                     <span className="text-sm text-muted-foreground xl:hidden">
-                                        Allocato
+                                        {contractMode ? 'Previsto' : 'Allocato'}
                                     </span>
                                     {amount(expense, 'allocated_amount')}
                                 </TableCell>
@@ -399,22 +439,24 @@ export function ExpenseTable({
                                     </span>
                                     {amount(expense, 'actual_amount')}
                                 </TableCell>
-                                <TableCell
-                                    className={cn(
-                                        amountCell,
-                                        'text-sm font-medium tabular-nums',
-                                        varianceTextClass(expense.variance),
-                                    )}
-                                >
-                                    <span className="text-xs font-normal text-muted-foreground xl:hidden">
-                                        Scostamento
-                                    </span>
-                                    <span className="tracking-normal whitespace-nowrap">
-                                        {expense.variance == null
-                                            ? 'Non determinabile'
-                                            : money(expense.variance)}
-                                    </span>
-                                </TableCell>
+                                {!contractMode && (
+                                    <TableCell
+                                        className={cn(
+                                            amountCell,
+                                            'text-sm font-medium tabular-nums',
+                                            varianceTextClass(expense.variance),
+                                        )}
+                                    >
+                                        <span className="text-xs font-normal text-muted-foreground xl:hidden">
+                                            Scostamento
+                                        </span>
+                                        <span className="tracking-normal whitespace-nowrap">
+                                            {expense.variance == null
+                                                ? 'Non determinabile'
+                                                : money(expense.variance)}
+                                        </span>
+                                    </TableCell>
+                                )}
                                 <TableCell className="col-start-3 row-start-1 px-0 text-right xl:px-2">
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>

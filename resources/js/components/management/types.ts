@@ -46,6 +46,9 @@ export type RecordData = {
     variance?: string | null;
     starts_on?: string | null;
     ends_on?: string | null;
+    period_starts_on?: string | null;
+    period_ends_on?: string | null;
+    has_period_expenses?: boolean;
     expenses_count?: number;
     lines?: ExpenseLine[];
     cost_centers?: CostCenter[];

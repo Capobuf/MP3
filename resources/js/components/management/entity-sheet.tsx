@@ -43,6 +43,8 @@ import type { Tenant } from '@/types';
 import { AttachmentsSection } from './attachments-section';
 import { DateField } from './date-field';
 import { draftLines, ExpenseLines } from './expense-lines';
+import { ExpensePeriodFields, periodYear } from './expense-period-fields';
+import { dateLabel } from './helpers';
 import type { DraftLine } from './expense-lines';
 import { api, ApiError, decimalInput } from './helpers';
 import { RecordSelect } from './record-select';
@@ -90,6 +92,10 @@ const fields: Record<Kind, FormField[]> = {
     ],
     expenses: [
         { key: 'title', label: 'Descrizione spesa', required: true },
+        { key: 'period_starts_on', label: 'Inizio periodo', type: 'date' },
+        { key: 'period_ends_on', label: 'Fine periodo', type: 'date' },
+        { key: 'allocated_amount', label: 'Previsto (€)', type: 'money' },
+        { key: 'actual_amount', label: 'Effettivo (€)', type: 'money' },
         {
             key: 'year',
             label: 'Anno di imputazione',
@@ -107,6 +113,7 @@ type Frame = {
     record?: RecordData;
     values: Record<string, string>;
     lines: DraftLine[];
+    detailed: boolean;
     costCenterIds: number[];
     original: string;
     returnField?: string;
@@ -131,6 +138,7 @@ function frame(
         ]),
     );
     const lines = kind === 'expenses' ? draftLines(record) : [];
+    const detailed = kind === 'expenses' && (!record || !!record.lines?.length);
     const costCenterIds =
         record?.cost_centers?.map((center) => center.id) ?? [];
     return {
@@ -138,8 +146,9 @@ function frame(
         record,
         values,
         lines,
+        detailed,
         costCenterIds,
-        original: JSON.stringify({ values, lines, costCenterIds }),
+        original: JSON.stringify({ values, lines, costCenterIds, detailed }),
         returnField,
     };
 }
@@ -149,6 +158,7 @@ export function EntitySheet({
     record,
     year = new Date().getFullYear(),
     options,
+    contractContext,
     onClose,
     onSaved,
 }: {
@@ -157,12 +167,37 @@ export function EntitySheet({
     record?: RecordData;
     year?: number;
     options: Options;
+    contractContext?: RecordData;
     onClose: () => void;
     onSaved: (record: RecordData) => void;
 }) {
-    const [frames, setFrames] = useState<Frame[]>(() => [
-        frame(kind, year, record),
-    ]);
+    const [frames, setFrames] = useState<Frame[]>(() => {
+        const initial = frame(kind, year, record);
+        if (kind === 'expenses' && contractContext && !record) {
+            initial.detailed = false;
+            initial.values.contract_id = String(contractContext.id);
+            if (
+                !contractContext.has_period_expenses &&
+                contractContext.starts_on &&
+                contractContext.ends_on
+            ) {
+                initial.values.period_starts_on =
+                    contractContext.starts_on.slice(0, 10);
+                initial.values.period_ends_on = contractContext.ends_on.slice(
+                    0,
+                    10,
+                );
+                initial.values.year = periodYear(initial.values, true);
+            }
+            initial.original = JSON.stringify({
+                values: initial.values,
+                lines: initial.lines,
+                costCenterIds: initial.costCenterIds,
+                detailed: initial.detailed,
+            });
+        }
+        return [initial];
+    });
     const [localOptions, setLocalOptions] = useState(options);
     const [creatingCostCenter, setCreatingCostCenter] = useState<string | null>(
         null,
@@ -180,6 +215,7 @@ export function EntitySheet({
                 values: item.values,
                 lines: item.lines,
                 costCenterIds: item.costCenterIds,
+                detailed: item.detailed,
             }) !== item.original,
     );
     useEffect(() => {
@@ -191,11 +227,37 @@ export function EntitySheet({
     }, [dirty, formBusy]);
     function change(key: string, value: string) {
         setFrames((previous) =>
-            previous.map((item, index) =>
-                index === previous.length - 1
-                    ? { ...item, values: { ...item.values, [key]: value } }
-                    : item,
-            ),
+            previous.map((item, index) => {
+                if (index !== previous.length - 1) return item;
+                const values = { ...item.values, [key]: value };
+                if (item.kind === 'expenses' && key.startsWith('period_'))
+                    values.year = periodYear(
+                        values,
+                        !item.record &&
+                            (!item.values.period_starts_on ||
+                                !item.values.period_ends_on),
+                    );
+                return { ...item, values };
+            }),
+        );
+    }
+    function useDetailedLines() {
+        setFrames((previous) =>
+            previous.map((item, index) => {
+                if (index !== previous.length - 1) return item;
+                return {
+                    ...item,
+                    detailed: true,
+                    lines: draftLines({
+                        id: item.record?.id ?? 0,
+                        title: item.values.title,
+                        allocated_amount: decimalInput(
+                            item.values.allocated_amount,
+                        ),
+                        actual_amount: decimalInput(item.values.actual_amount),
+                    }),
+                };
+            }),
         );
     }
     function back() {
@@ -227,12 +289,18 @@ export function EntitySheet({
             ]),
         );
         if (current.kind === 'expenses') {
-            payload.lines = current.lines.map((line) => ({
-                description: line.description,
-                type: line.type,
-                unit_price: decimalInput(line.unit_price),
-                quantity: decimalInput(line.quantity),
-            }));
+            if (current.detailed) {
+                delete payload.allocated_amount;
+                delete payload.actual_amount;
+                payload.lines = current.lines.map((line) => ({
+                    description: line.description,
+                    type: line.type,
+                    unit_price: decimalInput(line.unit_price),
+                    quantity: decimalInput(line.quantity),
+                }));
+            } else if (contractContext) {
+                payload.contract_entry = true;
+            }
         }
         if (current.kind !== 'vendors') {
             payload.cost_center_ids = current.costCenterIds;
@@ -349,7 +417,9 @@ export function EntitySheet({
                         </SheetTitle>
                         <SheetDescription>
                             {current.kind === 'expenses'
-                                ? 'Inserisci i dati generali della spesa, poi aggiungi le righe economiche. Puoi avere solo allocati, solo effettivi o entrambi. I tipi senza righe valgono zero.'
+                                ? current.detailed
+                                    ? 'Modifica i dati generali e le righe economiche della spesa.'
+                                    : 'Inserisci il previsto, l’effettivo oppure entrambi. Un campo vuoto indica un importo non disponibile; zero è un importo valorizzato.'
                                 : current.kind === 'contracts'
                                   ? 'L’importo di riferimento è informativo. Il contratto non genera spese.'
                                   : `Dati di ${tenant.name}.`}
@@ -367,6 +437,7 @@ export function EntitySheet({
                                         values: current.values,
                                         lines: current.lines,
                                         costCenterIds: current.costCenterIds,
+                                        detailed: current.detailed,
                                     }) !== current.original
                                 )
                                     setDiscard('back');
@@ -400,6 +471,15 @@ export function EntitySheet({
                                     Dati generali della spesa
                                 </h2>
                             )}
+                            {current.kind === 'expenses' && contractContext && (
+                                <p className="text-sm text-muted-foreground">
+                                    Contratto: {contractContext.name}. Date di
+                                    riferimento:{' '}
+                                    {dateLabel(contractContext.starts_on)} –{' '}
+                                    {dateLabel(contractContext.ends_on)}. Puoi
+                                    indicare anche un periodo diverso.
+                                </p>
+                            )}
                             <FieldGroup
                                 className={
                                     current.kind === 'expenses'
@@ -418,6 +498,35 @@ export function EntitySheet({
                                 }
                             >
                                 {fields[current.kind].map((field) => {
+                                    if (current.kind === 'expenses') {
+                                        if (
+                                            [
+                                                'year',
+                                                'period_starts_on',
+                                                'period_ends_on',
+                                            ].includes(field.key)
+                                        )
+                                            return null;
+                                        if (
+                                            current.detailed &&
+                                            [
+                                                'allocated_amount',
+                                                'actual_amount',
+                                            ].includes(field.key)
+                                        )
+                                            return null;
+                                        if (
+                                            contractContext &&
+                                            (field.key === 'contract_id' ||
+                                                (!current.detailed &&
+                                                    [
+                                                        'vendor_id',
+                                                        'project_id',
+                                                        'notes',
+                                                    ].includes(field.key)))
+                                        )
+                                            return null;
+                                    }
                                     const value = current.values[field.key];
                                     const id = `field-${field.key}`;
                                     const selectOptions = field.catalog
@@ -650,32 +759,32 @@ export function EntitySheet({
                                         </Field>
                                     );
                                 })}
-                                {current.kind !== 'vendors' && (
-                                    <Field
-                                        className={cn(
-                                            'min-w-0 gap-2',
-                                            current.kind === 'expenses' &&
-                                                'sm:col-span-2',
-                                        )}
-                                        data-invalid={
-                                            !!errors.cost_center_ids ||
-                                            Object.keys(errors).some((key) =>
-                                                key.startsWith(
-                                                    'cost_center_ids.',
-                                                ),
-                                            )
+                                {current.kind === 'expenses' && (
+                                    <ExpensePeriodFields
+                                        values={current.values}
+                                        onChange={change}
+                                        disabled={formBusy}
+                                        errors={errors}
+                                        showPeriod={
+                                            !!current.values.contract_id ||
+                                            !!current.values.period_starts_on ||
+                                            !!current.values.period_ends_on
                                         }
-                                    >
-                                        <FieldLabel htmlFor="entity-cost-centers">
-                                            Centri di Costo
-                                        </FieldLabel>
-                                        <CostCenterSelect
-                                            id="entity-cost-centers"
-                                            options={localOptions.cost_centers}
-                                            value={current.costCenterIds}
-                                            onCreate={setCreatingCostCenter}
-                                            disabled={formBusy}
-                                            invalid={
+                                    />
+                                )}
+                                {current.kind !== 'vendors' &&
+                                    !(
+                                        current.kind === 'expenses' &&
+                                        contractContext &&
+                                        !current.detailed
+                                    ) && (
+                                        <Field
+                                            className={cn(
+                                                'min-w-0 gap-2',
+                                                current.kind === 'expenses' &&
+                                                    'sm:col-span-2',
+                                            )}
+                                            data-invalid={
                                                 !!errors.cost_center_ids ||
                                                 Object.keys(errors).some(
                                                     (key) =>
@@ -684,41 +793,65 @@ export function EntitySheet({
                                                         ),
                                                 )
                                             }
-                                            describedBy="entity-cost-centers-error"
-                                            onChange={(costCenterIds) =>
-                                                setFrames((previous) =>
-                                                    previous.map(
-                                                        (item, index) =>
-                                                            index ===
-                                                            previous.length - 1
-                                                                ? {
-                                                                      ...item,
-                                                                      costCenterIds,
-                                                                  }
-                                                                : item,
-                                                    ),
-                                                )
-                                            }
-                                        />
-                                        <FieldError
-                                            id="entity-cost-centers-error"
-                                            errors={Object.entries(errors)
-                                                .filter(
-                                                    ([key]) =>
-                                                        key ===
-                                                            'cost_center_ids' ||
-                                                        key.startsWith(
-                                                            'cost_center_ids.',
+                                        >
+                                            <FieldLabel htmlFor="entity-cost-centers">
+                                                Centri di Costo
+                                            </FieldLabel>
+                                            <CostCenterSelect
+                                                id="entity-cost-centers"
+                                                options={
+                                                    localOptions.cost_centers
+                                                }
+                                                value={current.costCenterIds}
+                                                onCreate={setCreatingCostCenter}
+                                                disabled={formBusy}
+                                                invalid={
+                                                    !!errors.cost_center_ids ||
+                                                    Object.keys(errors).some(
+                                                        (key) =>
+                                                            key.startsWith(
+                                                                'cost_center_ids.',
+                                                            ),
+                                                    )
+                                                }
+                                                describedBy="entity-cost-centers-error"
+                                                onChange={(costCenterIds) =>
+                                                    setFrames((previous) =>
+                                                        previous.map(
+                                                            (item, index) =>
+                                                                index ===
+                                                                previous.length -
+                                                                    1
+                                                                    ? {
+                                                                          ...item,
+                                                                          costCenterIds,
+                                                                      }
+                                                                    : item,
                                                         ),
-                                                )
-                                                .flatMap(([, messages]) =>
-                                                    messages.map((message) => ({
-                                                        message,
-                                                    })),
-                                                )}
-                                        />
-                                    </Field>
-                                )}
+                                                    )
+                                                }
+                                            />
+                                            <FieldError
+                                                id="entity-cost-centers-error"
+                                                errors={Object.entries(errors)
+                                                    .filter(
+                                                        ([key]) =>
+                                                            key ===
+                                                                'cost_center_ids' ||
+                                                            key.startsWith(
+                                                                'cost_center_ids.',
+                                                            ),
+                                                    )
+                                                    .flatMap(([, messages]) =>
+                                                        messages.map(
+                                                            (message) => ({
+                                                                message,
+                                                            }),
+                                                        ),
+                                                    )}
+                                            />
+                                        </Field>
+                                    )}
                             </FieldGroup>
                             {current.kind !== 'vendors' &&
                                 (current.record ? (
@@ -747,32 +880,48 @@ export function EntitySheet({
                                         allegati.
                                     </p>
                                 ))}
-                            {current.kind === 'expenses' && (
-                                <ExpenseLines
-                                    lines={current.lines}
-                                    disabled={formBusy}
-                                    errors={errors}
-                                    onChange={(lines) => {
-                                        setErrors((previous) =>
-                                            Object.fromEntries(
-                                                Object.entries(previous).filter(
-                                                    ([key]) =>
-                                                        !key.startsWith(
-                                                            'lines',
-                                                        ),
+                            {current.kind === 'expenses' &&
+                                !current.detailed &&
+                                !contractContext && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={formBusy}
+                                        onClick={useDetailedLines}
+                                    >
+                                        Usa righe economiche dettagliate
+                                    </Button>
+                                )}
+                            {current.kind === 'expenses' &&
+                                current.detailed && (
+                                    <ExpenseLines
+                                        lines={current.lines}
+                                        disabled={formBusy}
+                                        errors={errors}
+                                        onChange={(lines) => {
+                                            setErrors((previous) =>
+                                                Object.fromEntries(
+                                                    Object.entries(
+                                                        previous,
+                                                    ).filter(
+                                                        ([key]) =>
+                                                            !key.startsWith(
+                                                                'lines',
+                                                            ),
+                                                    ),
                                                 ),
-                                            ),
-                                        );
-                                        setFrames((previous) =>
-                                            previous.map((item, index) =>
-                                                index === previous.length - 1
-                                                    ? { ...item, lines }
-                                                    : item,
-                                            ),
-                                        );
-                                    }}
-                                />
-                            )}
+                                            );
+                                            setFrames((previous) =>
+                                                previous.map((item, index) =>
+                                                    index ===
+                                                    previous.length - 1
+                                                        ? { ...item, lines }
+                                                        : item,
+                                                ),
+                                            );
+                                        }}
+                                    />
+                                )}
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-popover p-4 sm:px-6">
                             {current.kind === 'expenses' &&
