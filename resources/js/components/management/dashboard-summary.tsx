@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { percent } from './analytics-helpers';
 import type { ExpenseAnalytics } from './analytics-types';
-import { money } from './helpers';
+import { money, varianceTextClass } from './helpers';
 
 const signedNumber = new Intl.NumberFormat('it-IT', {
     maximumFractionDigits: 1,
@@ -95,14 +95,11 @@ export function DashboardSummary({
                                     </CardDescription>
                                     <CardTitle
                                         className={cn(
-                                            'summary-value',
+                                            'summary-value text-foreground',
                                             metric === 'variance' &&
-                                                (Number(current.variance) > 0
-                                                    ? 'text-finance-overrun'
-                                                    : Number(current.variance) <
-                                                        0
-                                                      ? 'text-finance-saving'
-                                                      : ''),
+                                                varianceTextClass(
+                                                    current.variance,
+                                                ),
                                         )}
                                     >
                                         {loading ? (

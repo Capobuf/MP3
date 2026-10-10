@@ -11,6 +11,7 @@ use App\Support\ExpenseOverview;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -31,6 +32,9 @@ class CatalogController extends Controller
     public function index(Request $request, Tenant $tenant, string $catalog): Response
     {
         $query = $this->records($tenant, $catalog)->withCount('expenses');
+        if ($catalog !== 'vendors') {
+            $query->with('costCenters.parent:id,name');
+        }
         if ($catalog === 'contracts') {
             $query->with('vendor:id,name');
             if ($request->filled('vendor_id')) {
@@ -72,6 +76,9 @@ class CatalogController extends Controller
     public function show(Request $request, Tenant $tenant, string $catalog, int $record): Response
     {
         $item = $this->records($tenant, $catalog)->findOrFail($record);
+        if ($catalog !== 'vendors') {
+            $item->load('costCenters.parent:id,name');
+        }
         if ($item instanceof Contract) {
             $item->load('vendor:id,name');
         }
@@ -95,7 +102,7 @@ class CatalogController extends Controller
             'year' => $year,
             'years' => $years,
             'totals' => ExpenseOverview::totals($expenses),
-            'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
+            'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
         ]);
     }
@@ -132,6 +139,10 @@ class CatalogController extends Controller
         if (! $request->filled('starts_on')) {
             unset($rules['ends_on'][2]);
         }
+        if ($catalog !== 'vendors') {
+            $rules['cost_center_ids'] = ['sometimes', 'array', 'list'];
+            $rules['cost_center_ids.*'] = ['required', 'integer', 'distinct', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)];
+        }
 
         return $request->validate($rules, [
             'name.required' => 'Inserisci il nome.',
@@ -144,7 +155,18 @@ class CatalogController extends Controller
 
     public function store(Request $request, Tenant $tenant, string $catalog): JsonResponse
     {
-        $record = $this->records($tenant, $catalog)->create($this->validated($request, $tenant, $catalog));
+        $data = $this->validated($request, $tenant, $catalog);
+        $record = DB::transaction(function () use ($tenant, $catalog, $data) {
+            $ids = $data['cost_center_ids'] ?? [];
+            unset($data['cost_center_ids']);
+            $record = $this->records($tenant, $catalog)->create($data);
+            if ($record instanceof Contract || $record instanceof Project) {
+                $record->costCenters()->sync($ids);
+                $record->load('costCenters.parent:id,name');
+            }
+
+            return $record;
+        });
 
         return response()->json(['record' => $record], 201);
     }
@@ -152,9 +174,21 @@ class CatalogController extends Controller
     public function update(Request $request, Tenant $tenant, string $catalog, int $record): JsonResponse
     {
         $item = $this->records($tenant, $catalog)->findOrFail($record);
-        $item->update($this->validated($request, $tenant, $catalog));
+        $data = $this->validated($request, $tenant, $catalog);
+        DB::transaction(function () use ($item, $data) {
+            $ids = $data['cost_center_ids'] ?? null;
+            unset($data['cost_center_ids']);
+            $item->update($data);
+            if (($item instanceof Contract || $item instanceof Project) && $ids !== null) {
+                $item->costCenters()->sync($ids);
+            }
+        });
+        $item->refresh();
+        if ($item instanceof Contract || $item instanceof Project) {
+            $item->load('costCenters.parent:id,name');
+        }
 
-        return response()->json(['record' => $item->refresh()]);
+        return response()->json(['record' => $item]);
     }
 
     public function destroy(Tenant $tenant, string $catalog, int $record): JsonResponse

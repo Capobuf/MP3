@@ -143,7 +143,7 @@
     --theme-tracking-normal: 0em;
     /* Economic meaning is independent of the chart palette. */
     --finance-overrun: var(--destructive);
-    --finance-saving: #13756b;
+    --finance-saving: oklch(0.45 0.08 122.8535);
 }
 
 .dark {
@@ -180,9 +180,9 @@
     --sidebar-accent-foreground: oklch(0.9476 0.0253 86.8708);
     --sidebar-border: oklch(0.3185 0.0046 219.6186);
     --sidebar-ring: oklch(0.6921 0.1763 49.7619);
-    /* Economic meaning is independent of the chart palette. */
+    /* Use the theme's red for overruns and green for savings. */
     --finance-overrun: var(--destructive);
-    --finance-saving: #70d7c1;
+    --finance-saving: var(--chart-2);
 }
 
 @layer base {
@@ -193,6 +193,10 @@
     body {
         @apply bg-background font-sans text-sm text-foreground antialiased;
         letter-spacing: var(--letter-spacing);
+    }
+
+    [data-slot='chart'] .recharts-surface [tabindex]:focus:not(:focus-visible) {
+        outline: none;
     }
 }
 

@@ -1,7 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
-import AppLogoIcon from '@/components/app-logo-icon';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -64,7 +63,13 @@ const activeItemStyles = 'bg-accent text-accent-foreground';
 
 export function AppHeader({ breadcrumbs = [] }: Props) {
     const page = usePage();
-    const { auth } = page.props;
+    const { auth, currentTenant } = page.props;
+    const homeHref = currentTenant
+        ? `/t/${currentTenant.slug}/dashboard`
+        : '/platform';
+    const homeLabel = currentTenant
+        ? `Vai alla home di ${currentTenant.name}`
+        : 'Vai alla home della piattaforma';
     const getInitials = useInitials();
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
@@ -92,7 +97,13 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                     Navigation menu
                                 </SheetTitle>
                                 <SheetHeader className="flex justify-start text-left">
-                                    <AppLogoIcon className="size-8" />
+                                    <Link
+                                        href={homeHref}
+                                        aria-label={homeLabel}
+                                        prefetch
+                                    >
+                                        <AppLogo />
+                                    </Link>
                                 </SheetHeader>
                                 <div className="flex h-full flex-1 flex-col space-y-4 p-4">
                                     <div className="flex h-full flex-col justify-between text-sm">
@@ -134,7 +145,8 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                     </div>
 
                     <Link
-                        href={dashboard()}
+                        href={homeHref}
+                        aria-label={homeLabel}
                         prefetch
                         className="flex items-center space-x-2"
                     >

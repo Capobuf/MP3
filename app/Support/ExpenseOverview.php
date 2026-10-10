@@ -89,7 +89,7 @@ final class ExpenseOverview
 
         return [
             'tenant' => $tenant->only('id', 'name', 'slug'),
-            'expenses' => (clone $query)->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines'])->orderBy($sort, $direction)->orderBy('id')->paginate(50)->withQueryString(),
+            'expenses' => (clone $query)->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderBy($sort, $direction)->orderBy('id')->paginate(50)->withQueryString(),
             'totals' => $totals ?? self::totals($query),
             'filters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $request->integer('year', (int) now()->format('Y')), 'sort' => $sort, 'direction' => $direction],
             'years' => $tenant->expenses()->select('year')->distinct()->orderByDesc('year')->pluck('year')->push((int) now()->format('Y'), $request->integer('year', (int) now()->format('Y')))->unique()->values(),
@@ -102,6 +102,7 @@ final class ExpenseOverview
     {
         return [
             'vendors' => $tenant->vendors()->orderBy('name')->limit(100)->get(['id', 'name']),
+            'cost_centers' => $tenant->costCenters()->with('parent:id,name')->orderBy('name')->get(['id', 'name', 'parent_id']),
             'contracts' => $tenant->contracts()->orderBy('name')->limit(100)->get(['id', 'name']),
             'projects' => $tenant->projects()->orderBy('name')->limit(100)->get(['id', 'name']),
         ];

@@ -45,11 +45,15 @@ import { draftLines, ExpenseLines } from './expense-lines';
 import type { DraftLine } from './expense-lines';
 import { api, ApiError, decimalInput } from './helpers';
 import { RecordSelect } from './record-select';
+import { CostCenterSelect } from './cost-center-select';
 import { singular } from './types';
 import type { Catalog, Kind, Options, RecordData } from './types';
 
 type FormField = {
-    key: Exclude<keyof RecordData, 'vendor' | 'contract' | 'project' | 'lines'>;
+    key: Exclude<
+        keyof RecordData,
+        'vendor' | 'contract' | 'project' | 'lines' | 'cost_centers'
+    >;
     label: string;
     type?: string;
     required?: boolean;
@@ -101,6 +105,7 @@ type Frame = {
     record?: RecordData;
     values: Record<string, string>;
     lines: DraftLine[];
+    costCenterIds: number[];
     original: string;
     returnField?: string;
 };
@@ -124,12 +129,15 @@ function frame(
         ]),
     );
     const lines = kind === 'expenses' ? draftLines(record) : [];
+    const costCenterIds =
+        record?.cost_centers?.map((center) => center.id) ?? [];
     return {
         kind,
         record,
         values,
         lines,
-        original: JSON.stringify({ values, lines }),
+        costCenterIds,
+        original: JSON.stringify({ values, lines, costCenterIds }),
         returnField,
     };
 }
@@ -160,8 +168,11 @@ export function EntitySheet({
     const current = frames[frames.length - 1];
     const dirty = frames.some(
         (item) =>
-            JSON.stringify({ values: item.values, lines: item.lines }) !==
-            item.original,
+            JSON.stringify({
+                values: item.values,
+                lines: item.lines,
+                costCenterIds: item.costCenterIds,
+            }) !== item.original,
     );
     useEffect(() => {
         const listener = (event: BeforeUnloadEvent) => {
@@ -209,6 +220,9 @@ export function EntitySheet({
                 unit_price: decimalInput(line.unit_price),
                 quantity: decimalInput(line.quantity),
             }));
+        }
+        if (current.kind !== 'vendors') {
+            payload.cost_center_ids = current.costCenterIds;
         }
         try {
             const data = await api<{ record: RecordData }>(
@@ -306,6 +320,7 @@ export function EntitySheet({
                                     JSON.stringify({
                                         values: current.values,
                                         lines: current.lines,
+                                        costCenterIds: current.costCenterIds,
                                     }) !== current.original
                                 )
                                     setDiscard('back');
@@ -589,6 +604,74 @@ export function EntitySheet({
                                         </Field>
                                     );
                                 })}
+                                {current.kind !== 'vendors' && (
+                                    <Field
+                                        className={cn(
+                                            'min-w-0 gap-2',
+                                            current.kind === 'expenses' &&
+                                                'sm:col-span-2',
+                                        )}
+                                        data-invalid={
+                                            !!errors.cost_center_ids ||
+                                            Object.keys(errors).some((key) =>
+                                                key.startsWith(
+                                                    'cost_center_ids.',
+                                                ),
+                                            )
+                                        }
+                                    >
+                                        <FieldLabel htmlFor="entity-cost-centers">
+                                            Centri di Costo
+                                        </FieldLabel>
+                                        <CostCenterSelect
+                                            id="entity-cost-centers"
+                                            options={localOptions.cost_centers}
+                                            value={current.costCenterIds}
+                                            disabled={busy}
+                                            invalid={
+                                                !!errors.cost_center_ids ||
+                                                Object.keys(errors).some(
+                                                    (key) =>
+                                                        key.startsWith(
+                                                            'cost_center_ids.',
+                                                        ),
+                                                )
+                                            }
+                                            describedBy="entity-cost-centers-error"
+                                            onChange={(costCenterIds) =>
+                                                setFrames((previous) =>
+                                                    previous.map(
+                                                        (item, index) =>
+                                                            index ===
+                                                            previous.length - 1
+                                                                ? {
+                                                                      ...item,
+                                                                      costCenterIds,
+                                                                  }
+                                                                : item,
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                        <FieldError
+                                            id="entity-cost-centers-error"
+                                            errors={Object.entries(errors)
+                                                .filter(
+                                                    ([key]) =>
+                                                        key ===
+                                                            'cost_center_ids' ||
+                                                        key.startsWith(
+                                                            'cost_center_ids.',
+                                                        ),
+                                                )
+                                                .flatMap(([, messages]) =>
+                                                    messages.map((message) => ({
+                                                        message,
+                                                    })),
+                                                )}
+                                        />
+                                    </Field>
+                                )}
                             </FieldGroup>
                             {current.kind === 'expenses' && (
                                 <ExpenseLines

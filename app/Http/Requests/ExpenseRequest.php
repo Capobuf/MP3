@@ -35,6 +35,8 @@ class ExpenseRequest extends FormRequest
             'allocated_amount' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
             'actual_amount' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
             'notes' => ['nullable', 'string', 'max:10000'],
+            'cost_center_ids' => ['sometimes', 'array', 'list'],
+            'cost_center_ids.*' => ['required', 'integer', 'distinct', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)],
             'lines' => ['sometimes', 'array', 'list', 'max:500'],
             'lines.*' => ['required', 'array:description,type,unit_price,quantity'],
             'lines.*.description' => ['required', 'string', 'max:255'],

@@ -15,7 +15,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { decimalInput, money } from './helpers';
+import { cn } from '@/lib/utils';
+import { decimalInput, money, varianceTextClass } from './helpers';
 import type { ExpenseLine, RecordData } from './types';
 
 export type DraftLine = ExpenseLine & { key: string };
@@ -682,7 +683,15 @@ export function ExpenseLines({
                         <dt className="text-sm text-muted-foreground">
                             {label}
                         </dt>
-                        <dd className="mt-1 font-semibold tracking-normal break-words tabular-nums">
+                        <dd
+                            className={cn(
+                                'mt-1 font-semibold tracking-normal break-words text-foreground tabular-nums',
+                                label.startsWith('Scostamento') &&
+                                    varianceTextClass(
+                                        incomplete ? null : value,
+                                    ),
+                            )}
+                        >
                             {incomplete ? 'Da completare' : format(value)}
                         </dd>
                     </div>

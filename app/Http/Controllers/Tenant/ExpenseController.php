@@ -28,7 +28,7 @@ class ExpenseController extends Controller
     {
         return Inertia::render('tenants/expense', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
-            'expense' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines']),
+            'expense' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name']),
             'options' => ExpenseOverview::options($tenant),
         ]);
     }
@@ -42,7 +42,7 @@ class ExpenseController extends Controller
             return $expense;
         });
 
-        return response()->json(['record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines'])], 201);
+        return response()->json(['record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
     }
 
     public function update(ExpenseRequest $request, Tenant $tenant, Expense $expense): JsonResponse
@@ -52,7 +52,7 @@ class ExpenseController extends Controller
             $this->persist($locked, $request->validated());
         });
 
-        return response()->json(['record' => $expense->refresh()->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines'])]);
+        return response()->json(['record' => $expense->refresh()->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
     }
 
     public function destroy(Tenant $tenant, Expense $expense): JsonResponse
@@ -116,12 +116,17 @@ class ExpenseController extends Controller
     /** @param array<string, mixed> $data */
     private function persist(Expense $expense, array $data): void
     {
+        $costCenterIds = $data['cost_center_ids'] ?? null;
+        unset($data['cost_center_ids']);
         if (! array_key_exists('lines', $data)) {
             if ($expense->exists && $expense->lines()->exists() &&
                 (array_key_exists('allocated_amount', $data) || array_key_exists('actual_amount', $data))) {
                 throw ValidationException::withMessages(['lines' => 'Modifica le righe della spesa: gli importi complessivi sono calcolati automaticamente.']);
             }
             $expense->fill($data)->save();
+            if ($costCenterIds !== null) {
+                $expense->costCenters()->sync($costCenterIds);
+            }
 
             return;
         }
@@ -160,5 +165,8 @@ class ExpenseController extends Controller
         $expense->fill($data)->save();
         $expense->lines()->delete();
         $expense->lines()->createMany($lines);
+        if ($costCenterIds !== null) {
+            $expense->costCenters()->sync($costCenterIds);
+        }
     }
 }

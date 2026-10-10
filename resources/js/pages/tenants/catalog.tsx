@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Plus, Ellipsis, Search } from 'lucide-react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
+import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { EntitySheet } from '@/components/management/entity-sheet';
 import { applyFilters } from '@/components/management/expense-workspace';
 import { dateLabel, money } from '@/components/management/helpers';
@@ -312,11 +313,17 @@ export default function CatalogPage({
                                         <TableRow key={record.id}>
                                             <TableCell className="max-w-80 min-w-48 font-medium break-words whitespace-normal">
                                                 <Link
-                                                    className="hover:underline"
                                                     href={`${path}/${record.id}`}
                                                 >
                                                     {record.name}
                                                 </Link>
+                                                {catalog !== 'vendors' && (
+                                                    <CostCenterTags
+                                                        centers={
+                                                            record.cost_centers
+                                                        }
+                                                    />
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 {catalog === 'vendors' ? (

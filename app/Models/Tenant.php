@@ -10,6 +10,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['name', 'slug'])]
 class Tenant extends Model
 {
+    /** @return HasMany<CostCenter, $this> */
+    public function costCenters(): HasMany
+    {
+        return $this->hasMany(CostCenter::class);
+    }
+
     /**
      * @return BelongsToMany<User, $this>
      */

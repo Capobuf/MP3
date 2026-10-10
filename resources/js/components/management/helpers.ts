@@ -9,6 +9,17 @@ export function money(value: string | number | null | undefined): string {
         ? 'Da inserire'
         : euro.format(Number(value) === 0 ? 0 : Number(value));
 }
+
+export function varianceTextClass(
+    value: string | number | bigint | null | undefined,
+): string {
+    if (value == null) return 'text-muted-foreground';
+    const amount = Number(value);
+    if (amount > 0) return 'text-finance-overrun';
+    if (amount < 0) return 'text-finance-saving';
+    return 'text-foreground';
+}
+
 export function dateLabel(value: string | null | undefined): string {
     if (!value) return '—';
     return new Intl.DateTimeFormat('it-IT').format(

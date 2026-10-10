@@ -6,7 +6,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import { money } from './helpers';
+import { money, varianceTextClass } from './helpers';
 import type { Totals } from './types';
 
 export function Summary({ totals }: { totals: Totals }) {
@@ -39,13 +39,9 @@ export function Summary({ totals }: { totals: Totals }) {
                             <CardDescription>{item.label}</CardDescription>
                             <CardTitle
                                 className={cn(
-                                    'summary-value',
+                                    'summary-value text-foreground',
                                     item.label.startsWith('Scostamento') &&
-                                        (Number(item.value) > 0
-                                            ? 'text-finance-overrun'
-                                            : Number(item.value) < 0
-                                              ? 'text-finance-saving'
-                                              : ''),
+                                        varianceTextClass(item.value),
                                 )}
                             >
                                 {money(item.value)}

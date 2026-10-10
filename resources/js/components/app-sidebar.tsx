@@ -14,18 +14,31 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { getPrimaryNavItems } from '@/lib/app-navigation';
-import { dashboard } from '@/routes';
 
 export function AppSidebar() {
     const { auth, currentTenant } = usePage().props;
+    const homeHref = currentTenant
+        ? `/t/${currentTenant.slug}/dashboard`
+        : '/platform';
+    const homeLabel = currentTenant
+        ? `Vai alla home di ${currentTenant.name}`
+        : 'Vai alla home della piattaforma';
 
     return (
         <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader className="gap-4 p-3">
+            <SidebarHeader className="gap-4 p-3 group-data-[collapsible=icon]:px-2">
                 <SidebarMenu>
                     <SidebarMenuItem>
-                        <SidebarMenuButton size="lg" asChild>
-                            <Link href={dashboard()} prefetch>
+                        <SidebarMenuButton
+                            size="lg"
+                            className="h-14 justify-center"
+                            asChild
+                        >
+                            <Link
+                                href={homeHref}
+                                aria-label={homeLabel}
+                                prefetch
+                            >
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>

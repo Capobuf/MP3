@@ -3,7 +3,17 @@ import type { Tenant } from '@/types';
 export type Catalog = 'vendors' | 'contracts' | 'projects';
 export type Kind = Catalog | 'expenses';
 export type Option = { id: number; name: string };
-export type Options = Record<Catalog, Option[]>;
+export type CostCenter = Option & {
+    parent_id: number | null;
+    parent?: Option | null;
+    children?: CostCenter[];
+    expenses_count?: number;
+    projects_count?: number;
+    contracts_count?: number;
+};
+export type Options = Record<Catalog, Option[]> & {
+    cost_centers: CostCenter[];
+};
 export type ExpenseLine = {
     id?: number;
     description: string;
@@ -38,6 +48,7 @@ export type RecordData = {
     ends_on?: string | null;
     expenses_count?: number;
     lines?: ExpenseLine[];
+    cost_centers?: CostCenter[];
 };
 export type Expense = RecordData & { title: string; year: number };
 export type Pagination<T> = {

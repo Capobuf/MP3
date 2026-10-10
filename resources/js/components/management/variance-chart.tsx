@@ -12,7 +12,7 @@ import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { compactMoney } from './analytics-helpers';
 import type { VarianceRow } from './analytics-types';
 import { AnalyticsCard, EmptyChart } from './analytics-ui';
-import { money } from './helpers';
+import { money, varianceTextClass } from './helpers';
 
 export function VarianceChart({
     rows,
@@ -94,7 +94,14 @@ export function VarianceChart({
                                         </p>
                                         <p>Effettivo: {money(row.actual)}</p>
                                         <p>
-                                            Scostamento: {money(row.variance)}
+                                            Scostamento:{' '}
+                                            <span
+                                                className={varianceTextClass(
+                                                    row.variance,
+                                                )}
+                                            >
+                                                {money(row.variance)}
+                                            </span>
                                         </p>
                                     </div>
                                 ) : null;
@@ -131,7 +138,7 @@ export function VarianceChart({
                         key={row.id}
                         type="button"
                         disabled={disabled}
-                        className="max-w-full rounded text-left break-words text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                        className="max-w-full rounded text-left break-words text-primary focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => open(row.id)}
                         title={row.title}
                     >

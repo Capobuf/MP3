@@ -1,12 +1,14 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
+import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseLines } from '@/components/management/expense-lines';
-import { money } from '@/components/management/helpers';
+import { money, varianceTextClass } from '@/components/management/helpers';
 import type { Expense, Options } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import type { Tenant } from '@/types';
 
 export default function ExpenseDetail({
@@ -66,7 +68,21 @@ export default function ExpenseDetail({
                                         {label}
                                     </dt>
                                     <dd
-                                        className={`mt-2 text-base font-medium tabular-nums ${['Allocato', 'Effettivo', 'Scostamento (effettivo − allocato)'].includes(String(label)) ? 'tracking-normal' : ''} ${String(label).startsWith('Scostamento') && Number(expense.variance) > 0 ? 'text-finance-overrun' : ''}`}
+                                        className={cn(
+                                            'mt-2 text-base font-medium text-foreground tabular-nums',
+                                            [
+                                                'Allocato',
+                                                'Effettivo',
+                                                'Scostamento (effettivo − allocato)',
+                                            ].includes(String(label)) &&
+                                                'tracking-normal',
+                                            String(label).startsWith(
+                                                'Scostamento',
+                                            ) &&
+                                                varianceTextClass(
+                                                    expense.variance,
+                                                ),
+                                        )}
                                     >
                                         {value}
                                     </dd>
@@ -85,7 +101,7 @@ export default function ExpenseDetail({
                                         <dd className="mt-2">
                                             {expense[relation] ? (
                                                 <Link
-                                                    className="text-primary underline-offset-4 hover:underline"
+                                                    className="text-primary"
                                                     href={`/t/${tenant.slug}/${relation}s/${expense[relation]!.id}`}
                                                 >
                                                     {expense[relation]!.name}
@@ -98,6 +114,18 @@ export default function ExpenseDetail({
                                 ),
                             )}
                         </dl>
+                        <div className="mt-6 flex flex-col gap-2">
+                            <p className="text-sm text-muted-foreground">
+                                Centri di Costo
+                            </p>
+                            {expense.cost_centers?.length ? (
+                                <CostCenterTags
+                                    centers={expense.cost_centers}
+                                />
+                            ) : (
+                                <p className="text-sm">Nessuno</p>
+                            )}
+                        </div>
                         {expense.notes && (
                             <p className="mt-6 text-sm whitespace-pre-wrap text-muted-foreground">
                                 {expense.notes}

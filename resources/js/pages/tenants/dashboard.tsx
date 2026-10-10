@@ -1,10 +1,7 @@
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { AnalyticsLoadingContext } from '@/components/management/analytics-ui';
-import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Head, router } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 import type {
     EntityFilter,
     ExpenseAnalytics,
@@ -20,10 +17,8 @@ import {
 import { DashboardSummary } from '@/components/management/dashboard-summary';
 import { DistributionChart } from '@/components/management/distribution-chart';
 import { EconomicChart } from '@/components/management/economic-chart';
-import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseSankey } from '@/components/management/expense-sankey';
 import { ExpenseWorkspace } from '@/components/management/expense-workspace';
-import { matchesExpenseFilters } from '@/components/management/helpers';
 import type { ExpensePageProps } from '@/components/management/types';
 import { VarianceChart } from '@/components/management/variance-chart';
 
@@ -31,7 +26,6 @@ export default function TenantDashboard(
     props: ExpensePageProps & { analytics: ExpenseAnalytics },
 ) {
     const { tenant, filters, analytics } = props;
-    const [creating, setCreating] = useState(false);
     const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/dashboard`;
     const year = filters.year!;
@@ -73,13 +67,6 @@ export default function TenantDashboard(
                             </span>
                         </p>
                     </div>
-                    <Button
-                        disabled={tableBusy}
-                        onClick={() => setCreating(true)}
-                    >
-                        <Plus data-icon="inline-start" />
-                        Nuova spesa
-                    </Button>
                 </header>
                 <DashboardFilters
                     key={JSON.stringify([tenant.slug, filters])}
@@ -211,23 +198,6 @@ export default function TenantDashboard(
                     />
                 </AnalyticsLoadingContext>
             </div>
-            {creating && (
-                <EntitySheet
-                    tenant={tenant}
-                    kind="expenses"
-                    year={year}
-                    options={props.options}
-                    onClose={() => setCreating(false)}
-                    onSaved={(record) => {
-                        setCreating(false);
-                        if (!matchesExpenseFilters(record, filters))
-                            toast.info(
-                                'Spesa salvata. Non compare perché non corrisponde ai filtri correnti.',
-                            );
-                        router.reload();
-                    }}
-                />
-            )}
         </>
     );
 }

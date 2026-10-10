@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCostCenters;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['vendor_id', 'name', 'reference_amount', 'starts_on', 'ends_on', 'notes'])]
 class Contract extends Model
 {
+    use HasCostCenters;
+
     /** @return BelongsTo<Tenant, $this> */
     public function tenant(): BelongsTo
     {

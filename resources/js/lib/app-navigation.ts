@@ -4,6 +4,7 @@ import {
     Handshake,
     LayoutGrid,
     Receipt,
+    Tags,
 } from 'lucide-react';
 import type { NavItem, Tenant } from '@/types';
 
@@ -46,6 +47,11 @@ export function getPrimaryNavItems(
             title: 'Fornitori',
             href: `/t/${tenant.slug}/vendors`,
             icon: Handshake,
+        },
+        {
+            title: 'Centri di Costo',
+            href: `/t/${tenant.slug}/cost-centers`,
+            icon: Tags,
         },
     ];
 }

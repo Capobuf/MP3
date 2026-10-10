@@ -6,6 +6,8 @@ use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
 use App\Http\Controllers\Platform\TenantUserController;
 use App\Http\Controllers\Platform\UserController as PlatformUserController;
 use App\Http\Controllers\Tenant\CatalogController;
+use App\Http\Controllers\Tenant\CostCenterController;
+use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Middleware\EnsureSuperAdmin;
@@ -26,7 +28,12 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::prefix('t/{tenant:slug}')->middleware('can:view,tenant')->scopeBindings()->name('tenant.')->group(function () {
+        Route::get('creation-options', CreationOptionsController::class)->name('creation-options');
         Route::get('dashboard', TenantDashboardController::class)->name('dashboard');
+        Route::get('cost-centers', [CostCenterController::class, 'index'])->name('cost-centers.index');
+        Route::post('cost-centers', [CostCenterController::class, 'store'])->name('cost-centers.store');
+        Route::patch('cost-centers/{costCenter}', [CostCenterController::class, 'update'])->name('cost-centers.update');
+        Route::delete('cost-centers/{costCenter}', [CostCenterController::class, 'destroy'])->name('cost-centers.destroy');
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
         Route::patch('expenses/batch', [ExpenseController::class, 'batch'])->name('expenses.batch');

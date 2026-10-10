@@ -16,7 +16,7 @@ import {
 import { compactMoney, economicConfig, topGroups } from './analytics-helpers';
 import type { EconomicGroup, GroupId, Metric } from './analytics-types';
 import { AnalyticsCard, EmptyChart, MetricSelect } from './analytics-ui';
-import { money } from './helpers';
+import { money, varianceTextClass } from './helpers';
 
 export type ChartRow = EconomicGroup;
 export function EconomicChart({
@@ -107,9 +107,15 @@ export function EconomicChart({
                                         </p>
                                         <p>
                                             Scostamento confrontabile:{' '}
-                                            {row.variance === null
-                                                ? 'Non disponibile'
-                                                : money(row.variance)}
+                                            <span
+                                                className={varianceTextClass(
+                                                    row.variance,
+                                                )}
+                                            >
+                                                {row.variance === null
+                                                    ? 'Non disponibile'
+                                                    : money(row.variance)}
+                                            </span>
                                         </p>
                                         <p className="mt-2 text-muted-foreground">
                                             {row.count} spese · {row.incomplete}{' '}
@@ -147,7 +153,7 @@ export function EconomicChart({
                         <button
                             key={row.id}
                             type="button"
-                            className="max-w-full rounded text-left break-words text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                            className="max-w-full rounded text-left break-words text-primary focus-visible:ring-2 focus-visible:ring-ring"
                             onClick={() => select(row.id)}
                             title={row.name}
                         >

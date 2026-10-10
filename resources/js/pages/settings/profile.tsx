@@ -95,7 +95,7 @@ export default function Profile({
                                             <Link
                                                 href={send()}
                                                 as="button"
-                                                className="rounded text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                                                className="rounded text-primary focus-visible:ring-2 focus-visible:ring-ring"
                                             >
                                                 Invia di nuovo l’email di
                                                 verifica.

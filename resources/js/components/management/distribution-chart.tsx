@@ -148,7 +148,7 @@ export function DistributionChart({
                                     />
                                     <button
                                         type="button"
-                                        className="min-w-0 rounded text-left break-words underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring disabled:no-underline"
+                                        className="min-w-0 rounded text-left break-words focus-visible:ring-2 focus-visible:ring-ring"
                                         disabled={
                                             !onSelect || row.id === 'others'
                                         }

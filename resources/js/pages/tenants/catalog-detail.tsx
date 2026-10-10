@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
+import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { EntitySheet } from '@/components/management/entity-sheet';
 import { ExpenseTable } from '@/components/management/expense-table';
 import { dateLabel, money } from '@/components/management/helpers';
@@ -81,7 +82,7 @@ export default function CatalogDetail({
                     <div className="min-w-0 flex-1">
                         <Link
                             href={path}
-                            className="text-sm text-muted-foreground hover:underline"
+                            className="text-sm text-muted-foreground"
                         >
                             {tenant.name} / {labels[catalog]}
                         </Link>
@@ -127,7 +128,7 @@ export default function CatalogDetail({
                                     <dd className="mt-1">
                                         {record.vendor ? (
                                             <Link
-                                                className="text-sm text-primary underline-offset-4 hover:underline"
+                                                className="text-sm text-primary"
                                                 href={`/t/${tenant.slug}/vendors/${record.vendor.id}`}
                                             >
                                                 {record.vendor.name}
@@ -143,6 +144,20 @@ export default function CatalogDetail({
                             <p className="mt-6 text-sm whitespace-pre-wrap text-muted-foreground">
                                 {record.notes ?? record.description}
                             </p>
+                        )}
+                        {catalog !== 'vendors' && (
+                            <div className="mt-6 flex flex-col gap-2">
+                                <p className="text-sm text-muted-foreground">
+                                    Centri di Costo
+                                </p>
+                                {record.cost_centers?.length ? (
+                                    <CostCenterTags
+                                        centers={record.cost_centers}
+                                    />
+                                ) : (
+                                    <p className="text-sm">Nessuno</p>
+                                )}
+                            </div>
                         )}
                         {catalog === 'contracts' && (
                             <p className="mt-4 text-sm text-muted-foreground">

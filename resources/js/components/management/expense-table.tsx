@@ -31,7 +31,9 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { api, money } from './helpers';
+import { cn } from '@/lib/utils';
+import { CostCenterTags } from './cost-center-tags';
+import { api, money, varianceTextClass } from './helpers';
 import type { Expense, Filters } from './types';
 
 type AmountField = 'allocated_amount' | 'actual_amount';
@@ -160,7 +162,7 @@ export function ExpenseTable({
                 type="button"
                 disabled={busy}
                 aria-label={`Modifica le righe ${amountLabels[field].toLowerCase()} per ${expense.title}`}
-                className="min-h-9 rounded px-1 text-right text-sm font-medium tracking-normal whitespace-nowrap text-primary tabular-nums underline-offset-4 hover:bg-accent hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="min-h-9 rounded px-1 text-right text-sm font-medium tracking-normal whitespace-nowrap text-foreground tabular-nums hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 onClick={() => onEdit(expense)}
             >
                 {money(expense[field])}
@@ -358,7 +360,7 @@ export function ExpenseTable({
                                 <TableCell className="col-start-2 row-start-1 min-w-0 px-0 whitespace-normal xl:px-2">
                                     <Link
                                         href={`/t/${slug}/expenses/${expense.id}`}
-                                        className="block rounded font-medium break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        className="block rounded font-medium break-words focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                                         title={expense.title}
                                     >
                                         {expense.title}
@@ -374,6 +376,9 @@ export function ExpenseTable({
                                             'Senza progetto'}
                                         {showYear && ` · ${expense.year}`}
                                     </p>
+                                    <CostCenterTags
+                                        centers={expense.cost_centers}
+                                    />
                                 </TableCell>
                                 <TableCell className={amountCell}>
                                     <span className="text-sm text-muted-foreground xl:hidden">
@@ -388,7 +393,11 @@ export function ExpenseTable({
                                     {amount(expense, 'actual_amount')}
                                 </TableCell>
                                 <TableCell
-                                    className={`${amountCell} text-sm font-medium tabular-nums ${Number(expense.variance) > 0 ? 'text-finance-overrun' : expense.variance == null ? 'text-muted-foreground' : ''}`}
+                                    className={cn(
+                                        amountCell,
+                                        'text-sm font-medium tabular-nums',
+                                        varianceTextClass(expense.variance),
+                                    )}
                                 >
                                     <span className="text-xs font-normal text-muted-foreground xl:hidden">
                                         Scostamento

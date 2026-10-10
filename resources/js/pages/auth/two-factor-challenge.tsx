@@ -116,7 +116,7 @@ export default function TwoFactorChallenge() {
                                 <span>oppure puoi </span>
                                 <button
                                     type="button"
-                                    className="cursor-pointer rounded text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                                    className="cursor-pointer rounded text-primary focus-visible:ring-2 focus-visible:ring-ring"
                                     onClick={() =>
                                         toggleRecoveryMode(clearErrors)
                                     }

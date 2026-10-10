@@ -1,6 +1,7 @@
 import { usePage } from '@inertiajs/react';
 import { Breadcrumbs } from '@/components/breadcrumbs';
 import { QuickNavigation } from '@/components/quick-navigation';
+import { QuickCreate } from '@/components/quick-create';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -17,7 +18,7 @@ export function AppSidebarHeader({
 }: {
     breadcrumbs?: BreadcrumbItemType[];
 }) {
-    const { auth } = usePage().props;
+    const { auth, currentTenant } = usePage().props;
 
     return (
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card px-4 md:px-6 2xl:px-8">
@@ -29,6 +30,7 @@ export function AppSidebarHeader({
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
                 <QuickNavigation />
+                <QuickCreate key={currentTenant?.id ?? 'platform'} />
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
