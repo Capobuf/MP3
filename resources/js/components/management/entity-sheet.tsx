@@ -136,12 +136,19 @@ function snapshot(
         initialExpense: item.initialExpense,
     });
 }
-function linePayload(lines: DraftLine[]) {
+function linePayload(lines: DraftLine[], defaultYear?: string) {
     return lines.map((line) => ({
         description: line.description,
         type: line.type,
         unit_price: decimalInput(line.unit_price),
         quantity: decimalInput(line.quantity),
+        ...(defaultYear
+            ? {
+                  period_starts_on: line.period_starts_on || null,
+                  period_ends_on: line.period_ends_on || null,
+                  year: line.year ?? defaultYear,
+              }
+            : {}),
     }));
 }
 function frame(
@@ -177,7 +184,7 @@ function frame(
                       period_starts_on: '',
                       period_ends_on: '',
                   },
-                  lines: [emptyDraftLine()],
+                  lines: [{ ...emptyDraftLine(), year: String(year) }],
               }
             : undefined;
     return {
@@ -220,7 +227,8 @@ export function EntitySheet({
     const [frames, setFrames] = useState<Frame[]>(() => {
         const initial = frame(kind, year, record);
         if (kind === 'expenses' && contractContext && !record) {
-            initial.lines = [emptyDraftLine()];
+            initial.values.title = contractContext.name ?? '';
+            initial.lines = [emptyDraftLine('allocated', contractContext.name)];
             initial.values.contract_id = String(contractContext.id);
             if (
                 !contractContext.has_period_expenses &&
@@ -235,6 +243,12 @@ export function EntitySheet({
                 );
                 initial.values.year = periodYear(initial.values, true);
             }
+            initial.lines[0] = {
+                ...initial.lines[0],
+                period_starts_on: initial.values.period_starts_on,
+                period_ends_on: initial.values.period_ends_on,
+                year: initial.values.year,
+            };
             initial.original = snapshot(initial);
         }
         return [initial];
@@ -252,6 +266,9 @@ export function EntitySheet({
     const current = frames[frames.length - 1];
     const initialExpense = current.initialExpense;
     const editingInitialExpense = !!initialExpense?.enabled;
+    const contractLines =
+        current.kind === 'expenses' &&
+        (!!current.values.contract_id || !!current.record?.contract_id);
     const initialExpenseErrors = Object.fromEntries(
         Object.entries(errors)
             .filter(([key]) => key.startsWith('initial_expense.'))
@@ -273,6 +290,30 @@ export function EntitySheet({
             previous.map((item, index) => {
                 if (index !== previous.length - 1) return item;
                 const values = { ...item.values, [key]: value };
+                let lines = item.lines;
+                if (
+                    item.kind === 'expenses' &&
+                    key === 'contract_id' &&
+                    !item.record
+                ) {
+                    const previousName =
+                        localOptions.contracts.find(
+                            (contract) =>
+                                String(contract.id) === item.values.contract_id,
+                        )?.name ?? '';
+                    const name =
+                        localOptions.contracts.find(
+                            (contract) => String(contract.id) === value,
+                        )?.name ?? '';
+                    if (values.title === '' || values.title === previousName)
+                        values.title = name;
+                    lines = lines.map((line) =>
+                        line.description === '' ||
+                        line.description === previousName
+                            ? { ...line, description: name }
+                            : line,
+                    );
+                }
                 if (item.kind === 'expenses' && key.startsWith('period_'))
                     values.year = periodYear(
                         values,
@@ -307,8 +348,39 @@ export function EntitySheet({
                             values: expenseValues,
                         };
                     }
+                    if (expenseKey) {
+                        const lineField =
+                            key === 'name' ? 'description' : expenseKey;
+                        initialExpense = {
+                            ...initialExpense,
+                            lines: initialExpense.lines.map((line) => {
+                                if (
+                                    (line[lineField as keyof DraftLine] ??
+                                        '') !== item.values[key]
+                                )
+                                    return line;
+                                const next = { ...line, [lineField]: value };
+                                if (key !== 'name')
+                                    next.year = periodYear(
+                                        {
+                                            year: String(
+                                                next.year ??
+                                                    initialExpense!.values.year,
+                                            ),
+                                            period_starts_on:
+                                                next.period_starts_on ?? '',
+                                            period_ends_on:
+                                                next.period_ends_on ?? '',
+                                        },
+                                        !line.period_starts_on ||
+                                            !line.period_ends_on,
+                                    );
+                                return next;
+                            }),
+                        };
+                    }
                 }
-                return { ...item, values, initialExpense };
+                return { ...item, values, lines, initialExpense };
             }),
         );
     }
@@ -341,6 +413,9 @@ export function EntitySheet({
                     lines: draftLines({
                         id: item.record?.id ?? 0,
                         title: item.values.title,
+                        year: Number(item.values.year),
+                        period_starts_on: item.values.period_starts_on || null,
+                        period_ends_on: item.values.period_ends_on || null,
                         allocated_amount: decimalInput(
                             item.values.allocated_amount,
                         ),
@@ -382,14 +457,20 @@ export function EntitySheet({
             if (current.detailed) {
                 delete payload.allocated_amount;
                 delete payload.actual_amount;
-                payload.lines = linePayload(current.lines);
+                payload.lines = linePayload(
+                    current.lines,
+                    contractLines ? current.values.year : undefined,
+                );
             }
             if (contractContext) payload.contract_entry = true;
         }
         if (initialExpense?.enabled) {
             payload.initial_expense = {
                 ...initialExpense.values,
-                lines: linePayload(initialExpense.lines),
+                lines: linePayload(
+                    initialExpense.lines,
+                    initialExpense.values.year,
+                ),
             };
         }
         if (current.kind !== 'vendors') {
@@ -418,10 +499,28 @@ export function EntitySheet({
                                   ...item,
                                   values: {
                                       ...item.values,
+                                      title:
+                                          current.kind === 'contracts' &&
+                                          !item.values.title
+                                              ? (data.record.name ?? '')
+                                              : item.values.title,
                                       [current.returnField!]: String(
                                           data.record.id,
                                       ),
                                   },
+                                  lines:
+                                      current.kind === 'contracts'
+                                          ? item.lines.map((line) =>
+                                                line.description === ''
+                                                    ? {
+                                                          ...line,
+                                                          description:
+                                                              data.record
+                                                                  .name ?? '',
+                                                      }
+                                                    : line,
+                                            )
+                                          : item.lines,
                               }
                             : item,
                     ),
@@ -508,7 +607,9 @@ export function EntitySheet({
                         <SheetDescription>
                             {current.kind === 'expenses'
                                 ? current.detailed
-                                    ? 'Modifica i dati generali e le righe economiche della spesa.'
+                                    ? contractLines
+                                        ? 'Modifica i dati della spesa e le condizioni economiche.'
+                                        : 'Modifica i dati generali e le righe economiche della spesa.'
                                     : 'Inserisci il previsto, l’effettivo oppure entrambi. Un campo vuoto indica un importo non disponibile; zero è un importo valorizzato.'
                                 : current.kind === 'contracts'
                                   ? current.record
@@ -591,6 +692,12 @@ export function EntitySheet({
                                             ].includes(field.key)
                                         )
                                             return null;
+                                        if (field.key === 'year')
+                                            if (
+                                                current.detailed &&
+                                                contractLines
+                                            )
+                                                return null;
                                         if (field.key === 'year')
                                             return (
                                                 <ExpensePeriodFields
@@ -942,10 +1049,17 @@ export function EntitySheet({
                                         </Field>
                                     )}
                             </FieldGroup>
+                            {contractLines && current.detailed && (
+                                <FieldError>
+                                    {errors.period_starts_on?.[0] ??
+                                        errors.period_ends_on?.[0] ??
+                                        errors.year?.[0]}
+                                </FieldError>
+                            )}
                             {initialExpense && (
                                 <FieldSet>
                                     <FieldLegend>
-                                        Condizioni economiche
+                                        Prima spesa collegata
                                     </FieldLegend>
                                     <FieldGroup className="grid gap-4 sm:grid-cols-2">
                                         <Field
@@ -1032,19 +1146,6 @@ export function EntitySheet({
                                                         }
                                                     </FieldError>
                                                 </Field>
-                                                <ExpensePeriodFields
-                                                    values={
-                                                        initialExpense.values
-                                                    }
-                                                    onChange={
-                                                        changeInitialExpense
-                                                    }
-                                                    disabled={formBusy}
-                                                    errors={
-                                                        initialExpenseErrors
-                                                    }
-                                                    showPeriod
-                                                />
                                             </>
                                         )}
                                         <FieldError>
@@ -1061,7 +1162,9 @@ export function EntitySheet({
                                         disabled={formBusy}
                                         onClick={useDetailedLines}
                                     >
-                                        Passa alle righe economiche
+                                        {contractLines
+                                            ? 'Passa alle condizioni economiche'
+                                            : 'Passa alle righe economiche'}
                                     </Button>
                                 )}
                             {((current.kind === 'expenses' &&
@@ -1077,6 +1180,23 @@ export function EntitySheet({
                                         editingInitialExpense ||
                                         !!current.values.contract_id ||
                                         !!current.record?.contract_id
+                                    }
+                                    defaultDescription={
+                                        editingInitialExpense
+                                            ? current.values.name
+                                            : (contractContext?.name ??
+                                              current.record?.contract?.name ??
+                                              localOptions.contracts.find(
+                                                  (contract) =>
+                                                      String(contract.id) ===
+                                                      current.values
+                                                          .contract_id,
+                                              )?.name)
+                                    }
+                                    defaultPeriod={
+                                        editingInitialExpense
+                                            ? initialExpense!.values
+                                            : current.values
                                     }
                                     disabled={formBusy}
                                     errors={

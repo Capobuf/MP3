@@ -12,6 +12,7 @@ use App\Support\ExpensePeriods;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -150,7 +151,17 @@ class ExpenseController extends Controller
         $contractEntry = $data['contract_entry'] ?? false;
         unset($data['contract_entry']);
         $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
-        ExpensePeriods::validate($expense, $pending);
+        $individualPeriods = isset($data['lines']) && array_filter($data['lines'], fn ($line) => array_key_exists('year', $line) || array_key_exists('period_starts_on', $line) || array_key_exists('period_ends_on', $line)) !== [];
+        if ($individualPeriods) {
+            $starts = array_filter(array_column($data['lines'], 'period_starts_on'));
+            $ends = array_filter(array_column($data['lines'], 'period_ends_on'));
+            $data['period_starts_on'] = $starts === [] ? null : min($starts);
+            $data['period_ends_on'] = $ends === [] ? null : max($ends);
+            $data['year'] = $data['lines'][0]['year'] ?? $expense->year;
+            $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
+        }
+        $sharedPeriodUpdate = array_intersect_key($data, array_flip(['year', 'period_starts_on', 'period_ends_on']));
+        ExpensePeriods::validate($expense, $pending, ! $individualPeriods && (! $hasLines || $sharedPeriodUpdate !== []));
         if ($contractEntry && $expense->contract_id === null) {
             throw ValidationException::withMessages(['contract_id' => 'Seleziona il contratto della spesa.']);
         }
@@ -163,6 +174,14 @@ class ExpenseController extends Controller
             if ($hasLines &&
                 (array_key_exists('allocated_amount', $data) || array_key_exists('actual_amount', $data))) {
                 throw ValidationException::withMessages(['lines' => 'Modifica le righe della spesa: gli importi complessivi sono calcolati automaticamente.']);
+            }
+            // Keep the former shared-period API compatible without changing independent conditions.
+            $periodUpdate = array_intersect_key($data, array_flip(['period_starts_on', 'period_ends_on', 'year']));
+            if ($hasLines && $periodUpdate !== []) {
+                $expense->lines()->where('period_starts_on', $expense->getRawOriginal('period_starts_on'))
+                    ->where('period_ends_on', $expense->getRawOriginal('period_ends_on'))
+                    ->where(fn ($query) => $query->where('year', $expense->getRawOriginal('year'))->orWhereNull('year'))
+                    ->update($periodUpdate);
             }
             $expense->fill($data)->save();
             if ($costCenterIds !== null) {
@@ -180,6 +199,12 @@ class ExpenseController extends Controller
         $totals = ['allocated' => 0, 'actual' => 0];
         $limit = 99999999999999;
         foreach ($data['lines'] as $position => $line) {
+            $start = array_key_exists('period_starts_on', $line) ? $line['period_starts_on'] : $expense->period_starts_on?->toDateString();
+            $end = array_key_exists('period_ends_on', $line) ? $line['period_ends_on'] : $expense->period_ends_on?->toDateString();
+            $year = $line['year'] ?? $expense->year;
+            if ($start !== null && $end !== null && ! in_array((int) $year, [Carbon::parse($start)->year, Carbon::parse($end)->year], true)) {
+                throw ValidationException::withMessages(["lines.{$position}.year" => 'Scegli l’anno iniziale o finale del periodo della condizione economica.']);
+            }
             $quantity = (string) ($line['quantity'] ?? '1');
             $parts = explode('.', $quantity);
             $scaledQuantity = (int) $parts[0] * 10000 + (int) str_pad($parts[1] ?? '', 4, '0');
@@ -197,6 +222,9 @@ class ExpenseController extends Controller
                 'quantity' => $quantity,
                 'total' => Money::decimal($cents),
                 'position' => $position,
+                'period_starts_on' => $start,
+                'period_ends_on' => $end,
+                'year' => $expense->contract_id !== null || array_key_exists('year', $line) ? $year : null,
             ];
         }
         foreach ($totals as $total) {

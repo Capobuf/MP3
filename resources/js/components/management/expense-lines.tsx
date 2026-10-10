@@ -16,7 +16,9 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { decimalInput, money, varianceTextClass } from './helpers';
+import { dateLabel, decimalInput, money, varianceTextClass } from './helpers';
+import { DateField } from './date-field';
+import { ExpensePeriodFields, periodYear } from './expense-period-fields';
 import type { ExpenseLine, RecordData } from './types';
 
 export type DraftLine = ExpenseLine & { key: string };
@@ -28,10 +30,11 @@ function lineKey(): string {
 
 export function emptyDraftLine(
     type: ExpenseLine['type'] = 'allocated',
+    description = '',
 ): DraftLine {
     return {
         key: lineKey(),
-        description: '',
+        description,
         type,
         quantity: '1',
         unit_price: '',
@@ -56,10 +59,17 @@ export function draftLines(record?: RecordData): DraftLine[] {
                             type,
                             unit_price: amount,
                             quantity: '1',
+                            period_starts_on: record?.period_starts_on,
+                            period_ends_on: record?.period_ends_on,
+                            year: record?.year,
                         },
                     ];
           });
-    return lines.map((line) => ({ ...line, key: lineKey() }));
+    return lines.map((line) => ({
+        ...line,
+        year: line.year ?? record?.year,
+        key: lineKey(),
+    }));
 }
 
 // Integer arithmetic mirrors the server: round each price × quantity to cents.
@@ -86,6 +96,8 @@ export function ExpenseLines({
     disabled = false,
     readOnly = false,
     contractMode = false,
+    defaultDescription = '',
+    defaultPeriod,
     errors = {},
 }: {
     lines: DraftLine[];
@@ -93,6 +105,8 @@ export function ExpenseLines({
     disabled?: boolean;
     readOnly?: boolean;
     contractMode?: boolean;
+    defaultDescription?: string;
+    defaultPeriod?: Record<string, string>;
     errors?: Record<string, string[]>;
 }) {
     const [search, setSearch] = useState('');
@@ -132,16 +146,44 @@ export function ExpenseLines({
     const allocatedLabel = contractMode ? 'Previsto' : 'Allocato';
     function change(key: string, patch: Partial<ExpenseLine>) {
         onChange?.(
-            lines.map((line) =>
-                line.key === key ? { ...line, ...patch } : line,
-            ),
+            lines.map((line) => {
+                if (line.key !== key) return line;
+                const next = { ...line, ...patch };
+                if ('period_starts_on' in patch || 'period_ends_on' in patch)
+                    next.year = periodYear(
+                        {
+                            year: String(
+                                next.year ??
+                                    defaultPeriod?.year ??
+                                    new Date().getFullYear(),
+                            ),
+                            period_starts_on: next.period_starts_on ?? '',
+                            period_ends_on: next.period_ends_on ?? '',
+                        },
+                        !line.period_starts_on || !line.period_ends_on,
+                    );
+                return next;
+            }),
         );
     }
     function add() {
         if (lines.length >= 500) return;
         const line = emptyDraftLine(
             filter === 'actual' ? 'actual' : 'allocated',
+            defaultDescription,
         );
+        if (contractMode) {
+            line.period_starts_on = defaultPeriod?.period_starts_on ?? '';
+            line.period_ends_on = defaultPeriod?.period_ends_on ?? '';
+            line.year = periodYear(
+                {
+                    ...defaultPeriod,
+                    year:
+                        defaultPeriod?.year ?? String(new Date().getFullYear()),
+                },
+                true,
+            );
+        }
         pendingFocus.current = line.key;
         setSearch('');
         onChange?.([...lines, line]);
@@ -180,10 +222,18 @@ export function ExpenseLines({
     return (
         <section
             className="flex min-w-0 flex-col gap-3"
-            aria-label="Righe economiche della spesa"
+            aria-label={
+                contractMode
+                    ? 'Condizioni economiche'
+                    : 'Righe economiche della spesa'
+            }
         >
             <div className="flex flex-wrap items-center gap-2">
-                <h2 className="mr-auto font-semibold">Righe economiche</h2>
+                <h2 className="mr-auto font-semibold">
+                    {contractMode
+                        ? 'Condizioni economiche'
+                        : 'Righe economiche'}
+                </h2>
                 {!readOnly && (
                     <Button
                         type="button"
@@ -192,21 +242,36 @@ export function ExpenseLines({
                         disabled={disabled || lines.length >= 500}
                         onClick={add}
                     >
-                        <Plus className="size-4" /> Aggiungi riga
+                        <Plus className="size-4" />{' '}
+                        {contractMode
+                            ? 'Aggiungi condizione economica'
+                            : 'Aggiungi riga'}
                     </Button>
                 )}
             </div>
             <div className="flex flex-wrap gap-2">
                 <Input
-                    aria-label="Cerca nelle descrizioni delle righe"
-                    placeholder="Cerca nelle righe…"
+                    aria-label={
+                        contractMode
+                            ? 'Cerca nelle condizioni economiche'
+                            : 'Cerca nelle descrizioni delle righe'
+                    }
+                    placeholder={
+                        contractMode
+                            ? 'Cerca nelle condizioni…'
+                            : 'Cerca nelle righe…'
+                    }
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     disabled={disabled}
                     className="min-w-40 flex-1"
                 />
                 <NativeSelect
-                    aria-label="Filtra righe per tipo"
+                    aria-label={
+                        contractMode
+                            ? 'Filtra condizioni per tipo'
+                            : 'Filtra righe per tipo'
+                    }
                     value={filter}
                     disabled={disabled}
                     onChange={(event) => setFilter(event.target.value)}
@@ -233,7 +298,8 @@ export function ExpenseLines({
                 )}
             </div>
             <p className="text-sm text-muted-foreground">
-                {visible.length} di {lines.length} righe.{' '}
+                {visible.length} di {lines.length}{' '}
+                {contractMode ? 'condizioni economiche' : 'righe'}.{' '}
                 {!readOnly &&
                     'Modifica i campi direttamente nella tabella e usa le frecce per riordinare. Le modifiche saranno salvate con la spesa.'}
             </p>
@@ -245,23 +311,34 @@ export function ExpenseLines({
             {filtered &&
                 Object.keys(errors).some((key) => key.startsWith('lines.')) && (
                     <p role="alert" className="text-sm text-destructive">
-                        Ci sono righe da correggere.{' '}
+                        {contractMode
+                            ? 'Ci sono condizioni economiche da correggere.'
+                            : 'Ci sono righe da correggere.'}{' '}
                         <Button
                             type="button"
                             variant="link"
                             onClick={resetFilters}
                         >
-                            Mostra tutte le righe
+                            {contractMode
+                                ? 'Mostra tutte le condizioni'
+                                : 'Mostra tutte le righe'}
                         </Button>
                     </p>
                 )}
             {!readOnly && selectedLines.length > 0 && (
                 <div
                     className="flex flex-wrap items-center gap-2 rounded-md bg-muted p-2 text-sm"
-                    aria-label="Operazioni sulle righe selezionate"
+                    aria-label={
+                        contractMode
+                            ? 'Operazioni sulle condizioni selezionate'
+                            : 'Operazioni sulle righe selezionate'
+                    }
                 >
                     <span className="mr-auto" role="status">
-                        {selectedLines.length} righe selezionate
+                        {selectedLines.length}{' '}
+                        {contractMode
+                            ? 'condizioni selezionate'
+                            : 'righe selezionate'}
                         {selectedLines.length > visibleSelected
                             ? ` (${selectedLines.length - visibleSelected} nascoste dai filtri)`
                             : ''}
@@ -339,7 +416,11 @@ export function ExpenseLines({
                             {!readOnly && (
                                 <TableHead className="w-10">
                                     <Checkbox
-                                        aria-label="Seleziona tutte le righe visibili"
+                                        aria-label={
+                                            contractMode
+                                                ? 'Seleziona tutte le condizioni visibili'
+                                                : 'Seleziona tutte le righe visibili'
+                                        }
                                         disabled={disabled || !visible.length}
                                         checked={
                                             visibleSelected ===
@@ -377,6 +458,13 @@ export function ExpenseLines({
                             )}
                             {!readOnly && <TableHead>Ordine</TableHead>}
                             <TableHead>Descrizione</TableHead>
+                            {contractMode && (
+                                <>
+                                    <TableHead>Inizio</TableHead>
+                                    <TableHead>Fine</TableHead>
+                                    <TableHead>Anno di imputazione</TableHead>
+                                </>
+                            )}
                             <TableHead>Tipo</TableHead>
                             <TableHead className="text-right">
                                 Prezzo unitario (€)
@@ -396,14 +484,23 @@ export function ExpenseLines({
                         {!visible.length && (
                             <TableRow>
                                 <TableCell
-                                    colSpan={readOnly ? 5 : 8}
+                                    colSpan={
+                                        (readOnly ? 5 : 8) +
+                                        (contractMode ? 3 : 0)
+                                    }
                                     className="py-6 text-center text-muted-foreground"
                                 >
                                     {lines.length
-                                        ? 'Nessuna riga corrisponde ai filtri.'
+                                        ? contractMode
+                                            ? 'Nessuna condizione corrisponde ai filtri.'
+                                            : 'Nessuna riga corrisponde ai filtri.'
                                         : readOnly
-                                          ? 'Non sono presenti righe dettagliate.'
-                                          : 'Nessuna riga. Aggiungi una riga per inserire un importo.'}
+                                          ? contractMode
+                                              ? 'Non sono presenti condizioni economiche.'
+                                              : 'Non sono presenti righe dettagliate.'
+                                          : contractMode
+                                            ? 'Aggiungi una condizione economica per inserire un importo.'
+                                            : 'Nessuna riga. Aggiungi una riga per inserire un importo.'}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -412,7 +509,7 @@ export function ExpenseLines({
                             const cents = lineCents(line);
                             const fieldError = (field: string) =>
                                 errors[`lines.${index}.${field}`]?.[0];
-                            const label = `riga ${index + 1}`;
+                            const label = `${contractMode ? 'condizione economica' : 'riga'} ${index + 1}`;
                             return (
                                 <TableRow
                                     key={line.key}
@@ -533,6 +630,94 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
+                                    {contractMode &&
+                                        (
+                                            [
+                                                'period_starts_on',
+                                                'period_ends_on',
+                                            ] as const
+                                        ).map((field) => (
+                                            <TableCell
+                                                key={field}
+                                                className="min-w-44"
+                                            >
+                                                {readOnly ? (
+                                                    dateLabel(line[field])
+                                                ) : (
+                                                    <DateField
+                                                        id={`${line.key}-${field}`}
+                                                        aria-label={`${field === 'period_starts_on' ? 'Inizio' : 'Fine'} ${label}`}
+                                                        value={
+                                                            line[field] ?? ''
+                                                        }
+                                                        onChange={(value) =>
+                                                            change(line.key, {
+                                                                [field]: value,
+                                                            })
+                                                        }
+                                                        disabled={disabled}
+                                                        aria-invalid={
+                                                            !!fieldError(field)
+                                                        }
+                                                        aria-describedby={
+                                                            fieldError(field)
+                                                                ? `${line.key}-${field}-error`
+                                                                : undefined
+                                                        }
+                                                    />
+                                                )}
+                                                {fieldError(field) && (
+                                                    <p
+                                                        id={`${line.key}-${field}-error`}
+                                                        role="alert"
+                                                        className="text-sm text-destructive"
+                                                    >
+                                                        {fieldError(field)}
+                                                    </p>
+                                                )}
+                                            </TableCell>
+                                        ))}
+                                    {contractMode && (
+                                        <TableCell className="min-w-56">
+                                            {readOnly ? (
+                                                line.year
+                                            ) : (
+                                                <ExpensePeriodFields
+                                                    values={{
+                                                        period_starts_on:
+                                                            line.period_starts_on ??
+                                                            '',
+                                                        period_ends_on:
+                                                            line.period_ends_on ??
+                                                            '',
+                                                        year: String(
+                                                            line.year ?? '',
+                                                        ),
+                                                    }}
+                                                    onChange={(_, value) =>
+                                                        change(line.key, {
+                                                            year: value,
+                                                        })
+                                                    }
+                                                    disabled={disabled}
+                                                    errors={
+                                                        fieldError('year')
+                                                            ? {
+                                                                  year: [
+                                                                      fieldError(
+                                                                          'year',
+                                                                      )!,
+                                                                  ],
+                                                              }
+                                                            : {}
+                                                    }
+                                                    showPeriod={false}
+                                                    idPrefix={line.key}
+                                                    yearLabel={`Anno ${label}`}
+                                                />
+                                            )}
+                                        </TableCell>
+                                    )}
                                     <TableCell className="min-w-32">
                                         {readOnly ? (
                                             line.type === 'allocated' ? (
@@ -685,7 +870,9 @@ export function ExpenseLines({
             </div>
             {filtered && !readOnly && (
                 <p className="text-sm text-muted-foreground">
-                    Azzera i filtri per riordinare le righe.
+                    {contractMode
+                        ? 'Azzera i filtri per riordinare le condizioni.'
+                        : 'Azzera i filtri per riordinare le righe.'}
                 </p>
             )}
             <h3 className="font-semibold">Riepilogo</h3>

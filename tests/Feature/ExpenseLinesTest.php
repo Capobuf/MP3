@@ -163,4 +163,20 @@ class ExpenseLinesTest extends TestCase
             }
         }
     }
+
+    public function test_condition_period_migration_preserves_dates_year_and_line_values(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Storica', 'year' => 2027, 'period_starts_on' => '2026-06-05', 'period_ends_on' => '2027-02-18', 'allocated_amount' => '0', 'actual_amount' => null]);
+        $line = $expense->lines()->create([...$this->line('Storica', 'allocated', '0'), 'total' => '0', 'position' => 0]);
+        $migration = require database_path('migrations/2026_10_10_000003_add_period_to_expense_lines_table.php');
+        $migration->down();
+        $migration->up();
+        $line->refresh();
+        $this->assertSame('2026-06-05', $line->period_starts_on->toDateString());
+        $this->assertSame('2027-02-18', $line->period_ends_on->toDateString());
+        $this->assertSame(2027, $line->year);
+        $this->assertSame('0.00', $line->total);
+        $this->assertSame('0.00', $expense->refresh()->allocated_amount);
+        $this->assertNull($expense->actual_amount);
+    }
 }

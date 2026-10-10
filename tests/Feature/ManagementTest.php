@@ -97,6 +97,75 @@ class ManagementTest extends TestCase
         }
     }
 
+    public function test_conditions_have_independent_periods_and_attribution_years_in_every_summary(): void
+    {
+        $initial = $this->initialExpense();
+        $initial['lines'][0] += ['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31', 'year' => 2026];
+        $initial['lines'][1] += ['period_starts_on' => '2026-06-05', 'period_ends_on' => '2027-02-18', 'year' => 2027];
+        $response = $this->postJson('/t/alfa/contracts', ['name' => 'Condizioni', 'initial_expense' => $initial])->assertCreated();
+        $expense = $this->tenant->expenses()->with('lines')->sole();
+        $this->assertSame([2026, 2027], $expense->lines->pluck('year')->all());
+        $this->assertSame('2026-01-01', $expense->period_starts_on->toDateString());
+        $this->assertSame('2027-02-18', $expense->period_ends_on->toDateString());
+        foreach ([2026 => ['500.00', '0.00'], 2027 => ['0.00', '280.00']] as $year => [$allocated, $actual]) {
+            foreach (['dashboard', 'expenses'] as $path) {
+                $this->get('/t/alfa/'.$path.'?year='.$year)->assertInertia(fn (Assert $page) => $page
+                    ->where('totals.allocated', $allocated)->where('totals.actual', $actual)->where('totals.count', 1)
+                    ->has('expenses.data', 1)->where('expenses.data.0.year', $year)->has('expenses.data.0.lines', 2));
+            }
+        }
+        $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page
+            ->where('analytics.current.actual', '280.00')->where('analytics.current.allocated', null)
+            ->where('analytics.previous.allocated', '500.00')->where('analytics.previous.actual', null));
+        $this->get('/t/alfa/contracts/'.$response->json('record.id'))->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '500.00')->where('totals.actual', '280.00')->has('expenses.data', 1));
+        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
+        $expense->update(['project_id' => $project->id]);
+        $this->get('/t/alfa/projects/'.$project->id.'?year=2027')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '0.00')->where('totals.actual', '280.00')->where('years', [2027, 2026]));
+        $initial['lines'][1]['year'] = 2026;
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['lines' => $initial['lines']])->assertOk();
+        $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0));
+        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '500.00')->where('totals.actual', '280.00'));
+    }
+
+    public function test_invalid_condition_dates_and_years_roll_back_contract_creation(): void
+    {
+        $base = ['description' => 'Condizione', 'type' => 'allocated', 'unit_price' => '0', 'quantity' => '1',
+            'period_starts_on' => '2026-06-05', 'period_ends_on' => '2027-02-18', 'year' => 2027];
+        foreach ([
+            [['period_starts_on' => null], 'period_starts_on'],
+            [['period_ends_on' => null], 'period_ends_on'],
+            [['period_ends_on' => '2026-01-01'], 'period_ends_on'],
+            [['period_starts_on' => 'not-a-date'], 'period_starts_on'],
+            [['year' => 2025], 'year'],
+            [['year' => 2101], 'year'],
+            [['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31', 'year' => 2027], 'year'],
+        ] as [$invalid, $error]) {
+            $this->postJson('/t/alfa/contracts', ['name' => 'Non salvare', 'initial_expense' => [
+                'title' => 'Non salvare', 'year' => 2026, 'lines' => [[...$base, ...$invalid]],
+            ]])->assertUnprocessable()->assertJsonValidationErrors('initial_expense.lines.0.'.$error);
+            $this->assertDatabaseCount('contracts', 0);
+            $this->assertDatabaseCount('expenses', 0);
+            $this->assertDatabaseCount('expense_lines', 0);
+        }
+    }
+
+    public function test_metadata_edits_preserve_conditions_whose_year_is_between_the_container_years(): void
+    {
+        $data = $this->initialExpense();
+        $data['lines'][0] += ['period_starts_on' => '2026-06-05', 'period_ends_on' => '2027-02-18', 'year' => 2027];
+        $data['lines'][1] += ['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31', 'year' => 2026];
+        $data['lines'][] = ['description' => 'Futura', 'type' => 'allocated', 'unit_price' => '0', 'period_starts_on' => '2028-01-01', 'period_ends_on' => '2028-12-31', 'year' => 2028];
+        $this->postJson('/t/alfa/contracts', ['name' => 'Condizioni', 'initial_expense' => $data])->assertCreated();
+        $expense = $this->tenant->expenses()->with('lines')->sole();
+        $lines = $expense->lines->toArray();
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['title' => 'Titolo aggiornato', 'notes' => 'Nota'])->assertOk();
+        $this->assertSame($lines, $expense->fresh()->lines->toArray());
+        $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page->where('totals.allocated', '500.00'));
+    }
+
     public function test_invalid_initial_expenses_do_not_leave_contracts_or_lines_behind(): void
     {
         $valid = $this->initialExpense();

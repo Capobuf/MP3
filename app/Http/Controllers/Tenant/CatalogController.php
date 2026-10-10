@@ -93,6 +93,7 @@ class CatalogController extends Controller
         $year = null;
         $years = [];
         if ($item instanceof Project) {
+            $expenses = ExpenseOverview::economicQuery($tenant)->where('project_id', $item->id);
             $data = $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
             $year = isset($data['year']) ? (int) $data['year'] : null;
             $years = (clone $expenses)->select('year')->distinct()->orderByDesc('year')->pluck('year')->all();
@@ -165,7 +166,7 @@ class CatalogController extends Controller
             if ($request->input('initial_expense') !== null) {
                 foreach (ExpenseRequest::forTenant($tenant) as $field => $rule) {
                     if (in_array($field, $expenseFields, true) || str_starts_with($field, 'lines.')) {
-                        $rules['initial_expense.'.$field] = $rule;
+                        $rules['initial_expense.'.$field] = array_map(fn ($part) => is_string($part) ? str_replace(':lines.', ':initial_expense.lines.', $part) : $part, $rule);
                     }
                 }
                 $rules['initial_expense.lines'] = ['required', 'min:1', ...array_diff($rules['initial_expense.lines'], ['sometimes'])];

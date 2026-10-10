@@ -58,7 +58,26 @@ export default function ExpenseDetail({
                     <CardContent className="min-w-0">
                         <dl className="grid gap-6 sm:grid-cols-3">
                             {[
-                                ['Anno di imputazione', expense.year],
+                                [
+                                    'Anno di imputazione',
+                                    expense.contract_id && expense.lines?.length
+                                        ? [
+                                              ...new Set(
+                                                  expense.lines.map(
+                                                      (line) =>
+                                                          line.year ??
+                                                          expense.year,
+                                                  ),
+                                              ),
+                                          ]
+                                              .sort(
+                                                  (left, right) =>
+                                                      Number(left) -
+                                                      Number(right),
+                                              )
+                                              .join(', ')
+                                        : expense.year,
+                                ],
                                 ...(expense.contract_id ||
                                 expense.period_starts_on
                                     ? [

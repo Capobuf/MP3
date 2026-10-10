@@ -403,7 +403,7 @@ export function ExpenseTable({
                                             ` · ${expense.year}`}
                                         {contractMode &&
                                             !!expense.lines?.length &&
-                                            ` · ${expense.lines.length} ${expense.lines.length === 1 ? 'riga economica' : 'righe economiche'}`}
+                                            ` · ${expense.lines.length} ${expense.lines.length === 1 ? 'condizione economica' : 'condizioni economiche'}`}
                                     </p>
                                     <CostCenterTags
                                         centers={expense.cost_centers}
@@ -426,7 +426,21 @@ export function ExpenseTable({
                                             <span className="text-sm text-muted-foreground xl:hidden">
                                                 Anno di imputazione
                                             </span>
-                                            {expense.year}
+                                            {[
+                                                ...new Set(
+                                                    expense.lines?.map(
+                                                        (line) =>
+                                                            line.year ??
+                                                            expense.year,
+                                                    ) ?? [expense.year],
+                                                ),
+                                            ]
+                                                .sort(
+                                                    (left, right) =>
+                                                        Number(left) -
+                                                        Number(right),
+                                                )
+                                                .join(', ') || expense.year}
                                         </TableCell>
                                     </>
                                 )}

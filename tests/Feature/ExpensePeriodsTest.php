@@ -53,6 +53,17 @@ class ExpensePeriodsTest extends TestCase
         return [...$data, 'contract_entry' => true];
     }
 
+    public function test_condition_dates_use_the_supplied_year_and_keep_overlap_validation(): void
+    {
+        $line = [...$this->line('allocated', '0'), 'period_starts_on' => '2027-01-01', 'period_ends_on' => '2027-12-31'];
+        $data = [...$this->detailedData(), 'year' => 2027, 'lines' => [$line]];
+        $this->postJson('/t/periodi/expenses', $data)->assertCreated()
+            ->assertJsonPath('record.period_starts_on', '2027-01-01')->assertJsonPath('record.lines.0.year', 2027);
+        $this->postJson('/t/periodi/expenses', $data)->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
+        $this->assertDatabaseCount('expenses', 1);
+        $this->assertDatabaseCount('expense_lines', 1);
+    }
+
     public function test_contract_entry_accepts_either_line_type_including_zero_without_direct_amounts(): void
     {
         foreach ([['allocated', '100'], ['actual', '80'], ['allocated', '0'], ['actual', '0']] as $index => [$type, $price]) {

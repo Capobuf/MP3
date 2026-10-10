@@ -23,12 +23,16 @@ export function ExpensePeriodFields({
     disabled,
     errors,
     showPeriod,
+    idPrefix = 'entity',
+    yearLabel = 'Anno di imputazione economica',
 }: {
     values: Record<string, string>;
     onChange: (key: string, value: string) => void;
     disabled: boolean;
     errors: Record<string, string[]>;
     showPeriod: boolean;
+    idPrefix?: string;
+    yearLabel?: string;
 }) {
     const first = values.period_starts_on?.slice(0, 4);
     const last = values.period_ends_on?.slice(0, 4);
@@ -44,32 +48,34 @@ export function ExpensePeriodFields({
                         data-invalid={!!errors[key]}
                         data-disabled={disabled}
                     >
-                        <FieldLabel htmlFor={`entity-${key}`}>
+                        <FieldLabel htmlFor={`${idPrefix}-${key}`}>
                             {key === 'period_starts_on'
                                 ? 'Inizio periodo della spesa'
                                 : 'Fine periodo della spesa'}
                         </FieldLabel>
                         <DateField
-                            id={`entity-${key}`}
+                            id={`${idPrefix}-${key}`}
                             value={values[key] ?? ''}
                             onChange={(value) => onChange(key, value)}
                             disabled={disabled}
                             aria-invalid={!!errors[key]}
                             aria-describedby={
-                                errors[key] ? `entity-${key}-error` : undefined
+                                errors[key]
+                                    ? `${idPrefix}-${key}-error`
+                                    : undefined
                             }
                         />
-                        <FieldError id={`entity-${key}-error`}>
+                        <FieldError id={`${idPrefix}-${key}-error`}>
                             {errors[key]?.[0]}
                         </FieldError>
                     </Field>
                 ))}
             <Field data-invalid={!!errors.year} data-disabled={disabled}>
                 <FieldLabel
-                    id="expense-year-label"
-                    htmlFor={multipleYears ? undefined : 'entity-year'}
+                    id={`${idPrefix}-year-label`}
+                    htmlFor={multipleYears ? undefined : `${idPrefix}-year`}
                 >
-                    Anno di imputazione economica
+                    {yearLabel}
                 </FieldLabel>
                 {multipleYears ? (
                     <ToggleGroup
@@ -80,12 +86,12 @@ export function ExpensePeriodFields({
                             if (value) onChange('year', value);
                         }}
                         disabled={disabled}
-                        aria-labelledby="expense-year-label"
+                        aria-labelledby={`${idPrefix}-year-label`}
                         aria-invalid={!!errors.year}
                         aria-describedby={
                             errors.year
-                                ? 'expense-year-error'
-                                : 'expense-year-description'
+                                ? `${idPrefix}-year-error`
+                                : `${idPrefix}-year-description`
                         }
                     >
                         <ToggleGroupItem value={first}>
@@ -97,7 +103,7 @@ export function ExpensePeriodFields({
                     </ToggleGroup>
                 ) : (
                     <Input
-                        id="entity-year"
+                        id={`${idPrefix}-year`}
                         type="number"
                         min={2000}
                         max={2100}
@@ -111,16 +117,16 @@ export function ExpensePeriodFields({
                         aria-invalid={!!errors.year}
                         aria-describedby={
                             errors.year
-                                ? 'expense-year-error'
+                                ? `${idPrefix}-year-error`
                                 : validPeriod
-                                  ? 'expense-year-description'
+                                  ? `${idPrefix}-year-description`
                                   : undefined
                         }
                     />
                 )}
                 {validPeriod && (
                     <p
-                        id="expense-year-description"
+                        id={`${idPrefix}-year-description`}
                         className="text-sm text-muted-foreground"
                         role="status"
                     >
@@ -128,7 +134,7 @@ export function ExpensePeriodFields({
                         {multipleYears ? '.' : ' (anno del periodo).'}{' '}
                     </p>
                 )}
-                <FieldError id="expense-year-error">
+                <FieldError id={`${idPrefix}-year-error`}>
                     {errors.year?.[0]}
                 </FieldError>
             </Field>

@@ -22,7 +22,7 @@ export function DateField({
     value: string;
     onChange: (value: string) => void;
     disabled?: boolean;
-} & Pick<AriaAttributes, 'aria-invalid' | 'aria-describedby'>) {
+} & Pick<AriaAttributes, 'aria-invalid' | 'aria-describedby' | 'aria-label'>) {
     return (
         <div className="flex gap-2">
             <Input
