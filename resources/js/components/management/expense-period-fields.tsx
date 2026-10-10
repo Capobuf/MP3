@@ -1,5 +1,4 @@
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { DateField } from './date-field';
 
@@ -20,6 +19,20 @@ export function periodYear(
     return !preferStart && [first, last].includes(values.year)
         ? values.year
         : first;
+}
+
+export function periodCrossesYears(values: {
+    period_starts_on?: string | null;
+    period_ends_on?: string | null;
+}): boolean {
+    const start = values.period_starts_on ?? '';
+    const end = values.period_ends_on ?? '';
+    return (
+        /^\d{4}-\d{2}-\d{2}$/.test(start) &&
+        /^\d{4}-\d{2}-\d{2}$/.test(end) &&
+        end >= start &&
+        start.slice(0, 4) !== end.slice(0, 4)
+    );
 }
 
 export function ExpensePeriodFields({
@@ -43,11 +56,7 @@ export function ExpensePeriodFields({
 }) {
     const first = values.period_starts_on?.slice(0, 4);
     const last = values.period_ends_on?.slice(0, 4);
-    const validPeriod =
-        /^\d{4}-\d{2}-\d{2}$/.test(values.period_starts_on ?? '') &&
-        /^\d{4}-\d{2}-\d{2}$/.test(values.period_ends_on ?? '') &&
-        values.period_ends_on >= values.period_starts_on;
-    const multipleYears = validPeriod && first !== last;
+    const multipleYears = periodCrossesYears(values);
     return (
         <>
             {showPeriod &&
@@ -80,19 +89,18 @@ export function ExpensePeriodFields({
                         </FieldError>
                     </Field>
                 ))}
-            <Field
-                className="min-w-0 gap-2"
-                data-invalid={!!errors.year}
-                data-disabled={disabled}
-            >
-                <FieldLabel
-                    className={compact ? 'sr-only' : undefined}
-                    id={`${idPrefix}-year-label`}
-                    htmlFor={multipleYears ? undefined : `${idPrefix}-year`}
+            {multipleYears && (
+                <Field
+                    className="min-w-0 gap-2"
+                    data-invalid={!!errors.year}
+                    data-disabled={disabled}
                 >
-                    {yearLabel}
-                </FieldLabel>
-                {multipleYears ? (
+                    <FieldLabel
+                        className={compact ? 'sr-only' : undefined}
+                        id={`${idPrefix}-year-label`}
+                    >
+                        {yearLabel}
+                    </FieldLabel>
                     <ToggleGroup
                         type="single"
                         variant="outline"
@@ -122,30 +130,6 @@ export function ExpensePeriodFields({
                             {compact ? last : `Anno finale · ${last}`}
                         </ToggleGroupItem>
                     </ToggleGroup>
-                ) : (
-                    <Input
-                        id={`${idPrefix}-year`}
-                        type="number"
-                        min={2000}
-                        max={2100}
-                        required
-                        value={values.year}
-                        onChange={(event) =>
-                            onChange('year', event.target.value)
-                        }
-                        readOnly={validPeriod}
-                        disabled={disabled}
-                        aria-invalid={!!errors.year}
-                        aria-describedby={
-                            errors.year
-                                ? `${idPrefix}-year-error`
-                                : validPeriod
-                                  ? `${idPrefix}-year-description`
-                                  : undefined
-                        }
-                    />
-                )}
-                {validPeriod && (
                     <p
                         id={`${idPrefix}-year-description`}
                         className="text-sm text-muted-foreground"
@@ -153,13 +137,16 @@ export function ExpensePeriodFields({
                     >
                         {compact
                             ? `Imputato al ${values.year}`
-                            : `Importo interamente imputato al ${values.year}${multipleYears ? '.' : ' (anno del periodo).'}`}
+                            : `Importo interamente imputato al ${values.year}.`}
                     </p>
-                )}
-                <FieldError id={`${idPrefix}-year-error`}>
-                    {errors.year?.[0]}
-                </FieldError>
-            </Field>
+                    <FieldError id={`${idPrefix}-year-error`}>
+                        {errors.year?.[0]}
+                    </FieldError>
+                </Field>
+            )}
+            {!multipleYears && errors.year && (
+                <FieldError>{errors.year[0]}</FieldError>
+            )}
         </>
     );
 }

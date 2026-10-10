@@ -18,7 +18,11 @@ import {
 import { cn } from '@/lib/utils';
 import { dateLabel, decimalInput, money, varianceTextClass } from './helpers';
 import { DateField } from './date-field';
-import { ExpensePeriodFields, periodYear } from './expense-period-fields';
+import {
+    ExpensePeriodFields,
+    periodCrossesYears,
+    periodYear,
+} from './expense-period-fields';
 import type { ExpenseLine, RecordData } from './types';
 
 export type DraftLine = ExpenseLine & { key: string };
@@ -120,6 +124,7 @@ export function ExpenseLines({
                 .toLocaleLowerCase('it')
                 .includes(search.toLocaleLowerCase('it')),
     );
+    const showYearColumn = contractMode && visible.some(periodCrossesYears);
     const selectedLines = lines.filter((line) => selected.includes(line.key));
     const visibleSelected = visible.filter((line) =>
         selected.includes(line.key),
@@ -462,7 +467,11 @@ export function ExpenseLines({
                                 <>
                                     <TableHead>Inizio</TableHead>
                                     <TableHead>Fine</TableHead>
-                                    <TableHead>Anno di imputazione</TableHead>
+                                    {showYearColumn && (
+                                        <TableHead>
+                                            Anno di imputazione
+                                        </TableHead>
+                                    )}
                                 </>
                             )}
                             <TableHead>Tipo</TableHead>
@@ -486,7 +495,8 @@ export function ExpenseLines({
                                 <TableCell
                                     colSpan={
                                         (readOnly ? 5 : 8) +
-                                        (contractMode ? 3 : 0)
+                                        (contractMode ? 2 : 0) +
+                                        (showYearColumn ? 1 : 0)
                                     }
                                     className="py-6 text-center text-muted-foreground"
                                 >
@@ -679,10 +689,12 @@ export function ExpenseLines({
                                                 )}
                                             </TableCell>
                                         ))}
-                                    {contractMode && (
+                                    {showYearColumn && (
                                         <TableCell className="min-w-56">
                                             {readOnly ? (
-                                                line.year
+                                                periodCrossesYears(line) ? (
+                                                    line.year
+                                                ) : null
                                             ) : (
                                                 <ExpensePeriodFields
                                                     compact
