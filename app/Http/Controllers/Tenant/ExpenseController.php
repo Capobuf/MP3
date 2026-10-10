@@ -145,12 +145,15 @@ class ExpenseController extends Controller
         unset($data['contract_entry']);
         $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
         ExpensePeriods::validate($expense, $pending);
-        if ($contractEntry && ($expense->contract_id === null || ($expense->allocated_amount === null && $expense->actual_amount === null))) {
-            throw ValidationException::withMessages(['allocated_amount' => 'Nel contratto indica almeno un importo previsto o effettivo, anche zero.']);
+        if ($contractEntry && $expense->contract_id === null) {
+            throw ValidationException::withMessages(['contract_id' => 'Seleziona il contratto della spesa.']);
         }
         $costCenterIds = $data['cost_center_ids'] ?? null;
         unset($data['cost_center_ids']);
         if (! array_key_exists('lines', $data)) {
+            if ($contractEntry && $expense->allocated_amount === null && $expense->actual_amount === null) {
+                throw ValidationException::withMessages(['allocated_amount' => 'Nel contratto indica almeno un importo previsto o effettivo, anche zero.']);
+            }
             if ($hasLines &&
                 (array_key_exists('allocated_amount', $data) || array_key_exists('actual_amount', $data))) {
                 throw ValidationException::withMessages(['lines' => 'Modifica le righe della spesa: gli importi complessivi sono calcolati automaticamente.']);
@@ -161,6 +164,10 @@ class ExpenseController extends Controller
             }
 
             return;
+        }
+
+        if ($contractEntry && $data['lines'] === []) {
+            throw ValidationException::withMessages(['lines' => 'Inserisci almeno una riga economica completa, anche di valore zero.']);
         }
 
         $lines = [];
@@ -192,12 +199,12 @@ class ExpenseController extends Controller
             }
         }
         unset($data['lines']);
-        // Keep unknown amounts when contract expenses gain lines or are detached.
+        // Missing types are unknown for contracts; retain the ordinary expense defaults.
         foreach (['allocated' => 'allocated_amount', 'actual' => 'actual_amount'] as $type => $field) {
             $hasType = in_array($type, array_column($lines, 'type'), true);
             $data[$field] = ! $hasType &&
-                ($expense->contract_id !== null || $expense->getRawOriginal('contract_id') !== null || $hasLines) &&
-                $expense->getRawOriginal($field) === null
+                ($expense->contract_id !== null || $expense->getRawOriginal('contract_id') !== null ||
+                    ($hasLines && $expense->getRawOriginal($field) === null))
                 ? null : Money::decimal($totals[$type]);
         }
         $expense->fill($data)->save();

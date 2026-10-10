@@ -38,6 +38,142 @@ class ExpensePeriodsTest extends TestCase
         return $this->tenant->expenses()->create($this->data($start, $end, $year));
     }
 
+    /** @return array<string, string> */
+    private function line(string $type, string $price, string $quantity = '1', string $description = 'Servizio'): array
+    {
+        return ['description' => $description, 'type' => $type, 'unit_price' => $price, 'quantity' => $quantity];
+    }
+
+    /** @return array<string, mixed> */
+    private function detailedData(): array
+    {
+        $data = $this->data();
+        unset($data['allocated_amount'], $data['actual_amount']);
+
+        return [...$data, 'contract_entry' => true];
+    }
+
+    public function test_contract_entry_accepts_either_line_type_including_zero_without_direct_amounts(): void
+    {
+        foreach ([['allocated', '100'], ['actual', '80'], ['allocated', '0'], ['actual', '0']] as $index => [$type, $price]) {
+            $month = '2026-0'.($index + 1);
+            $this->postJson('/t/periodi/expenses', [...$this->detailedData(),
+                'period_starts_on' => $month.'-01', 'period_ends_on' => $month.'-20',
+                'lines' => [$this->line($type, $price)],
+            ])->assertCreated()->assertJsonCount(1, 'record.lines')
+                ->assertJsonPath('record.allocated_amount', $type === 'allocated' ? $price.'.00' : null)
+                ->assertJsonPath('record.actual_amount', $type === 'actual' ? $price.'.00' : null)
+                ->assertJsonPath('record.variance', null);
+        }
+    }
+
+    public function test_mixed_contract_lines_are_the_source_of_truth_for_all_totals(): void
+    {
+        $response = $this->postJson('/t/periodi/expenses', [...$this->detailedData(),
+            'allocated_amount' => '999', 'actual_amount' => '999',
+            'lines' => [$this->line('allocated', '100', '5', 'Licenze'), $this->line('allocated', '300'),
+                $this->line('actual', '280'), $this->line('actual', '12.35', '2.5', 'Ore')],
+        ])->assertCreated()->assertJsonCount(4, 'record.lines')
+            ->assertJsonPath('record.allocated_amount', '800.00')->assertJsonPath('record.actual_amount', '310.88')
+            ->assertJsonPath('record.variance', '-489.12');
+        $this->assertDatabaseCount('expenses', 1);
+        foreach (['dashboard?year=2026', 'expenses?year=2026', 'contracts/'.$this->contract->id] as $path) {
+            $this->get('/t/periodi/'.$path)->assertInertia(fn (Assert $page) => $page
+                ->where('totals.allocated', '800.00')->where('totals.actual', '310.88')->where('totals.variance', '-489.12')
+                ->where('totals.count', 1)->has('expenses.data.0.lines', 4));
+        }
+        $this->get('/t/periodi/expenses/'.$response->json('record.id'))->assertInertia(fn (Assert $page) => $page
+            ->where('expense.lines.0.description', 'Licenze')->where('expense.lines.0.quantity', '5.0000')
+            ->where('expense.lines.3.unit_price', '12.35')->where('expense.lines.3.total', '30.88'));
+    }
+
+    public function test_contract_entry_rejects_missing_empty_or_incomplete_lines_atomically(): void
+    {
+        $this->postJson('/t/periodi/expenses', $this->detailedData())->assertUnprocessable()->assertJsonValidationErrors('allocated_amount');
+        $this->postJson('/t/periodi/expenses', [...$this->detailedData(), 'allocated_amount' => '100', 'lines' => []])
+            ->assertUnprocessable()->assertJsonValidationErrors('lines');
+        foreach (['description', 'type', 'unit_price', 'quantity'] as $field) {
+            $line = $this->line('allocated', '100');
+            $line[$field] = '';
+            $this->postJson('/t/periodi/expenses', [...$this->detailedData(), 'lines' => [$line]])
+                ->assertUnprocessable()->assertJsonValidationErrors('lines.0.'.$field);
+        }
+        $this->postJson('/t/periodi/expenses', [...$this->detailedData(), 'contract_id' => null, 'lines' => [$this->line('actual', '0')]])
+            ->assertUnprocessable()->assertJsonValidationErrors('contract_id');
+        $this->assertDatabaseCount('expenses', 0);
+        $this->assertDatabaseCount('expense_lines', 0);
+    }
+
+    public function test_contract_lines_can_be_edited_added_and_removed_with_missing_types_becoming_null(): void
+    {
+        $response = $this->postJson('/t/periodi/expenses', [...$this->detailedData(),
+            'lines' => [$this->line('allocated', '100', '5'), $this->line('actual', '280')],
+        ])->assertCreated();
+        $url = '/t/periodi/expenses/'.$response->json('record.id');
+        $this->patchJson($url, ['contract_entry' => true,
+            'lines' => [$this->line('allocated', '110', '5', 'Licenze aggiornate'), $this->line('actual', '280'), $this->line('allocated', '300')],
+        ])->assertOk()->assertJsonCount(3, 'record.lines')->assertJsonPath('record.allocated_amount', '850.00')
+            ->assertJsonPath('record.actual_amount', '280.00')->assertJsonPath('record.lines.0.description', 'Licenze aggiornate');
+        $this->patchJson($url, ['contract_entry' => true, 'lines' => [$this->line('actual', '0')]])
+            ->assertOk()->assertJsonCount(1, 'record.lines')->assertJsonPath('record.allocated_amount', null)
+            ->assertJsonPath('record.actual_amount', '0.00')->assertJsonPath('record.variance', null);
+        $this->patchJson($url, ['contract_entry' => true, 'lines' => [$this->line('allocated', '0')]])
+            ->assertOk()->assertJsonPath('record.allocated_amount', '0.00')->assertJsonPath('record.actual_amount', null);
+        $this->patchJson($url, ['allocated_amount' => '999', 'contract_entry' => true])->assertUnprocessable()->assertJsonValidationErrors('lines');
+        $this->assertDatabaseCount('expense_lines', 1);
+    }
+
+    public function test_legacy_contract_expenses_convert_only_when_lines_are_submitted(): void
+    {
+        foreach ([['100', '80'], ['0', null], [null, '0']] as $index => [$allocated, $actual]) {
+            $month = '2026-0'.($index + 1);
+            $expense = $this->tenant->expenses()->create([...$this->data($month.'-01', $month.'-20'),
+                'allocated_amount' => $allocated, 'actual_amount' => $actual,
+            ]);
+            $url = '/t/periodi/expenses/'.$expense->id;
+            $this->get($url)->assertInertia(fn (Assert $page) => $page->has('expense.lines', 0));
+            $this->patchJson($url, ['title' => 'Ancora diretta', 'contract_entry' => true])->assertOk()->assertJsonCount(0, 'record.lines');
+            $this->assertSame($allocated === null ? null : $allocated.'.00', $expense->refresh()->allocated_amount);
+            $this->assertSame($actual === null ? null : $actual.'.00', $expense->actual_amount);
+            $lines = [];
+            foreach (['allocated' => $allocated, 'actual' => $actual] as $type => $amount) {
+                if ($amount !== null) {
+                    $lines[] = $this->line($type, $amount, '1', 'Ancora diretta');
+                }
+            }
+            $this->patchJson($url, ['contract_entry' => true, 'lines' => $lines])->assertOk()
+                ->assertJsonCount(count($lines), 'record.lines')
+                ->assertJsonPath('record.allocated_amount', $allocated === null ? null : $allocated.'.00')
+                ->assertJsonPath('record.actual_amount', $actual === null ? null : $actual.'.00');
+        }
+    }
+
+    public function test_period_edits_preserve_contract_lines_and_overlap_rejections_do_not_change_them(): void
+    {
+        $response = $this->postJson('/t/periodi/expenses', [...$this->detailedData(),
+            'lines' => [$this->line('allocated', '100', '5'), $this->line('actual', '280')],
+        ])->assertCreated();
+        $expense = Expense::findOrFail($response->json('record.id'));
+        $ids = $expense->lines()->pluck('id')->all();
+        $url = '/t/periodi/expenses/'.$expense->id;
+        $this->patchJson($url, ['contract_entry' => true, 'period_ends_on' => '2027-06-30', 'year' => 2027])
+            ->assertOk()->assertJsonCount(2, 'record.lines')->assertJsonPath('record.allocated_amount', '500.00')
+            ->assertJsonPath('record.actual_amount', '280.00');
+        $this->assertSame($ids, $expense->lines()->pluck('id')->all());
+        foreach ([2026, 2027] as $year) {
+            $this->get('/t/periodi/dashboard?year='.$year)->assertInertia(fn (Assert $page) => $page
+                ->where('totals.allocated', $year === 2027 ? '500.00' : '0.00'));
+        }
+        $this->postJson('/t/periodi/expenses', [...$this->detailedData(), 'lines' => [$this->line('actual', '90')]])
+            ->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
+        $this->createExpense('2027-07-01', '2027-12-31', 2027);
+        $this->patchJson($url, ['period_ends_on' => '2027-07-01', 'lines' => [$this->line('allocated', '999')]])
+            ->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
+        $this->assertSame($ids, $expense->lines()->pluck('id')->all());
+        $this->assertSame('500.00', $expense->refresh()->allocated_amount);
+        $this->assertSame('2027-06-30', $expense->period_ends_on->toDateString());
+    }
+
     public function test_valid_period_and_independent_amounts_including_zero(): void
     {
         foreach ([['650', null], [null, '600'], ['650', '600'], ['0', null], [null, '0']] as $index => [$allocated, $actual]) {

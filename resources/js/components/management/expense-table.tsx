@@ -401,6 +401,9 @@ export function ExpenseTable({
                                         {showYear &&
                                             !contractMode &&
                                             ` · ${expense.year}`}
+                                        {contractMode &&
+                                            !!expense.lines?.length &&
+                                            ` · ${expense.lines.length} ${expense.lines.length === 1 ? 'riga economica' : 'righe economiche'}`}
                                     </p>
                                     <CostCenterTags
                                         centers={expense.cost_centers}

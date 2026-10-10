@@ -42,7 +42,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { Tenant } from '@/types';
 import { AttachmentsSection } from './attachments-section';
 import { DateField } from './date-field';
-import { draftLines, ExpenseLines } from './expense-lines';
+import { draftLines, emptyDraftLine, ExpenseLines } from './expense-lines';
 import { ExpensePeriodFields, periodYear } from './expense-period-fields';
 import { dateLabel } from './helpers';
 import type { DraftLine } from './expense-lines';
@@ -94,14 +94,14 @@ const fields: Record<Kind, FormField[]> = {
         { key: 'title', label: 'Descrizione spesa', required: true },
         { key: 'period_starts_on', label: 'Inizio periodo', type: 'date' },
         { key: 'period_ends_on', label: 'Fine periodo', type: 'date' },
-        { key: 'allocated_amount', label: 'Previsto (€)', type: 'money' },
-        { key: 'actual_amount', label: 'Effettivo (€)', type: 'money' },
         {
             key: 'year',
             label: 'Anno di imputazione',
             type: 'number',
             required: true,
         },
+        { key: 'allocated_amount', label: 'Previsto (€)', type: 'money' },
+        { key: 'actual_amount', label: 'Effettivo (€)', type: 'money' },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
         { key: 'contract_id', label: 'Contratto', catalog: 'contracts' },
         { key: 'project_id', label: 'Progetto', catalog: 'projects' },
@@ -174,7 +174,7 @@ export function EntitySheet({
     const [frames, setFrames] = useState<Frame[]>(() => {
         const initial = frame(kind, year, record);
         if (kind === 'expenses' && contractContext && !record) {
-            initial.detailed = false;
+            initial.lines = [emptyDraftLine()];
             initial.values.contract_id = String(contractContext.id);
             if (
                 !contractContext.has_period_expenses &&
@@ -298,9 +298,8 @@ export function EntitySheet({
                     unit_price: decimalInput(line.unit_price),
                     quantity: decimalInput(line.quantity),
                 }));
-            } else if (contractContext) {
-                payload.contract_entry = true;
             }
+            if (contractContext) payload.contract_entry = true;
         }
         if (current.kind !== 'vendors') {
             payload.cost_center_ids = current.costCenterIds;
@@ -468,7 +467,7 @@ export function EntitySheet({
                             )}
                             {current.kind === 'expenses' && (
                                 <h2 className="font-semibold">
-                                    Dati generali della spesa
+                                    Dati della spesa
                                 </h2>
                             )}
                             {current.kind === 'expenses' && contractContext && (
@@ -501,12 +500,29 @@ export function EntitySheet({
                                     if (current.kind === 'expenses') {
                                         if (
                                             [
-                                                'year',
                                                 'period_starts_on',
                                                 'period_ends_on',
                                             ].includes(field.key)
                                         )
                                             return null;
+                                        if (field.key === 'year')
+                                            return (
+                                                <ExpensePeriodFields
+                                                    key={field.key}
+                                                    values={current.values}
+                                                    onChange={change}
+                                                    disabled={formBusy}
+                                                    errors={errors}
+                                                    showPeriod={
+                                                        !!current.values
+                                                            .contract_id ||
+                                                        !!current.values
+                                                            .period_starts_on ||
+                                                        !!current.values
+                                                            .period_ends_on
+                                                    }
+                                                />
+                                            );
                                         if (
                                             current.detailed &&
                                             [
@@ -759,19 +775,6 @@ export function EntitySheet({
                                         </Field>
                                     );
                                 })}
-                                {current.kind === 'expenses' && (
-                                    <ExpensePeriodFields
-                                        values={current.values}
-                                        onChange={change}
-                                        disabled={formBusy}
-                                        errors={errors}
-                                        showPeriod={
-                                            !!current.values.contract_id ||
-                                            !!current.values.period_starts_on ||
-                                            !!current.values.period_ends_on
-                                        }
-                                    />
-                                )}
                                 {current.kind !== 'vendors' &&
                                     !(
                                         current.kind === 'expenses' &&
@@ -853,6 +856,51 @@ export function EntitySheet({
                                         </Field>
                                     )}
                             </FieldGroup>
+                            {current.kind === 'expenses' &&
+                                !current.detailed && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={formBusy}
+                                        onClick={useDetailedLines}
+                                    >
+                                        Passa alle righe economiche
+                                    </Button>
+                                )}
+                            {current.kind === 'expenses' &&
+                                current.detailed && (
+                                    <ExpenseLines
+                                        lines={current.lines}
+                                        contractMode={
+                                            !!current.values.contract_id ||
+                                            !!current.record?.contract_id
+                                        }
+                                        disabled={formBusy}
+                                        errors={errors}
+                                        onChange={(lines) => {
+                                            setErrors((previous) =>
+                                                Object.fromEntries(
+                                                    Object.entries(
+                                                        previous,
+                                                    ).filter(
+                                                        ([key]) =>
+                                                            !key.startsWith(
+                                                                'lines',
+                                                            ),
+                                                    ),
+                                                ),
+                                            );
+                                            setFrames((previous) =>
+                                                previous.map((item, index) =>
+                                                    index ===
+                                                    previous.length - 1
+                                                        ? { ...item, lines }
+                                                        : item,
+                                                ),
+                                            );
+                                        }}
+                                    />
+                                )}
                             {current.kind !== 'vendors' &&
                                 (current.record ? (
                                     <div className="flex min-w-0 flex-col gap-2">
@@ -880,48 +928,6 @@ export function EntitySheet({
                                         allegati.
                                     </p>
                                 ))}
-                            {current.kind === 'expenses' &&
-                                !current.detailed &&
-                                !contractContext && (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        disabled={formBusy}
-                                        onClick={useDetailedLines}
-                                    >
-                                        Usa righe economiche dettagliate
-                                    </Button>
-                                )}
-                            {current.kind === 'expenses' &&
-                                current.detailed && (
-                                    <ExpenseLines
-                                        lines={current.lines}
-                                        disabled={formBusy}
-                                        errors={errors}
-                                        onChange={(lines) => {
-                                            setErrors((previous) =>
-                                                Object.fromEntries(
-                                                    Object.entries(
-                                                        previous,
-                                                    ).filter(
-                                                        ([key]) =>
-                                                            !key.startsWith(
-                                                                'lines',
-                                                            ),
-                                                    ),
-                                                ),
-                                            );
-                                            setFrames((previous) =>
-                                                previous.map((item, index) =>
-                                                    index ===
-                                                    previous.length - 1
-                                                        ? { ...item, lines }
-                                                        : item,
-                                                ),
-                                            );
-                                        }}
-                                    />
-                                )}
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-popover p-4 sm:px-6">
                             {current.kind === 'expenses' &&

@@ -26,6 +26,18 @@ function lineKey(): string {
     return `expense-line-${++nextLineKey}`;
 }
 
+export function emptyDraftLine(
+    type: ExpenseLine['type'] = 'allocated',
+): DraftLine {
+    return {
+        key: lineKey(),
+        description: '',
+        type,
+        quantity: '1',
+        unit_price: '',
+    };
+}
+
 export function draftLines(record?: RecordData): DraftLine[] {
     const lines = record?.lines?.length
         ? record.lines
@@ -73,12 +85,14 @@ export function ExpenseLines({
     onChange,
     disabled = false,
     readOnly = false,
+    contractMode = false,
     errors = {},
 }: {
     lines: DraftLine[];
     onChange?: (lines: DraftLine[]) => void;
     disabled?: boolean;
     readOnly?: boolean;
+    contractMode?: boolean;
     errors?: Record<string, string[]>;
 }) {
     const [search, setSearch] = useState('');
@@ -97,13 +111,25 @@ export function ExpenseLines({
         selected.includes(line.key),
     ).length;
     const filtered = filter !== 'all' || search !== '';
-    const totals = { allocated: 0n, actual: 0n };
-    let incomplete = false;
+    const totals: Record<ExpenseLine['type'], bigint | null> = {
+        allocated: contractMode ? null : 0n,
+        actual: contractMode ? null : 0n,
+    };
+    const incomplete = new Set<ExpenseLine['type']>();
     for (const line of lines) {
         const cents = lineCents(line);
-        if (cents === null) incomplete = true;
-        else totals[line.type] += cents;
+        if (cents === null) incomplete.add(line.type);
+        else totals[line.type] = (totals[line.type] ?? 0n) + cents;
     }
+    for (const type of ['allocated', 'actual'] as const) {
+        if (contractMode ? incomplete.has(type) : incomplete.size > 0)
+            totals[type] = null;
+    }
+    const variance =
+        totals.allocated === null || totals.actual === null
+            ? null
+            : totals.actual - totals.allocated;
+    const allocatedLabel = contractMode ? 'Previsto' : 'Allocato';
     function change(key: string, patch: Partial<ExpenseLine>) {
         onChange?.(
             lines.map((line) =>
@@ -113,13 +139,9 @@ export function ExpenseLines({
     }
     function add() {
         if (lines.length >= 500) return;
-        const line: DraftLine = {
-            key: lineKey(),
-            description: '',
-            type: filter === 'actual' ? 'actual' : 'allocated',
-            quantity: '1',
-            unit_price: '',
-        };
+        const line = emptyDraftLine(
+            filter === 'actual' ? 'actual' : 'allocated',
+        );
         pendingFocus.current = line.key;
         setSearch('');
         onChange?.([...lines, line]);
@@ -161,7 +183,7 @@ export function ExpenseLines({
             aria-label="Righe economiche della spesa"
         >
             <div className="flex flex-wrap items-center gap-2">
-                <h2 className="mr-auto font-semibold">Righe di spesa</h2>
+                <h2 className="mr-auto font-semibold">Righe economiche</h2>
                 {!readOnly && (
                     <Button
                         type="button"
@@ -193,7 +215,7 @@ export function ExpenseLines({
                         Tutti i tipi
                     </NativeSelectOption>
                     <NativeSelectOption value="allocated">
-                        Allocati
+                        {contractMode ? 'Previste' : 'Allocati'}
                     </NativeSelectOption>
                     <NativeSelectOption value="actual">
                         Effettivi
@@ -259,7 +281,7 @@ export function ExpenseLines({
                             )
                         }
                     >
-                        Imposta allocati
+                        {contractMode ? 'Imposta previste' : 'Imposta allocati'}
                     </Button>
                     <Button
                         type="button"
@@ -514,7 +536,7 @@ export function ExpenseLines({
                                     <TableCell className="min-w-32">
                                         {readOnly ? (
                                             line.type === 'allocated' ? (
-                                                'Allocato'
+                                                allocatedLabel
                                             ) : (
                                                 'Effettivo'
                                             )
@@ -534,7 +556,7 @@ export function ExpenseLines({
                                                 }
                                             >
                                                 <NativeSelectOption value="allocated">
-                                                    Allocato
+                                                    {allocatedLabel}
                                                 </NativeSelectOption>
                                                 <NativeSelectOption value="actual">
                                                     Effettivo
@@ -666,17 +688,24 @@ export function ExpenseLines({
                     Azzera i filtri per riordinare le righe.
                 </p>
             )}
+            <h3 className="font-semibold">Riepilogo</h3>
             <dl
                 className="grid gap-3 rounded-md bg-muted/50 p-3 sm:grid-cols-3"
                 aria-live="polite"
             >
                 {(
                     [
-                        ['Allocato', totals.allocated],
-                        ['Effettivo', totals.actual],
                         [
-                            'Scostamento (effettivo − allocato)',
-                            totals.actual - totals.allocated,
+                            contractMode ? 'Totale previsto' : allocatedLabel,
+                            totals.allocated,
+                        ],
+                        [
+                            contractMode ? 'Totale effettivo' : 'Effettivo',
+                            totals.actual,
+                        ],
+                        [
+                            `Scostamento (effettivo − ${allocatedLabel.toLowerCase()})`,
+                            variance,
                         ],
                     ] as const
                 ).map(([label, value]) => (
@@ -688,12 +717,10 @@ export function ExpenseLines({
                             className={cn(
                                 'mt-1 font-semibold tracking-normal break-words text-foreground tabular-nums',
                                 label.startsWith('Scostamento') &&
-                                    varianceTextClass(
-                                        incomplete ? null : value,
-                                    ),
+                                    varianceTextClass(value),
                             )}
                         >
-                            {incomplete ? 'Da completare' : format(value)}
+                            {value === null ? 'Da completare' : format(value)}
                         </dd>
                     </div>
                 ))}
