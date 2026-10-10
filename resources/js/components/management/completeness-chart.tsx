@@ -70,7 +70,9 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                                     dataKey={row.id}
                                     stackId="complete"
                                     fill={`var(--color-${row.id})`}
-                                    isAnimationActive={false}
+                                    isAnimationActive="auto"
+                                    animationDuration={450}
+                                    animationEasing="ease-out"
                                 />
                             ))}
                         </BarChart>
@@ -94,7 +96,7 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                             </div>
                         ))}
                     </dl>
-                    <p className="mt-5 text-xs text-muted-foreground">
+                    <p className="mt-5 text-sm text-muted-foreground">
                         Percentuali su {total} spese.
                     </p>
                 </>

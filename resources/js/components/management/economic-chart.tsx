@@ -89,7 +89,7 @@ export function EconomicChart({
                                     | (typeof data)[number]
                                     | undefined;
                                 return active && row ? (
-                                    <div className="max-w-80 rounded-lg border bg-background p-3 font-sans text-xs tabular-nums shadow-md">
+                                    <div className="chart-tooltip">
                                         <p className="mb-2 font-medium">
                                             {row.name}
                                         </p>
@@ -131,7 +131,9 @@ export function EconomicChart({
                                 onClick={(_row, index) =>
                                     select(data[index].id)
                                 }
-                                isAnimationActive={false}
+                                isAnimationActive="auto"
+                                animationDuration={450}
+                                animationEasing="ease-out"
                             />
                         ))}
                     </BarChart>
@@ -144,7 +146,7 @@ export function EconomicChart({
                         <button
                             key={row.id}
                             type="button"
-                            className="max-w-full truncate text-muted-foreground hover:text-foreground hover:underline"
+                            className="max-w-full rounded text-left break-words text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                             onClick={() => select(row.id)}
                             title={row.name}
                         >

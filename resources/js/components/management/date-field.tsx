@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { CalendarIcon } from 'lucide-react';
+import type { AriaAttributes } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
@@ -15,16 +16,19 @@ export function DateField({
     value,
     onChange,
     disabled,
+    ...aria
 }: {
     id: string;
     value: string;
     onChange: (value: string) => void;
     disabled?: boolean;
-}) {
+} & Pick<AriaAttributes, 'aria-invalid' | 'aria-describedby'>) {
     return (
         <div className="flex gap-2">
             <Input
+                {...aria}
                 id={id}
+                className="min-w-0 tabular-nums"
                 type="date"
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
@@ -33,6 +37,7 @@ export function DateField({
             <Popover>
                 <PopoverTrigger asChild>
                     <Button
+                        className="shrink-0"
                         type="button"
                         variant="outline"
                         size="icon"

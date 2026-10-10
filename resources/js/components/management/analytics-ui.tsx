@@ -1,4 +1,6 @@
+import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
     Card,
     CardContent,
@@ -6,15 +8,12 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty';
 import { money } from './helpers';
 import type { EconomicValues, Metric } from './analytics-types';
+
+export const AnalyticsLoadingContext = createContext(false);
 
 export function AnalyticsCard({
     title,
@@ -28,15 +27,17 @@ export function AnalyticsCard({
     children: ReactNode;
 }) {
     return (
-        <Card className="min-w-0">
-            <CardHeader>
+        <Card className="h-full min-w-0 gap-4">
+            <CardHeader className="gap-2 px-4 sm:px-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <CardTitle className="text-base">{title}</CardTitle>
+                    <CardTitle className="text-base leading-snug">
+                        {title}
+                    </CardTitle>
                     {controls}
                 </div>
                 <CardDescription>{description}</CardDescription>
             </CardHeader>
-            <CardContent className="min-w-0 font-sans tabular-nums">
+            <CardContent className="min-w-0 px-4 font-sans tracking-normal tabular-nums sm:px-6">
                 {children}
             </CardContent>
         </Card>
@@ -47,10 +48,28 @@ export function EmptyChart({
 }: {
     children?: ReactNode;
 }) {
+    const loading = useContext(AnalyticsLoadingContext);
+    if (loading)
+        return (
+            <div
+                className="flex h-80 items-end gap-3 py-8"
+                aria-label="Caricamento grafico"
+            >
+                {[40, 65, 50, 85, 70].map((height) => (
+                    <Skeleton
+                        key={height}
+                        className="flex-1"
+                        style={{ height: `${height}%` }}
+                    />
+                ))}
+            </div>
+        );
     return (
-        <div className="flex h-64 items-center justify-center text-center text-sm text-muted-foreground">
-            {children}
-        </div>
+        <Empty className="h-80">
+            <EmptyHeader>
+                <EmptyDescription>{children}</EmptyDescription>
+            </EmptyHeader>
+        </Empty>
     );
 }
 export function MetricSelect({
@@ -61,18 +80,19 @@ export function MetricSelect({
     onChange: (metric: Metric) => void;
 }) {
     return (
-        <Select
+        <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
             value={value}
-            onValueChange={(value) => onChange(value as Metric)}
+            aria-label="Metrica economica"
+            onValueChange={(next) => {
+                if (next === 'actual' || next === 'allocated') onChange(next);
+            }}
         >
-            <SelectTrigger className="w-32" aria-label="Metrica economica">
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="actual">Effettivo</SelectItem>
-                <SelectItem value="allocated">Allocato</SelectItem>
-            </SelectContent>
-        </Select>
+            <ToggleGroupItem value="actual">Effettivo</ToggleGroupItem>
+            <ToggleGroupItem value="allocated">Allocato</ToggleGroupItem>
+        </ToggleGroup>
     );
 }
 export function Reconciliation({
@@ -83,7 +103,7 @@ export function Reconciliation({
     metric: Metric;
 }) {
     return (
-        <dl className="mt-4 grid gap-2 border-t pt-3 text-xs sm:grid-cols-3">
+        <dl className="mt-4 grid gap-2 border-t pt-3 text-sm sm:grid-cols-3">
             {[
                 ['Importi positivi', values[`${metric}_positive`]],
                 ['Rettifiche negative', values[`${metric}_negative`]],
@@ -91,7 +111,7 @@ export function Reconciliation({
             ].map(([label, value]) => (
                 <div key={label}>
                     <dt className="text-muted-foreground">{label}</dt>
-                    <dd className="mt-1 font-medium">
+                    <dd className="mt-1 font-medium tracking-normal break-words tabular-nums">
                         {value === null ? 'Non disponibile' : money(value)}
                     </dd>
                 </div>

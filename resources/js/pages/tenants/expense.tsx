@@ -23,20 +23,20 @@ export default function ExpenseDetail({
     return (
         <>
             <Head title={`${expense.title} · ${tenant.name}`} />
-            <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
-                <header className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+            <div className="page-shell">
+                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
                         <Link
                             href={`${path}?year=${expense.year}`}
                             className="text-sm text-muted-foreground"
                         >
                             {tenant.name} / Spese / {expense.year}
                         </Link>
-                        <h1 className="mt-2 text-3xl font-semibold">
+                        <h1 className="mt-2 page-title break-words">
                             {expense.title}
                         </h1>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex shrink-0 flex-wrap gap-2">
                         <Button onClick={() => setEdit(true)}>
                             Modifica spesa
                         </Button>
@@ -48,7 +48,7 @@ export default function ExpenseDetail({
                     </div>
                 </header>
                 <Card>
-                    <CardContent className="pt-6">
+                    <CardContent className="min-w-0">
                         <dl className="grid gap-6 sm:grid-cols-3">
                             {[
                                 ['Anno di imputazione', expense.year],
@@ -62,11 +62,11 @@ export default function ExpenseDetail({
                                 ],
                             ].map(([label, value]) => (
                                 <div key={label}>
-                                    <dt className="text-xs text-muted-foreground">
+                                    <dt className="text-sm text-muted-foreground">
                                         {label}
                                     </dt>
                                     <dd
-                                        className={`mt-2 text-base font-medium tabular-nums ${['Allocato', 'Effettivo', 'Scostamento (effettivo − allocato)'].includes(String(label)) ? 'text-right' : ''} ${String(label).startsWith('Scostamento') && Number(expense.variance) > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}
+                                        className={`mt-2 text-base font-medium tabular-nums ${['Allocato', 'Effettivo', 'Scostamento (effettivo − allocato)'].includes(String(label)) ? 'tracking-normal' : ''} ${String(label).startsWith('Scostamento') && Number(expense.variance) > 0 ? 'text-finance-overrun' : ''}`}
                                     >
                                         {value}
                                     </dd>
@@ -75,7 +75,7 @@ export default function ExpenseDetail({
                             {(['vendor', 'contract', 'project'] as const).map(
                                 (relation) => (
                                     <div key={relation}>
-                                        <dt className="text-xs text-muted-foreground">
+                                        <dt className="text-sm text-muted-foreground">
                                             {relation === 'vendor'
                                                 ? 'Fornitore'
                                                 : relation === 'contract'
@@ -85,7 +85,7 @@ export default function ExpenseDetail({
                                         <dd className="mt-2">
                                             {expense[relation] ? (
                                                 <Link
-                                                    className="underline"
+                                                    className="text-primary underline-offset-4 hover:underline"
                                                     href={`/t/${tenant.slug}/${relation}s/${expense[relation]!.id}`}
                                                 >
                                                     {expense[relation]!.name}
@@ -106,7 +106,7 @@ export default function ExpenseDetail({
                     </CardContent>
                 </Card>
                 <Card>
-                    <CardContent className="pt-6">
+                    <CardContent className="min-w-0">
                         <ExpenseLines
                             readOnly
                             lines={(expense.lines ?? []).map((line, index) => ({

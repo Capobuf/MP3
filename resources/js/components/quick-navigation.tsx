@@ -8,6 +8,7 @@ import {
     UserRound,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Kbd } from '@/components/ui/kbd';
 import { Button } from '@/components/ui/button';
 import {
     CommandDialog,
@@ -120,9 +121,7 @@ export function QuickNavigation() {
             >
                 <Search className="size-4" aria-hidden="true" />
                 <span className="hidden md:inline">Cerca una pagina...</span>
-                <kbd className="ml-auto hidden rounded border bg-background px-1.5 text-xs md:inline">
-                    Ctrl K
-                </kbd>
+                <Kbd className="ml-auto hidden md:inline-flex">Ctrl / ⌘ K</Kbd>
             </Button>
             <CommandDialog
                 open={open}

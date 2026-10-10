@@ -12,17 +12,17 @@ import type { NavItem } from '@/types';
 
 const sidebarNavItems: NavItem[] = [
     {
-        title: 'Profile',
+        title: 'Profilo',
         href: edit(),
         icon: null,
     },
     {
-        title: 'Security',
+        title: 'Sicurezza',
         href: editSecurity(),
         icon: null,
     },
     {
-        title: 'Appearance',
+        title: 'Aspetto',
         href: editAppearance(),
         icon: null,
     },
@@ -32,17 +32,17 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
 
     return (
-        <div className="px-4 py-6">
+        <div className="page-shell">
             <Heading
-                title="Settings"
-                description="Manage your profile and account settings"
+                title="Impostazioni"
+                description="Gestisci il profilo e le preferenze del tuo account."
             />
 
-            <div className="flex flex-col lg:flex-row lg:space-x-12">
+            <div className="flex min-w-0 flex-col gap-6 lg:flex-row lg:gap-10">
                 <aside className="w-full max-w-xl lg:w-48">
                     <nav
-                        className="flex flex-col space-y-1 space-x-0"
-                        aria-label="Settings"
+                        className="flex flex-wrap gap-1 lg:flex-col"
+                        aria-label="Impostazioni"
                     >
                         {sidebarNavItems.map((item, index) => (
                             <Button
@@ -51,7 +51,8 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                                 variant="ghost"
                                 asChild
                                 className={cn('w-full justify-start', {
-                                    'bg-muted': isCurrentOrParentUrl(item.href),
+                                    'bg-accent text-accent-foreground':
+                                        isCurrentOrParentUrl(item.href),
                                 })}
                             >
                                 <Link href={item.href}>
@@ -67,8 +68,8 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
 
                 <Separator className="my-6 lg:hidden" />
 
-                <div className="flex-1 md:max-w-2xl">
-                    <section className="max-w-xl space-y-12">
+                <div className="min-w-0 flex-1 rounded-xl border bg-card p-4 shadow-xs sm:p-6">
+                    <section className="flex max-w-2xl flex-col gap-10">
                         {children}
                     </section>
                 </div>

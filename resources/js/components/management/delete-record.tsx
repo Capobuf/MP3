@@ -21,14 +21,23 @@ export function DeleteRecord({
     label,
     onDeleted,
     disabled = false,
+    open: controlledOpen,
+    onOpenChange,
 }: {
     url: string;
     redirect?: string;
     label: string;
     onDeleted?: () => void;
     disabled?: boolean;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }) {
-    const [open, setOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
+    const open = controlledOpen ?? internalOpen;
+    const setOpen = (value: boolean) => {
+        setInternalOpen(value);
+        onOpenChange?.(value);
+    };
     const [busy, setBusy] = useState(false);
     async function remove() {
         setBusy(true);
@@ -56,17 +65,19 @@ export function DeleteRecord({
                 if (!busy) setOpen(value);
             }}
         >
-            <AlertDialogTrigger asChild>
-                <Button
-                    type="button"
-                    disabled={disabled}
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive"
-                >
-                    Elimina
-                </Button>
-            </AlertDialogTrigger>
+            {controlledOpen === undefined && (
+                <AlertDialogTrigger asChild>
+                    <Button
+                        type="button"
+                        disabled={disabled}
+                        variant="outline"
+                        size="sm"
+                        className="text-destructive"
+                    >
+                        Elimina
+                    </Button>
+                </AlertDialogTrigger>
+            )}
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Eliminare {label}?</AlertDialogTitle>
@@ -80,6 +91,7 @@ export function DeleteRecord({
                         Annulla
                     </AlertDialogCancel>
                     <AlertDialogAction
+                        variant="destructive"
                         disabled={busy}
                         onClick={(event) => {
                             event.preventDefault();

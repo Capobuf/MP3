@@ -11,7 +11,7 @@ import type { NavItem } from '@/types';
 
 export function NavMain({
     items,
-    label = 'Navigation',
+    label = 'Navigazione',
 }: {
     items: NavItem[];
     label?: string;
@@ -26,6 +26,7 @@ export function NavMain({
                     <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton
                             asChild
+                            className="data-[active=true]:text-sidebar-primary data-[active=true]:shadow-xs"
                             isActive={isCurrentUrl(item.href)}
                             tooltip={{ children: item.title }}
                         >

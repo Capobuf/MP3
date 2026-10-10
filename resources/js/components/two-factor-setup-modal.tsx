@@ -104,7 +104,7 @@ function TwoFactorSetupStep({
                     <div className="relative flex w-full items-center justify-center">
                         <div className="absolute inset-0 top-1/2 h-px w-full bg-border" />
                         <span className="relative bg-card px-2 py-1">
-                            or, enter the code manually
+                            oppure inserisci il codice manualmente
                         </span>
                     </div>
 
@@ -118,11 +118,13 @@ function TwoFactorSetupStep({
                                 <>
                                     <input
                                         type="text"
+                                        aria-label="Chiave di configurazione"
                                         readOnly
                                         value={manualSetupKey}
                                         className="h-full w-full bg-background p-3 text-foreground outline-none"
                                     />
                                     <button
+                                        aria-label="Copia chiave di configurazione"
                                         onClick={() => copy(manualSetupKey)}
                                         className="border-l border-border px-3 hover:bg-muted"
                                     >
@@ -177,6 +179,7 @@ function TwoFactorVerificationStep({
                             <InputOTP
                                 id="otp"
                                 name="code"
+                                aria-label="Codice di autenticazione"
                                 maxLength={OTP_MAX_LENGTH}
                                 onChange={setCode}
                                 disabled={processing}
@@ -210,7 +213,7 @@ function TwoFactorVerificationStep({
                                 onClick={onBack}
                                 disabled={processing}
                             >
-                                Back
+                                Indietro
                             </Button>
                             <Button
                                 type="submit"
@@ -219,7 +222,7 @@ function TwoFactorVerificationStep({
                                     processing || code.length < OTP_MAX_LENGTH
                                 }
                             >
-                                Confirm
+                                Conferma
                             </Button>
                         </div>
                     </div>
@@ -262,27 +265,27 @@ export default function TwoFactorSetupModal({
     }>(() => {
         if (twoFactorEnabled) {
             return {
-                title: 'Two-factor authentication enabled',
+                title: 'Autenticazione a due fattori attiva',
                 description:
-                    'Two-factor authentication is now enabled. Scan the QR code or enter the setup key in your authenticator app.',
-                buttonText: 'Close',
+                    'L’autenticazione a due fattori è attiva. Scansiona il codice QR o inserisci la chiave nella tua app di autenticazione.',
+                buttonText: 'Chiudi',
             };
         }
 
         if (showVerificationStep) {
             return {
-                title: 'Verify authentication code',
+                title: 'Verifica il codice di autenticazione',
                 description:
-                    'Enter the 6-digit code from your authenticator app',
-                buttonText: 'Continue',
+                    'Inserisci il codice a 6 cifre della tua app di autenticazione',
+                buttonText: 'Continua',
             };
         }
 
         return {
-            title: 'Enable two-factor authentication',
+            title: 'Attiva l’autenticazione a due fattori',
             description:
-                'To finish enabling two-factor authentication, scan the QR code or enter the setup key in your authenticator app',
-            buttonText: 'Continue',
+                'Per completare la configurazione, scansiona il codice QR o inserisci la chiave nella tua app di autenticazione',
+            buttonText: 'Continua',
         };
     }, [twoFactorEnabled, showVerificationStep]);
 

@@ -9,9 +9,8 @@
 
 @theme {
     --font-sans:
-        'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
-        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
-        'Noto Color Emoji';
+        'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -45,6 +44,9 @@
     --color-input: var(--input);
     --color-ring: var(--ring);
 
+    --color-finance-overrun: var(--finance-overrun);
+    --color-finance-saving: var(--finance-saving);
+
     --color-chart-1: var(--chart-1);
     --color-chart-2: var(--chart-2);
     --color-chart-3: var(--chart-3);
@@ -62,74 +64,78 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    --background: #f7f9fc;
+    --foreground: #172033;
+    --card: #ffffff;
+    --card-foreground: #172033;
+    --popover: #ffffff;
+    --popover-foreground: #172033;
+    --primary: #3455cb;
+    --primary-foreground: #ffffff;
+    --secondary: #ecf1fa;
+    --secondary-foreground: #1d3356;
+    --muted: #f0f3f8;
+    --muted-foreground: #5f6b7d;
+    --accent: #ebf0fe;
+    --accent-foreground: #2449a4;
+    --destructive: #c9344a;
+    --destructive-foreground: #ffffff;
+    --border: #e1e7f0;
+    --input: #d5deeb;
+    --ring: #5673e9;
+    --chart-1: #2964be;
+    --chart-2: #237f80;
+    --chart-3: #9b6db9;
+    --chart-4: #d27c47;
+    --chart-5: #3e9d6d;
+    --sidebar: #f2f5fa;
+    --sidebar-foreground: #223047;
+    --sidebar-primary: #3455cb;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #e6ecfa;
+    --sidebar-accent-foreground: #2449a4;
+    --sidebar-border: #dfe5ef;
+    --sidebar-ring: #5673e9;
+    --finance-overrun: #c44c50;
+    --finance-saving: #13756b;
+    --radius: 0.75rem;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    --background: #0d1423;
+    --foreground: #eef2fb;
+    --card: #151f31;
+    --card-foreground: #eef2fb;
+    --popover: #19263b;
+    --popover-foreground: #eef2fb;
+    --primary: #8aa2ff;
+    --primary-foreground: #0e1626;
+    --secondary: #202d43;
+    --secondary-foreground: #e7ecf8;
+    --muted: #202c42;
+    --muted-foreground: #a6b2c5;
+    --accent: #283b5e;
+    --accent-foreground: #eaf0ff;
+    --destructive: #ff758a;
+    --destructive-foreground: #201018;
+    --border: #2d3a50;
+    --input: #35435b;
+    --ring: #8aa2ff;
+    --chart-1: #8aa2ff;
+    --chart-2: #64cbc2;
+    --chart-3: #bea5f8;
+    --chart-4: #f2b86b;
+    --chart-5: #7fd8a0;
+    --sidebar: #111b2d;
+    --sidebar-foreground: #dae2f0;
+    --sidebar-primary: #8aa2ff;
+    --sidebar-primary-foreground: #0d1423;
+    --sidebar-accent: #263653;
+    --sidebar-accent-foreground: #eff3fb;
+    --sidebar-border: #2b3952;
+    --sidebar-ring: #8aa2ff;
+    --finance-overrun: #ff758a;
+    --finance-saving: #70d7c1;
 }
 
 @layer base {
@@ -138,6 +144,46 @@
     }
 
     body {
-        @apply bg-background text-foreground;
+        @apply bg-background font-sans text-sm text-foreground antialiased;
+    }
+}
+
+@utility page-shell {
+    @apply mx-auto flex w-full max-w-[1680px] min-w-0 flex-1 flex-col gap-6 p-4 md:p-6 2xl:gap-7 2xl:px-8;
+}
+
+@utility page-title {
+    @apply text-2xl font-semibold tracking-tight text-balance sm:text-3xl;
+}
+
+@utility financial-value {
+    @apply font-sans font-medium tracking-normal tabular-nums;
+}
+
+@utility chart-tooltip {
+    @apply max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border bg-popover p-3 font-sans text-sm tracking-normal text-popover-foreground tabular-nums shadow-md;
+    overflow-wrap: anywhere;
+}
+
+@layer base {
+    :root {
+        color-scheme: light;
+    }
+    .dark {
+        color-scheme: dark;
+    }
+    button:not(:disabled),
+    [role='button']:not([aria-disabled='true']) {
+        cursor: pointer;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
     }
 }

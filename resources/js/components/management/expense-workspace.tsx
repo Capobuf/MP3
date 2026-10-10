@@ -1,3 +1,4 @@
+import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -28,6 +29,7 @@ export function ExpenseWorkspace({
     const [busy, setBusy] = useState(false);
     const path = `/t/${tenant.slug}/${dashboard ? 'dashboard' : 'expenses'}`;
     const year = filters.year;
+    const refresh = usePageRefresh(path);
     function saved(record: RecordData) {
         setSheet(null);
         if (!matchesExpenseFilters(record, filters)) {
@@ -39,9 +41,15 @@ export function ExpenseWorkspace({
     }
 
     return (
-        <section aria-label="Gestione spese" className="min-w-0 space-y-4">
+        <section
+            aria-busy={busy || refresh.pending}
+            aria-label="Gestione spese"
+            className="flex min-w-0 flex-col gap-4"
+        >
             {dashboard && (
-                <h2 className="text-base font-semibold">Spese · {year}</h2>
+                <h2 className="text-lg font-semibold">
+                    Dettaglio delle spese · {year}
+                </h2>
             )}
             {showFilters && (
                 <DashboardFilters
@@ -56,6 +64,7 @@ export function ExpenseWorkspace({
                 />
             )}
             <ExpenseTable
+                loading={refresh.visible}
                 rows={expenses.data}
                 slug={tenant.slug}
                 filters={filters}

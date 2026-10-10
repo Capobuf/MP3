@@ -26,7 +26,7 @@ export function TenantSwitcher() {
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="h-14 rounded-xl border border-sidebar-border bg-sidebar p-2 group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent"
+                            className="h-14 rounded-xl border border-sidebar-border bg-card p-2 shadow-xs group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent"
                             aria-label={
                                 currentTenant
                                     ? `Cambia ambiente: ${currentTenant.name}`

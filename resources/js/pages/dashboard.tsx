@@ -14,18 +14,18 @@ import type { Tenant } from '@/types';
 export default function Dashboard({ tenants }: { tenants: Tenant[] }) {
     return (
         <>
-            <Head title="Choose tenant" />
-            <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-8">
+            <Head title="Scelta ambiente" />
+            <div className="page-shell">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
+                    <h1 className="page-title">
                         {tenants.length === 0
-                            ? 'No tenant access'
-                            : 'Choose a tenant'}
+                            ? 'Nessun ambiente assegnato'
+                            : 'Scegli un ambiente'}
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         {tenants.length === 0
-                            ? 'Your account is active, but it has not been assigned to a tenant. Contact a platform administrator.'
-                            : 'Select the customer environment you want to open.'}
+                            ? 'Il tuo account è attivo, ma non è ancora associato a un ambiente. Contatta un amministratore.'
+                            : 'Seleziona l’ambiente in cui vuoi lavorare.'}
                     </p>
                 </div>
 
@@ -47,7 +47,7 @@ export default function Dashboard({ tenants }: { tenants: Tenant[] }) {
                                         <Link
                                             href={`/t/${tenant.slug}/dashboard`}
                                         >
-                                            Open tenant
+                                            Apri ambiente
                                         </Link>
                                     </Button>
                                 </CardContent>
@@ -61,5 +61,5 @@ export default function Dashboard({ tenants }: { tenants: Tenant[] }) {
 }
 
 Dashboard.layout = {
-    breadcrumbs: [{ title: 'Choose tenant', href: dashboard() }],
+    breadcrumbs: [{ title: 'Scelta ambiente', href: dashboard() }],
 };

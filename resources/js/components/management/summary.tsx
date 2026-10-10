@@ -1,11 +1,17 @@
-import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardDescription,
+} from '@/components/ui/card';
 import { money } from './helpers';
 import type { Totals } from './types';
 
 export function Summary({ totals }: { totals: Totals }) {
     return (
-        <div className="space-y-3">
-            <div className="grid gap-4 sm:grid-cols-3">
+        <div className="flex flex-col gap-3">
+            <div className="grid gap-4 md:grid-cols-3">
                 {[
                     {
                         label: 'Totale allocato',
@@ -23,17 +29,25 @@ export function Summary({ totals }: { totals: Totals }) {
                         hint: `${totals.count - totals.incomplete} spese con entrambi gli importi`,
                     },
                 ].map((item) => (
-                    <Card key={item.label}>
-                        <CardContent className="pt-6">
-                            <p className="text-sm text-muted-foreground">
-                                {item.label}
-                            </p>
+                    <Card key={item.label} className="min-w-0 gap-3">
+                        <CardHeader className="px-5">
+                            <CardDescription>{item.label}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="px-5">
                             <p
-                                className={`mt-2 text-right text-2xl font-semibold tabular-nums ${item.label.startsWith('Scostamento') && Number(item.value) > 0 ? 'text-amber-700 dark:text-amber-400' : ''}`}
+                                className={cn(
+                                    'text-2xl font-semibold tracking-normal break-words tabular-nums',
+                                    item.label.startsWith('Scostamento') &&
+                                        (Number(item.value) > 0
+                                            ? 'text-finance-overrun'
+                                            : Number(item.value) < 0
+                                              ? 'text-finance-saving'
+                                              : ''),
+                                )}
                             >
                                 {money(item.value)}
                             </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
+                            <p className="mt-3 text-sm text-muted-foreground">
                                 {item.hint}
                             </p>
                         </CardContent>

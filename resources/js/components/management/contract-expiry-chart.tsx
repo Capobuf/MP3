@@ -54,7 +54,9 @@ export function ContractExpiryChart({
                         <Bar
                             dataKey="count"
                             radius={3}
-                            isAnimationActive={false}
+                            isAnimationActive="auto"
+                            animationDuration={450}
+                            animationEasing="ease-out"
                         >
                             {expiry.groups.map((row) => (
                                 <Cell

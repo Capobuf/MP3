@@ -1,8 +1,13 @@
 import { router } from '@inertiajs/react';
-import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+    InputGroup,
+    InputGroupInput,
+    InputGroupAddon,
+} from '@/components/ui/input-group';
+import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import {
     Popover,
@@ -12,6 +17,7 @@ import {
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
@@ -74,20 +80,15 @@ export function DashboardFilters({
 
     return (
         <form
-            className="flex flex-wrap items-center gap-2"
+            className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4 shadow-xs"
             onSubmit={(event) => {
                 event.preventDefault();
                 applyFilters(path, draft);
             }}
         >
-            <div className="relative min-w-0 flex-1 basis-48">
-                <Search
-                    aria-hidden="true"
-                    className="absolute top-2.5 left-3 size-4 text-muted-foreground"
-                />
-                <Input
+            <InputGroup className="min-w-0 flex-1 basis-48">
+                <InputGroupInput
                     aria-label="Cerca spese per descrizione"
-                    className="pl-9"
                     placeholder="Cerca una spesa…"
                     value={draft.search ?? ''}
                     disabled={busy}
@@ -95,7 +96,10 @@ export function DashboardFilters({
                         setDraft({ ...draft, search: event.target.value })
                     }
                 />
-            </div>
+                <InputGroupAddon>
+                    <Search aria-hidden="true" />
+                </InputGroupAddon>
+            </InputGroup>
             <Button type="submit" variant="outline" disabled={busy}>
                 Cerca
             </Button>
@@ -116,32 +120,40 @@ export function DashboardFilters({
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                    {years.map((value) => (
-                        <SelectItem key={value} value={String(value)}>
-                            {value}
-                        </SelectItem>
-                    ))}
+                    <SelectGroup>
+                        {years.map((value) => (
+                            <SelectItem key={value} value={String(value)}>
+                                {value}
+                            </SelectItem>
+                        ))}
+                    </SelectGroup>
                 </SelectContent>
             </Select>
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
                 <PopoverTrigger asChild>
                     <Button type="button" variant="outline" disabled={busy}>
                         <SlidersHorizontal className="size-4" />
-                        Filtri{activeFilters > 0 && ` (${activeFilters})`}
+                        Filtri
+                        {activeFilters > 0 && (
+                            <Badge variant="secondary" className="tabular-nums">
+                                {activeFilters}
+                            </Badge>
+                        )}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent
                     align="end"
-                    className="w-80 max-w-[calc(100vw-2rem)] space-y-4"
+                    className="flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-4"
                 >
                     <h3 className="text-sm font-medium">Filtra spese</h3>
                     {secondaryFilters.map(
                         ({ catalog, field, label, all, relation }) => (
                             <div key={field} className="space-y-1.5">
-                                <p className="text-xs font-medium text-muted-foreground">
+                                <Label htmlFor={`filter-${field}`}>
                                     {label}
-                                </p>
+                                </Label>
                                 <RecordSelect
+                                    id={`filter-${field}`}
                                     slug={tenant.slug}
                                     catalog={catalog}
                                     value={draft[field] ?? ''}
@@ -182,27 +194,43 @@ export function DashboardFilters({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {[
-                                    ['title', 'Descrizione'],
-                                    ['allocated_amount', 'Allocato'],
-                                    ['actual_amount', 'Effettivo'],
-                                    ['updated_at', 'Ultima modifica'],
-                                ].flatMap(([field, label]) =>
-                                    ['asc', 'desc'].map((direction) => (
-                                        <SelectItem
-                                            key={`${field}:${direction}`}
-                                            value={`${field}:${direction}`}
-                                        >
-                                            {label} ·{' '}
-                                            {direction === 'asc'
-                                                ? 'crescente'
-                                                : 'decrescente'}
-                                        </SelectItem>
-                                    )),
-                                )}
+                                <SelectGroup>
+                                    {[
+                                        ['title', 'Descrizione'],
+                                        ['allocated_amount', 'Allocato'],
+                                        ['actual_amount', 'Effettivo'],
+                                        ['updated_at', 'Ultima modifica'],
+                                    ].flatMap(([field, label]) =>
+                                        ['asc', 'desc'].map((direction) => (
+                                            <SelectItem
+                                                key={`${field}:${direction}`}
+                                                value={`${field}:${direction}`}
+                                            >
+                                                {label} ·{' '}
+                                                {direction === 'asc'
+                                                    ? 'crescente'
+                                                    : 'decrescente'}
+                                            </SelectItem>
+                                        )),
+                                    )}
+                                </SelectGroup>
                             </SelectContent>
                         </Select>
                     </div>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() =>
+                            setDraft({
+                                year,
+                                sort: filters.sort,
+                                direction: filters.direction,
+                            })
+                        }
+                    >
+                        Azzera selezione
+                    </Button>
                     <Button
                         type="button"
                         className="w-full"
@@ -235,10 +263,62 @@ export function DashboardFilters({
                 </Button>
             )}
             {onCreate && (
-                <Button type="button" disabled={busy} onClick={onCreate}>
+                <Button
+                    type="button"
+                    className="w-full sm:ml-auto sm:w-auto"
+                    disabled={busy}
+                    onClick={onCreate}
+                >
                     <Plus className="size-4" />
                     Nuova spesa
                 </Button>
+            )}
+            {activeFilters > 0 && (
+                <div
+                    className="flex w-full flex-wrap gap-2 border-t pt-3"
+                    aria-label="Filtri applicati"
+                >
+                    {secondaryFilters
+                        .filter(({ field }) => filters[field])
+                        .map(({ field, catalog, label, relation }) => {
+                            const selected = [
+                                ...options[catalog],
+                                ...expenses.data.flatMap((expense) =>
+                                    expense[relation]
+                                        ? [expense[relation]!]
+                                        : [],
+                                ),
+                            ].find(
+                                (option) =>
+                                    String(option.id) === filters[field],
+                            );
+                            const name =
+                                filters[field] === 'none'
+                                    ? 'Senza collegamento'
+                                    : (selected?.name ??
+                                      `Elemento #${filters[field]}`);
+                            return (
+                                <Button
+                                    key={field}
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    disabled={busy}
+                                    className="h-auto min-h-8 max-w-full whitespace-normal"
+                                    aria-label={`Rimuovi filtro ${label}: ${name}`}
+                                    onClick={() =>
+                                        applyFilters(path, {
+                                            ...filters,
+                                            [field]: '',
+                                        })
+                                    }
+                                >
+                                    {label}: {name}
+                                    <X data-icon="inline-end" />
+                                </Button>
+                            );
+                        })}
+                </div>
             )}
         </form>
     );

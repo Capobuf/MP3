@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import { DeleteRecord } from './delete-record';
-import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
+import { Plus, ArrowLeft } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -15,10 +15,18 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import {
+    Field,
+    FieldGroup,
+    FieldLabel,
+    FieldError,
+} from '@/components/ui/field';
+import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/utils';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
@@ -40,14 +48,14 @@ import { RecordSelect } from './record-select';
 import { singular } from './types';
 import type { Catalog, Kind, Options, RecordData } from './types';
 
-type Field = {
+type FormField = {
     key: Exclude<keyof RecordData, 'vendor' | 'contract' | 'project' | 'lines'>;
     label: string;
     type?: string;
     required?: boolean;
     catalog?: Catalog;
 };
-const fields: Record<Kind, Field[]> = {
+const fields: Record<Kind, FormField[]> = {
     vendors: [
         { key: 'name', label: 'Nome', required: true },
         { key: 'vat_number', label: 'Partita IVA' },
@@ -258,7 +266,13 @@ export function EntitySheet({
                 }}
             >
                 <SheetContent
-                    className={`w-full overflow-y-auto ${current.kind === 'expenses' ? 'sm:max-w-6xl' : 'sm:max-w-xl'}`}
+                    className={cn(
+                        'w-full gap-0 overflow-hidden bg-popover',
+                        current.kind === 'expenses'
+                            ? 'sm:max-w-5xl'
+                            : 'sm:max-w-xl',
+                    )}
+                    closeDisabled={busy}
                     onEscapeKeyDown={(event) => {
                         event.preventDefault();
                         requestClose();
@@ -268,7 +282,7 @@ export function EntitySheet({
                         requestClose();
                     }}
                 >
-                    <SheetHeader>
+                    <SheetHeader className="shrink-0 border-b p-5 pr-14 sm:px-6">
                         <SheetTitle>
                             {current.record ? 'Modifica' : 'Nuovo elemento'} ·{' '}
                             {singular[current.kind]}
@@ -303,85 +317,219 @@ export function EntitySheet({
                         </Button>
                     )}
                     <form
-                        className="space-y-5 px-4 pb-8"
+                        id="entity-form"
+                        aria-busy={busy}
+                        className="flex min-h-0 flex-1 flex-col"
                         onSubmit={(event) => {
                             void save(event);
                         }}
                     >
-                        {errors._form && (
-                            <p
-                                className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                                role="alert"
+                        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-4 sm:p-6">
+                            {errors._form && (
+                                <p
+                                    className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+                                    role="alert"
+                                >
+                                    {errors._form[0]} I dati inseriti restano
+                                    nel form.
+                                </p>
+                            )}
+                            {current.kind === 'expenses' && (
+                                <h2 className="font-semibold">
+                                    Dati generali della spesa
+                                </h2>
+                            )}
+                            <FieldGroup
+                                className={
+                                    current.kind === 'expenses'
+                                        ? 'grid gap-4 sm:grid-cols-2'
+                                        : 'gap-5'
+                                }
+                                role={
+                                    current.kind === 'expenses'
+                                        ? 'group'
+                                        : undefined
+                                }
+                                aria-label={
+                                    current.kind === 'expenses'
+                                        ? 'Dati generali della spesa'
+                                        : undefined
+                                }
                             >
-                                {errors._form[0]} I dati inseriti restano nel
-                                form.
-                            </p>
-                        )}
-                        {current.kind === 'expenses' && (
-                            <h2 className="font-semibold">
-                                Dati generali della spesa
-                            </h2>
-                        )}
-                        <div
-                            className={
-                                current.kind === 'expenses'
-                                    ? 'grid gap-4 sm:grid-cols-2'
-                                    : 'space-y-5'
-                            }
-                            role={
-                                current.kind === 'expenses'
-                                    ? 'group'
-                                    : undefined
-                            }
-                            aria-label={
-                                current.kind === 'expenses'
-                                    ? 'Dati generali della spesa'
-                                    : undefined
-                            }
-                        >
-                            {fields[current.kind].map((field) => {
-                                const value = current.values[field.key];
-                                const id = `field-${field.key}`;
-                                const selectOptions = field.catalog
-                                    ? [
-                                          ...localOptions[field.catalog],
-                                          ...(current.record?.[
-                                              field.catalog.slice(0, -1) as
-                                                  | 'vendor'
-                                                  | 'contract'
-                                                  | 'project'
+                                {fields[current.kind].map((field) => {
+                                    const value = current.values[field.key];
+                                    const id = `field-${field.key}`;
+                                    const selectOptions = field.catalog
+                                        ? [
+                                              ...localOptions[field.catalog],
+                                              ...(current.record?.[
+                                                  field.catalog.slice(0, -1) as
+                                                      | 'vendor'
+                                                      | 'contract'
+                                                      | 'project'
+                                              ]
+                                                  ? [
+                                                        current.record[
+                                                            field.catalog.slice(
+                                                                0,
+                                                                -1,
+                                                            ) as
+                                                                | 'vendor'
+                                                                | 'contract'
+                                                                | 'project'
+                                                        ]!,
+                                                    ]
+                                                  : []),
                                           ]
-                                              ? [
-                                                    current.record[
-                                                        field.catalog.slice(
-                                                            0,
-                                                            -1,
-                                                        ) as
-                                                            | 'vendor'
-                                                            | 'contract'
-                                                            | 'project'
-                                                    ]!,
-                                                ]
-                                              : []),
-                                      ]
-                                    : [];
-                                return (
-                                    <div
-                                        key={field.key}
-                                        className={`min-w-0 space-y-2 ${current.kind === 'expenses' && ['title', 'notes'].includes(field.key) ? 'sm:col-span-2' : ''}`}
-                                    >
-                                        <Label htmlFor={id}>
-                                            {field.label}
-                                            {field.required && ' *'}
-                                        </Label>
-                                        {field.catalog ? (
-                                            <div className="flex gap-2">
-                                                <RecordSelect
-                                                    slug={tenant.slug}
-                                                    catalog={field.catalog}
+                                        : [];
+                                    return (
+                                        <Field
+                                            key={field.key}
+                                            data-invalid={!!errors[field.key]}
+                                            data-disabled={busy}
+                                            className={cn(
+                                                'min-w-0 gap-2',
+                                                current.kind === 'expenses' &&
+                                                    ['title', 'notes'].includes(
+                                                        field.key,
+                                                    ) &&
+                                                    'sm:col-span-2',
+                                            )}
+                                        >
+                                            <FieldLabel htmlFor={id}>
+                                                {field.label}
+                                                {field.required && ' *'}
+                                            </FieldLabel>
+                                            {field.catalog ? (
+                                                <div className="flex gap-2">
+                                                    <RecordSelect
+                                                        id={id}
+                                                        aria-invalid={
+                                                            !!errors[field.key]
+                                                        }
+                                                        aria-describedby={
+                                                            errors[field.key]
+                                                                ? `${id}-error`
+                                                                : undefined
+                                                        }
+                                                        slug={tenant.slug}
+                                                        catalog={field.catalog}
+                                                        value={value}
+                                                        options={selectOptions}
+                                                        label={`Seleziona ${singular[field.catalog]}`}
+                                                        onChange={(selected) =>
+                                                            change(
+                                                                field.key,
+                                                                selected,
+                                                            )
+                                                        }
+                                                        disabled={busy}
+                                                    />
+                                                    {current.kind ===
+                                                        'expenses' && (
+                                                        <Button
+                                                            variant="outline"
+                                                            type="button"
+                                                            size="icon"
+                                                            disabled={busy}
+                                                            aria-label={`Crea ${singular[field.catalog]}`}
+                                                            onClick={() => {
+                                                                setErrors({});
+                                                                setFrames(
+                                                                    (
+                                                                        previous,
+                                                                    ) => [
+                                                                        ...previous,
+                                                                        frame(
+                                                                            field.catalog!,
+                                                                            year,
+                                                                            undefined,
+                                                                            field.key,
+                                                                        ),
+                                                                    ],
+                                                                );
+                                                            }}
+                                                        >
+                                                            <Plus className="size-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            ) : field.type === 'status' ? (
+                                                <Select
                                                     value={value}
-                                                    options={selectOptions}
-                                                    label={`Seleziona ${singular[field.catalog]}`}
+                                                    onValueChange={(selected) =>
+                                                        change(
+                                                            field.key,
+                                                            selected,
+                                                        )
+                                                    }
+                                                    disabled={busy}
+                                                >
+                                                    <SelectTrigger
+                                                        id={id}
+                                                        aria-invalid={
+                                                            !!errors[field.key]
+                                                        }
+                                                        aria-describedby={
+                                                            errors[field.key]
+                                                                ? `${id}-error`
+                                                                : undefined
+                                                        }
+                                                    >
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectGroup>
+                                                            {[
+                                                                'pianificato',
+                                                                'attivo',
+                                                                'completato',
+                                                            ].map((status) => (
+                                                                <SelectItem
+                                                                    key={status}
+                                                                    value={
+                                                                        status
+                                                                    }
+                                                                >
+                                                                    {status}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectGroup>
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : field.type === 'textarea' ? (
+                                                <Textarea
+                                                    aria-invalid={
+                                                        !!errors[field.key]
+                                                    }
+                                                    id={id}
+                                                    aria-describedby={
+                                                        errors[field.key]
+                                                            ? `${id}-error`
+                                                            : undefined
+                                                    }
+                                                    value={value}
+                                                    onChange={(event) =>
+                                                        change(
+                                                            field.key,
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    disabled={busy}
+                                                    rows={3}
+                                                />
+                                            ) : field.type === 'date' ? (
+                                                <DateField
+                                                    aria-invalid={
+                                                        !!errors[field.key]
+                                                    }
+                                                    id={id}
+                                                    aria-describedby={
+                                                        errors[field.key]
+                                                            ? `${id}-error`
+                                                            : undefined
+                                                    }
+                                                    value={value}
                                                     onChange={(selected) =>
                                                         change(
                                                             field.key,
@@ -390,155 +538,86 @@ export function EntitySheet({
                                                     }
                                                     disabled={busy}
                                                 />
-                                                {current.kind ===
-                                                    'expenses' && (
-                                                    <Button
-                                                        variant="outline"
-                                                        type="button"
-                                                        size="icon"
-                                                        disabled={busy}
-                                                        aria-label={`Crea ${singular[field.catalog]}`}
-                                                        onClick={() => {
-                                                            setErrors({});
-                                                            setFrames(
-                                                                (previous) => [
-                                                                    ...previous,
-                                                                    frame(
-                                                                        field.catalog!,
-                                                                        year,
-                                                                        undefined,
-                                                                        field.key,
-                                                                    ),
-                                                                ],
-                                                            );
-                                                        }}
-                                                    >
-                                                        <Plus className="size-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        ) : field.type === 'status' ? (
-                                            <Select
-                                                value={value}
-                                                onValueChange={(selected) =>
-                                                    change(field.key, selected)
-                                                }
-                                                disabled={busy}
-                                            >
-                                                <SelectTrigger id={id}>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {[
-                                                        'pianificato',
-                                                        'attivo',
-                                                        'completato',
-                                                    ].map((status) => (
-                                                        <SelectItem
-                                                            key={status}
-                                                            value={status}
-                                                        >
-                                                            {status}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        ) : field.type === 'textarea' ? (
-                                            <Textarea
-                                                id={id}
-                                                value={value}
-                                                onChange={(event) =>
-                                                    change(
-                                                        field.key,
-                                                        event.target.value,
-                                                    )
-                                                }
-                                                disabled={busy}
-                                                rows={3}
-                                            />
-                                        ) : field.type === 'date' ? (
-                                            <DateField
-                                                id={id}
-                                                value={value}
-                                                onChange={(selected) =>
-                                                    change(field.key, selected)
-                                                }
-                                                disabled={busy}
-                                            />
-                                        ) : (
-                                            <Input
-                                                id={id}
-                                                className={
-                                                    field.type === 'money'
-                                                        ? 'text-right font-medium tabular-nums'
-                                                        : undefined
-                                                }
-                                                type={
-                                                    field.type === 'money'
-                                                        ? 'text'
-                                                        : (field.type ?? 'text')
-                                                }
-                                                inputMode={
-                                                    field.type === 'money'
-                                                        ? 'decimal'
-                                                        : undefined
-                                                }
-                                                placeholder={
-                                                    field.type === 'money'
-                                                        ? 'Da inserire'
-                                                        : undefined
-                                                }
-                                                value={value}
-                                                onChange={(event) =>
-                                                    change(
-                                                        field.key,
-                                                        event.target.value,
-                                                    )
-                                                }
-                                                required={field.required}
-                                                disabled={busy}
-                                                aria-invalid={
-                                                    !!errors[field.key]
-                                                }
-                                            />
-                                        )}
-                                        {errors[field.key] && (
-                                            <p
-                                                role="alert"
-                                                className="text-sm text-destructive"
-                                            >
-                                                {errors[field.key][0]}
-                                            </p>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        {current.kind === 'expenses' && (
-                            <ExpenseLines
-                                lines={current.lines}
-                                disabled={busy}
-                                errors={errors}
-                                onChange={(lines) => {
-                                    setErrors((previous) =>
-                                        Object.fromEntries(
-                                            Object.entries(previous).filter(
-                                                ([key]) =>
-                                                    !key.startsWith('lines'),
+                                            ) : (
+                                                <Input
+                                                    id={id}
+                                                    aria-describedby={
+                                                        errors[field.key]
+                                                            ? `${id}-error`
+                                                            : undefined
+                                                    }
+                                                    className={
+                                                        field.type === 'money'
+                                                            ? 'text-right font-medium tabular-nums'
+                                                            : undefined
+                                                    }
+                                                    type={
+                                                        field.type === 'money'
+                                                            ? 'text'
+                                                            : (field.type ??
+                                                              'text')
+                                                    }
+                                                    inputMode={
+                                                        field.type === 'money'
+                                                            ? 'decimal'
+                                                            : undefined
+                                                    }
+                                                    placeholder={
+                                                        field.type === 'money'
+                                                            ? 'Da inserire'
+                                                            : undefined
+                                                    }
+                                                    value={value}
+                                                    onChange={(event) =>
+                                                        change(
+                                                            field.key,
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    required={field.required}
+                                                    disabled={busy}
+                                                    aria-invalid={
+                                                        !!errors[field.key]
+                                                    }
+                                                />
+                                            )}
+                                            {errors[field.key] && (
+                                                <FieldError id={`${id}-error`}>
+                                                    {errors[field.key][0]}
+                                                </FieldError>
+                                            )}
+                                        </Field>
+                                    );
+                                })}
+                            </FieldGroup>
+                            {current.kind === 'expenses' && (
+                                <ExpenseLines
+                                    lines={current.lines}
+                                    disabled={busy}
+                                    errors={errors}
+                                    onChange={(lines) => {
+                                        setErrors((previous) =>
+                                            Object.fromEntries(
+                                                Object.entries(previous).filter(
+                                                    ([key]) =>
+                                                        !key.startsWith(
+                                                            'lines',
+                                                        ),
+                                                ),
                                             ),
-                                        ),
-                                    );
-                                    setFrames((previous) =>
-                                        previous.map((item, index) =>
-                                            index === previous.length - 1
-                                                ? { ...item, lines }
-                                                : item,
-                                        ),
-                                    );
-                                }}
-                            />
-                        )}
-                        <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                                        );
+                                        setFrames((previous) =>
+                                            previous.map((item, index) =>
+                                                index === previous.length - 1
+                                                    ? { ...item, lines }
+                                                    : item,
+                                            ),
+                                        );
+                                    }}
+                                />
+                            )}
+                        </div>
+                        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-popover p-4 sm:px-6">
                             {current.kind === 'expenses' &&
                                 current.record &&
                                 frames.length === 1 && (
@@ -573,10 +652,8 @@ export function EntitySheet({
                                 Annulla
                             </Button>
                             <Button disabled={busy} type="submit">
-                                {busy && (
-                                    <Loader2 className="mr-2 size-4 animate-spin" />
-                                )}
-                                Salva
+                                {busy && <Spinner />}
+                                {busy ? 'Salvataggio…' : 'Salva'}
                             </Button>
                         </div>
                     </form>
@@ -603,6 +680,7 @@ export function EntitySheet({
                             Continua a modificare
                         </AlertDialogCancel>
                         <AlertDialogAction
+                            variant="destructive"
                             onClick={() => {
                                 if (discard === 'close') onClose();
                                 else back();

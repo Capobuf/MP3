@@ -1,10 +1,10 @@
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts';
 import {
     ChartContainer,
     ChartLegend,
     ChartLegendContent,
     ChartTooltip,
-    ChartTooltipContent,
 } from '@/components/ui/chart';
 import { compactMoney, economicConfig } from './analytics-helpers';
 import type { AnnualRow } from './analytics-types';
@@ -57,24 +57,10 @@ export function AnnualComparisonChart({
                                     | (typeof data)[number]
                                     | undefined;
                                 return props.active && row ? (
-                                    <div className="rounded-lg border bg-background p-3 text-xs shadow-md">
-                                        <ChartTooltipContent
-                                            active={props.active}
-                                            payload={props.payload}
-                                            labelFormatter={() =>
-                                                String(row.year)
-                                            }
-                                            formatter={(value, name) => (
-                                                <span>
-                                                    {
-                                                        economicConfig[
-                                                            name as keyof typeof economicConfig
-                                                        ]?.label
-                                                    }
-                                                    : {money(Number(value))}
-                                                </span>
-                                            )}
-                                        />
+                                    <div className="chart-tooltip">
+                                        <p className="font-medium">
+                                            {row.year}
+                                        </p>
                                         <p className="mt-2">
                                             Allocato:{' '}
                                             {row.allocated === null
@@ -104,7 +90,9 @@ export function AnnualComparisonChart({
                                 onClick={(_row, index) =>
                                     onSelect(data[index].year)
                                 }
-                                isAnimationActive={false}
+                                isAnimationActive="auto"
+                                animationDuration={450}
+                                animationEasing="ease-out"
                             >
                                 {data.map((row) => (
                                     <Cell
@@ -125,18 +113,26 @@ export function AnnualComparisonChart({
                     </BarChart>
                 </ChartContainer>
             )}
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-                {rows.map((row) => (
-                    <button
-                        type="button"
-                        key={row.year}
-                        aria-pressed={row.year === year}
-                        className={`rounded-md border px-3 py-1 text-xs ${row.year === year ? 'bg-accent font-semibold' : 'text-muted-foreground'}`}
-                        onClick={() => onSelect(row.year)}
-                    >
-                        {row.year}
-                    </button>
-                ))}
+            <div className="mt-4 overflow-x-auto pb-1">
+                <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    value={String(year)}
+                    aria-label="Anno del confronto"
+                    className="mx-auto w-max"
+                    onValueChange={(value) => {
+                        if (value) onSelect(Number(value));
+                    }}
+                >
+                    {rows.map((row) => (
+                        <ToggleGroupItem
+                            key={row.year}
+                            value={String(row.year)}
+                        >
+                            {row.year}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
             </div>
         </AnalyticsCard>
     );

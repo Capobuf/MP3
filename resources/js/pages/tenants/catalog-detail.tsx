@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
@@ -75,20 +76,20 @@ export default function CatalogDetail({
     return (
         <>
             <Head title={`${record.name} · ${tenant.name}`} />
-            <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
-                <header className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+            <div className="page-shell">
+                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
                         <Link
                             href={path}
                             className="text-sm text-muted-foreground hover:underline"
                         >
                             {tenant.name} / {labels[catalog]}
                         </Link>
-                        <h1 className="mt-2 text-3xl font-semibold">
+                        <h1 className="mt-2 page-title break-words">
                             {record.name}
                         </h1>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex shrink-0 flex-wrap gap-2">
                         <Button
                             disabled={tableBusy}
                             onClick={() => setEdit(true)}
@@ -104,15 +105,15 @@ export default function CatalogDetail({
                     </div>
                 </header>
                 <Card>
-                    <CardContent className="pt-6">
+                    <CardContent className="min-w-0">
                         <dl className="grid gap-5 sm:grid-cols-3">
                             {info.map(([label, value]) => (
                                 <div key={label}>
-                                    <dt className="text-xs text-muted-foreground">
+                                    <dt className="text-sm text-muted-foreground">
                                         {label}
                                     </dt>
                                     <dd
-                                        className={`mt-1 font-medium ${label === 'Importo contrattuale informativo' ? 'text-right text-base tabular-nums' : 'text-sm'}`}
+                                        className={`mt-1 font-medium ${label === 'Importo contrattuale informativo' ? 'text-base tracking-normal tabular-nums' : 'text-sm'}`}
                                     >
                                         {value ?? '—'}
                                     </dd>
@@ -120,13 +121,13 @@ export default function CatalogDetail({
                             ))}
                             {catalog === 'contracts' && (
                                 <div>
-                                    <dt className="text-xs text-muted-foreground">
+                                    <dt className="text-sm text-muted-foreground">
                                         Fornitore
                                     </dt>
                                     <dd className="mt-1">
                                         {record.vendor ? (
                                             <Link
-                                                className="text-sm underline"
+                                                className="text-sm text-primary underline-offset-4 hover:underline"
                                                 href={`/t/${tenant.slug}/vendors/${record.vendor.id}`}
                                             >
                                                 {record.vendor.name}
@@ -193,17 +194,19 @@ export default function CatalogDetail({
                                         </SelectValue>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">
-                                            Tutti gli anni
-                                        </SelectItem>
-                                        {years.map((value) => (
-                                            <SelectItem
-                                                key={value}
-                                                value={String(value)}
-                                            >
-                                                {value}
+                                        <SelectGroup>
+                                            <SelectItem value="all">
+                                                Tutti gli anni
                                             </SelectItem>
-                                        ))}
+                                            {years.map((value) => (
+                                                <SelectItem
+                                                    key={value}
+                                                    value={String(value)}
+                                                >
+                                                    {value}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
                                     </SelectContent>
                                 </Select>
                             </div>

@@ -1,3 +1,20 @@
+import { useRef, useState } from 'react';
+import type { FormComponentRef } from '@inertiajs/core';
+import {
+    AlertDialog,
+    AlertDialogTrigger,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogCancel,
+    AlertDialogAction,
+} from '@/components/ui/alert-dialog';
+import {
+    NativeSelect,
+    NativeSelectOption,
+} from '@/components/ui/native-select';
 import { Form, Head, Link } from '@inertiajs/react';
 import {
     ArrowUpRight,
@@ -39,29 +56,31 @@ export default function Platform({
 
     return (
         <>
-            <Head title="Platform" />
-            <div className="flex flex-1 flex-col gap-8 p-4 md:p-8">
+            <Head title="Piattaforma" />
+            <div className="page-shell">
                 <div className="flex items-start gap-3">
                     <div className="rounded-lg bg-primary p-2 text-primary-foreground">
                         <ShieldCheck className="size-5" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight">
-                            Platform administration
+                        <h1 className="page-title">
+                            Amministrazione piattaforma
                         </h1>
                         <p className="mt-1 text-sm text-muted-foreground">
-                            Manage tenants, global users, and tenant access.
+                            Gestisci ambienti, utenti e autorizzazioni di
+                            accesso.
                         </p>
                     </div>
                 </div>
 
-                <div className="grid gap-6 xl:grid-cols-2">
+                <div className="grid gap-4 xl:grid-cols-2">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Create tenant</CardTitle>
+                            <CardTitle>Crea ambiente</CardTitle>
                             <CardDescription>
-                                The slug becomes the permanent tenant URL and is
-                                not changed when the name is edited.
+                                Lo slug identifica l’indirizzo permanente
+                                dell’ambiente e resta invariato quando modifichi
+                                il nome.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -75,7 +94,7 @@ export default function Platform({
                                     <>
                                         <div className="grid gap-2">
                                             <Label htmlFor="tenant-name">
-                                                Name
+                                                Nome
                                             </Label>
                                             <Input
                                                 id="tenant-name"
@@ -100,7 +119,7 @@ export default function Platform({
                                         </div>
                                         <Button disabled={processing}>
                                             {processing && <Spinner />}
-                                            Create tenant
+                                            Crea ambiente
                                         </Button>
                                     </>
                                 )}
@@ -110,11 +129,11 @@ export default function Platform({
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Create standard user</CardTitle>
+                            <CardTitle>Crea utente standard</CardTitle>
                             <CardDescription>
-                                Set a temporary password securely, then share it
-                                outside the application. The user can change or
-                                reset it using Fortify.
+                                Imposta una password temporanea e comunicala in
+                                modo sicuro. L’utente potrà modificarla o
+                                reimpostarla al primo accesso.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -128,7 +147,7 @@ export default function Platform({
                                     <>
                                         <div className="grid gap-2">
                                             <Label htmlFor="user-name">
-                                                Name
+                                                Nome
                                             </Label>
                                             <Input
                                                 id="user-name"
@@ -154,7 +173,7 @@ export default function Platform({
                                         <div className="grid gap-2 sm:grid-cols-2">
                                             <div className="grid gap-2">
                                                 <Label htmlFor="user-password">
-                                                    Temporary password
+                                                    Password temporanea
                                                 </Label>
                                                 <PasswordInput
                                                     id="user-password"
@@ -168,7 +187,7 @@ export default function Platform({
                                             </div>
                                             <div className="grid gap-2">
                                                 <Label htmlFor="user-password-confirmation">
-                                                    Confirm password
+                                                    Conferma password
                                                 </Label>
                                                 <PasswordInput
                                                     id="user-password-confirmation"
@@ -180,7 +199,7 @@ export default function Platform({
                                         </div>
                                         <Button disabled={processing}>
                                             {processing && <Spinner />}
-                                            Create user
+                                            Crea utente
                                         </Button>
                                     </>
                                 )}
@@ -192,7 +211,7 @@ export default function Platform({
                 <section className="space-y-4">
                     <div className="flex items-center gap-2">
                         <Building2 className="size-5" />
-                        <h2 className="text-xl font-semibold">Tenants</h2>
+                        <h2 className="text-xl font-semibold">Ambienti</h2>
                         <Badge variant="secondary">{tenants.length}</Badge>
                     </div>
                     <div className="grid gap-4 lg:grid-cols-2">
@@ -224,7 +243,7 @@ export default function Platform({
                                                 <Link
                                                     href={`/t/${tenant.slug}/dashboard`}
                                                 >
-                                                    Open
+                                                    Apri
                                                     <ArrowUpRight />
                                                 </Link>
                                             </Button>
@@ -234,16 +253,16 @@ export default function Platform({
                                         <Form
                                             action={`/platform/tenants/${tenant.id}`}
                                             method="patch"
-                                            className="flex items-start gap-2"
+                                            className="flex flex-wrap items-start gap-2"
                                         >
                                             {({ processing, errors }) => (
                                                 <>
-                                                    <div className="flex-1">
+                                                    <div className="min-w-0 flex-1 [&_[data-slot=native-select-wrapper]]:w-full">
                                                         <Label
                                                             htmlFor={`tenant-${tenant.id}-name`}
                                                             className="sr-only"
                                                         >
-                                                            Tenant name
+                                                            Nome ambiente
                                                         </Label>
                                                         <Input
                                                             id={`tenant-${tenant.id}-name`}
@@ -264,17 +283,17 @@ export default function Platform({
                                                         variant="secondary"
                                                         disabled={processing}
                                                     >
-                                                        Save name
+                                                        Salva nome
                                                     </Button>
                                                 </>
                                             )}
                                         </Form>
 
                                         <div className="space-y-2">
-                                            <Label>Assigned users</Label>
+                                            <Label>Utenti assegnati</Label>
                                             {tenant.users.length === 0 ? (
                                                 <p className="text-sm text-muted-foreground">
-                                                    No users assigned.
+                                                    Nessun utente assegnato.
                                                 </p>
                                             ) : (
                                                 <div className="space-y-2">
@@ -296,25 +315,12 @@ export default function Platform({
                                                                         }
                                                                     </p>
                                                                 </div>
-                                                                <Form
-                                                                    action={`/platform/tenants/${tenant.id}/users/${user.id}`}
-                                                                    method="delete"
-                                                                >
-                                                                    {({
-                                                                        processing,
-                                                                    }) => (
-                                                                        <Button
-                                                                            size="icon"
-                                                                            variant="ghost"
-                                                                            disabled={
-                                                                                processing
-                                                                            }
-                                                                            aria-label={`Remove ${user.name} from ${tenant.name}`}
-                                                                        >
-                                                                            <Trash2 />
-                                                                        </Button>
-                                                                    )}
-                                                                </Form>
+                                                                <RemoveTenantUser
+                                                                    tenant={
+                                                                        tenant
+                                                                    }
+                                                                    user={user}
+                                                                />
                                                             </div>
                                                         ),
                                                     )}
@@ -326,33 +332,37 @@ export default function Platform({
                                             <Form
                                                 action={`/platform/tenants/${tenant.id}/users`}
                                                 method="post"
-                                                className="flex items-start gap-2"
+                                                className="flex flex-wrap items-start gap-2"
                                             >
                                                 {({ processing, errors }) => (
                                                     <>
-                                                        <div className="flex-1">
+                                                        <div className="min-w-0 flex-1 [&_[data-slot=native-select-wrapper]]:w-full">
                                                             <Label
                                                                 htmlFor={`tenant-${tenant.id}-user`}
                                                                 className="sr-only"
                                                             >
-                                                                User
+                                                                Utente
                                                             </Label>
-                                                            <select
+                                                            <NativeSelect
                                                                 id={`tenant-${tenant.id}-user`}
                                                                 name="user_id"
                                                                 required
                                                                 defaultValue=""
-                                                                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm shadow-xs focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                                                className="w-full"
+                                                                disabled={
+                                                                    processing
+                                                                }
                                                             >
-                                                                <option
+                                                                <NativeSelectOption
                                                                     value=""
                                                                     disabled
                                                                 >
-                                                                    Select user
-                                                                </option>
+                                                                    Seleziona
+                                                                    utente
+                                                                </NativeSelectOption>
                                                                 {availableUsers.map(
                                                                     (user) => (
-                                                                        <option
+                                                                        <NativeSelectOption
                                                                             key={
                                                                                 user.id
                                                                             }
@@ -368,10 +378,10 @@ export default function Platform({
                                                                                 user.email
                                                                             }
                                                                             )
-                                                                        </option>
+                                                                        </NativeSelectOption>
                                                                     ),
                                                                 )}
-                                                            </select>
+                                                            </NativeSelect>
                                                             <InputError
                                                                 className="mt-1"
                                                                 message={
@@ -384,7 +394,7 @@ export default function Platform({
                                                                 processing
                                                             }
                                                         >
-                                                            Grant access
+                                                            Assegna accesso
                                                         </Button>
                                                     </>
                                                 )}
@@ -400,7 +410,9 @@ export default function Platform({
                 <section className="space-y-4">
                     <div className="flex items-center gap-2">
                         <Users className="size-5" />
-                        <h2 className="text-xl font-semibold">Global users</h2>
+                        <h2 className="text-xl font-semibold">
+                            Utenti della piattaforma
+                        </h2>
                         <Badge variant="secondary">{users.length}</Badge>
                     </div>
                     <Card>
@@ -410,8 +422,8 @@ export default function Platform({
                                     key={user.id}
                                     className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
                                 >
-                                    <div>
-                                        <div className="flex items-center gap-2">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <p className="font-medium">
                                                 {user.name}
                                             </p>
@@ -420,18 +432,18 @@ export default function Platform({
                                             )}
                                             {!user.email_verified_at && (
                                                 <Badge variant="outline">
-                                                    Email unverified
+                                                    Email non verificata
                                                 </Badge>
                                             )}
                                         </div>
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="text-sm break-words text-muted-foreground">
                                             {user.email}
                                         </p>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
                                         {user.is_super_admin ? (
                                             <span className="text-sm text-muted-foreground">
-                                                Access to every tenant
+                                                Accesso a tutti gli ambienti
                                             </span>
                                         ) : user.tenants.length > 0 ? (
                                             user.tenants.map((tenant) => (
@@ -444,7 +456,7 @@ export default function Platform({
                                             ))
                                         ) : (
                                             <span className="text-sm text-muted-foreground">
-                                                No tenant access
+                                                Nessun ambiente assegnato
                                             </span>
                                         )}
                                     </div>
@@ -459,5 +471,76 @@ export default function Platform({
 }
 
 Platform.layout = {
-    breadcrumbs: [{ title: 'Platform', href: '/platform' }],
+    breadcrumbs: [{ title: 'Piattaforma', href: '/platform' }],
 };
+
+function RemoveTenantUser({
+    tenant,
+    user,
+}: {
+    tenant: PlatformTenant;
+    user: PlatformTenant['users'][number];
+}) {
+    const [open, setOpen] = useState(false);
+    const form = useRef<FormComponentRef>(null);
+    return (
+        <Form
+            ref={form}
+            action={`/platform/tenants/${tenant.id}/users/${user.id}`}
+            method="delete"
+            onSuccess={() => setOpen(false)}
+        >
+            {({ processing, errors }) => (
+                <AlertDialog
+                    open={open}
+                    onOpenChange={(value) => {
+                        if (!processing) setOpen(value);
+                    }}
+                >
+                    <AlertDialogTrigger asChild>
+                        <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            disabled={processing}
+                            aria-label={`Rimuovi ${user.name} da ${tenant.name}`}
+                        >
+                            <Trash2 />
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent aria-busy={processing}>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>
+                                Rimuovere l’accesso?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {user.name} non potrà più accedere a{' '}
+                                {tenant.name}. Il suo account resterà
+                                disponibile sulla piattaforma.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        {Object.values(errors).map((error, index) => (
+                            <InputError key={index} message={error} />
+                        ))}
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={processing}>
+                                Annulla
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                                variant="destructive"
+                                disabled={processing}
+                                onClick={(event) => {
+                                    event.preventDefault();
+                                    form.current?.submit();
+                                }}
+                            >
+                                {processing && <Spinner />}
+                                {processing ? 'Rimozione…' : 'Rimuovi accesso'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
+        </Form>
+    );
+}

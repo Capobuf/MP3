@@ -1,3 +1,4 @@
+import { Spinner } from '@/components/ui/spinner';
 import { Form, Head, usePage } from '@inertiajs/react';
 import { Link } from '@inertiajs/react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
@@ -26,15 +27,15 @@ export default function Profile({
 
     return (
         <>
-            <Head title="Profile settings" />
+            <Head title="Impostazioni profilo" />
 
-            <h1 className="sr-only">Profile settings</h1>
+            <h1 className="sr-only">Impostazioni profilo</h1>
 
             <div className="space-y-6">
                 <Heading
                     variant="small"
-                    title="Profile"
-                    description="Update your name and email address"
+                    title="Profilo"
+                    description="Aggiorna il nome e l’indirizzo email."
                 />
 
                 <Form
@@ -47,7 +48,7 @@ export default function Profile({
                     {({ processing, errors }) => (
                         <>
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
+                                <Label htmlFor="name">Nome</Label>
 
                                 <Input
                                     id="name"
@@ -56,7 +57,7 @@ export default function Profile({
                                     name="name"
                                     required
                                     autoComplete="name"
-                                    placeholder="Full name"
+                                    placeholder="Nome completo"
                                 />
 
                                 <InputError
@@ -66,7 +67,7 @@ export default function Profile({
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
+                                <Label htmlFor="email">Indirizzo email</Label>
 
                                 <Input
                                     id="email"
@@ -76,7 +77,7 @@ export default function Profile({
                                     name="email"
                                     required
                                     autoComplete="username"
-                                    placeholder="Email address"
+                                    placeholder="Indirizzo email"
                                 />
 
                                 <InputError
@@ -89,22 +90,23 @@ export default function Profile({
                                 auth.user.email_verified_at === null && (
                                     <div>
                                         <p className="-mt-4 text-sm text-muted-foreground">
-                                            Your email address is unverified.{' '}
+                                            Il tuo indirizzo email non è
+                                            verificato.{' '}
                                             <Link
                                                 href={send()}
                                                 as="button"
-                                                className="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
+                                                className="rounded text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                                             >
-                                                Click here to re-send the
-                                                verification email.
+                                                Invia di nuovo l’email di
+                                                verifica.
                                             </Link>
                                         </p>
 
                                         {status ===
                                             'verification-link-sent' && (
-                                            <div className="mt-2 text-sm font-medium text-green-600">
-                                                A new verification link has been
-                                                sent to your email address.
+                                            <div className="mt-2 text-sm font-medium text-primary">
+                                                Ti abbiamo inviato un nuovo link
+                                                di verifica.
                                             </div>
                                         )}
                                     </div>
@@ -115,7 +117,8 @@ export default function Profile({
                                     disabled={processing}
                                     data-test="update-profile-button"
                                 >
-                                    Save
+                                    {processing && <Spinner />}
+                                    {processing ? 'Salvataggio…' : 'Salva'}
                                 </Button>
                             </div>
                         </>
@@ -131,7 +134,7 @@ export default function Profile({
 Profile.layout = {
     breadcrumbs: [
         {
-            title: 'Profile settings',
+            title: 'Impostazioni profilo',
             href: edit(),
         },
     ],

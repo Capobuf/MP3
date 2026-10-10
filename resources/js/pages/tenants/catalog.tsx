@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { Plus, Ellipsis, Search } from 'lucide-react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { EntitySheet } from '@/components/management/entity-sheet';
@@ -18,10 +18,30 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import {
+    InputGroup,
+    InputGroupInput,
+    InputGroupAddon,
+} from '@/components/ui/input-group';
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import {
+    Empty,
+    EmptyHeader,
+    EmptyTitle,
+    EmptyDescription,
+    EmptyContent,
+} from '@/components/ui/empty';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
@@ -50,20 +70,31 @@ export default function CatalogPage({
     options: Options;
 }) {
     const [sheet, setSheet] = useState<{ record?: RecordData } | null>(null);
+    const [deleting, setDeleting] = useState<RecordData | null>(null);
     const [search, setSearch] = useState(filters.search ?? '');
     const path = `/t/${tenant.slug}/${catalog}`;
     return (
         <>
             <Head title={`${labels[catalog]} · ${tenant.name}`} />
-            <div className="flex min-w-0 flex-1 flex-col gap-6 p-4 md:p-6">
-                <header className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+            <div className="page-shell">
+                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
                         <p className="text-sm text-muted-foreground">
                             {tenant.name}
                         </p>
-                        <h1 className="text-3xl font-semibold">
-                            {labels[catalog]}
-                        </h1>
+                        <h1 className="page-title">{labels[catalog]}</h1>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            {
+                                {
+                                    vendors:
+                                        'Anagrafiche e spese collegate ai tuoi fornitori.',
+                                    projects:
+                                        'Stato, periodo e costi dei progetti.',
+                                    contracts:
+                                        'Riferimenti, scadenze e spese dei contratti.',
+                                }[catalog]
+                            }
+                        </p>
                     </div>
                     <Button onClick={() => setSheet({})}>
                         <Plus className="mr-2 size-4" />
@@ -71,7 +102,7 @@ export default function CatalogPage({
                     </Button>
                 </header>
                 <Card>
-                    <CardContent className="space-y-5 pt-6">
+                    <CardContent className="flex min-w-0 flex-col gap-5">
                         <form
                             className="flex flex-wrap gap-3"
                             onSubmit={(event) => {
@@ -79,16 +110,20 @@ export default function CatalogPage({
                                 applyFilters(path, { ...filters, search });
                             }}
                         >
-                            <Input
-                                className="w-full sm:w-64"
-                                aria-label="Cerca per nome"
-                                placeholder="Cerca per nome…"
-                                value={search}
-                                onChange={(event) =>
-                                    setSearch(event.target.value)
-                                }
-                            />
-                            <Button type="submit" variant="secondary">
+                            <InputGroup className="min-w-0 flex-1 basis-56">
+                                <InputGroupInput
+                                    aria-label="Cerca per nome"
+                                    placeholder="Cerca per nome…"
+                                    value={search}
+                                    onChange={(event) =>
+                                        setSearch(event.target.value)
+                                    }
+                                />
+                                <InputGroupAddon>
+                                    <Search aria-hidden="true" />
+                                </InputGroupAddon>
+                            </InputGroup>
+                            <Button type="submit" variant="outline">
                                 Cerca
                             </Button>
                             <Select
@@ -107,12 +142,14 @@ export default function CatalogPage({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="asc">
-                                        Nome A–Z
-                                    </SelectItem>
-                                    <SelectItem value="desc">
-                                        Nome Z–A
-                                    </SelectItem>
+                                    <SelectGroup>
+                                        <SelectItem value="asc">
+                                            Nome A–Z
+                                        </SelectItem>
+                                        <SelectItem value="desc">
+                                            Nome Z–A
+                                        </SelectItem>
+                                    </SelectGroup>
                                 </SelectContent>
                             </Select>
                             {catalog === 'projects' && (
@@ -133,27 +170,29 @@ export default function CatalogPage({
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="all">
-                                            Tutti gli stati
-                                        </SelectItem>
-                                        {[
-                                            'pianificato',
-                                            'attivo',
-                                            'completato',
-                                        ].map((status) => (
-                                            <SelectItem
-                                                value={status}
-                                                key={status}
-                                            >
-                                                {status}
+                                        <SelectGroup>
+                                            <SelectItem value="all">
+                                                Tutti gli stati
                                             </SelectItem>
-                                        ))}
+                                            {[
+                                                'pianificato',
+                                                'attivo',
+                                                'completato',
+                                            ].map((status) => (
+                                                <SelectItem
+                                                    value={status}
+                                                    key={status}
+                                                >
+                                                    {status}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
                                     </SelectContent>
                                 </Select>
                             )}
                             {catalog === 'contracts' && (
                                 <>
-                                    <div className="w-64">
+                                    <div className="w-full sm:w-64">
                                         <RecordSelect
                                             slug={tenant.slug}
                                             catalog="vendors"
@@ -222,22 +261,25 @@ export default function CatalogPage({
                             </Button>
                         </form>
                         {records.data.length === 0 ? (
-                            <div className="rounded-lg border border-dashed p-10 text-center">
-                                <p className="font-medium">
-                                    Nessun {singular[catalog]} trovato
-                                </p>
-                                <p className="mt-2 text-sm text-muted-foreground">
-                                    Modifica la ricerca oppure aggiungi il primo
-                                    elemento.
-                                </p>
-                                <Button
-                                    variant="outline"
-                                    className="mt-4"
-                                    onClick={() => setSheet({})}
-                                >
-                                    Aggiungi {singular[catalog]}
-                                </Button>
-                            </div>
+                            <Empty className="border">
+                                <EmptyHeader>
+                                    <EmptyTitle>
+                                        Nessun {singular[catalog]} trovato
+                                    </EmptyTitle>
+                                    <EmptyDescription>
+                                        Modifica la ricerca oppure aggiungi il
+                                        primo elemento.
+                                    </EmptyDescription>
+                                </EmptyHeader>
+                                <EmptyContent>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setSheet({})}
+                                    >
+                                        Aggiungi {singular[catalog]}
+                                    </Button>
+                                </EmptyContent>
+                            </Empty>
                         ) : (
                             <Table>
                                 <TableHeader>
@@ -258,13 +300,17 @@ export default function CatalogPage({
                                         <TableHead className="text-right">
                                             Spese collegate
                                         </TableHead>
-                                        <TableHead>Azioni</TableHead>
+                                        <TableHead className="w-12">
+                                            <span className="sr-only">
+                                                Azioni
+                                            </span>
+                                        </TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {records.data.map((record) => (
                                         <TableRow key={record.id}>
-                                            <TableCell className="font-medium">
+                                            <TableCell className="max-w-80 min-w-48 font-medium break-words whitespace-normal">
                                                 <Link
                                                     className="hover:underline"
                                                     href={`${path}/${record.id}`}
@@ -279,7 +325,7 @@ export default function CatalogPage({
                                                             {record.email ??
                                                                 '—'}
                                                         </p>
-                                                        <p className="text-xs text-muted-foreground">
+                                                        <p className="text-sm text-muted-foreground">
                                                             {record.phone ??
                                                                 '—'}
                                                         </p>
@@ -298,7 +344,7 @@ export default function CatalogPage({
                                                                 {record.status}
                                                             </Badge>
                                                         )}
-                                                        <p className="mt-1 text-xs text-muted-foreground">
+                                                        <p className="mt-1 text-sm text-muted-foreground">
                                                             {dateLabel(
                                                                 record.starts_on,
                                                             )}{' '}
@@ -311,7 +357,7 @@ export default function CatalogPage({
                                                 )}
                                             </TableCell>
                                             {catalog === 'contracts' && (
-                                                <TableCell className="text-right text-sm font-medium tabular-nums">
+                                                <TableCell className="text-right text-sm font-medium tracking-normal tabular-nums">
                                                     {money(
                                                         record.reference_amount,
                                                     )}
@@ -321,23 +367,53 @@ export default function CatalogPage({
                                                 {record.expenses_count}
                                             </TableCell>
                                             <TableCell>
-                                                <div className="flex gap-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() =>
-                                                            setSheet({ record })
-                                                        }
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger
+                                                        asChild
                                                     >
-                                                        Modifica
-                                                    </Button>
-                                                    <DeleteRecord
-                                                        url={`${path}/${record.id}`}
-                                                        label={
-                                                            record.name ?? ''
-                                                        }
-                                                    />
-                                                </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            aria-label={`Azioni per ${record.name}`}
+                                                        >
+                                                            <Ellipsis />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuGroup>
+                                                            <DropdownMenuItem
+                                                                asChild
+                                                            >
+                                                                <Link
+                                                                    href={`${path}/${record.id}`}
+                                                                >
+                                                                    Apri
+                                                                    dettaglio
+                                                                </Link>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem
+                                                                onSelect={() =>
+                                                                    setSheet({
+                                                                        record,
+                                                                    })
+                                                                }
+                                                            >
+                                                                Modifica
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                variant="destructive"
+                                                                onSelect={() =>
+                                                                    setDeleting(
+                                                                        record,
+                                                                    )
+                                                                }
+                                                            >
+                                                                Elimina
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuGroup>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -348,6 +424,16 @@ export default function CatalogPage({
                     </CardContent>
                 </Card>
             </div>
+            {deleting && (
+                <DeleteRecord
+                    url={`${path}/${deleting.id}`}
+                    label={deleting.name ?? ''}
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) setDeleting(null);
+                    }}
+                />
+            )}
             {sheet && (
                 <EntitySheet
                     tenant={tenant}

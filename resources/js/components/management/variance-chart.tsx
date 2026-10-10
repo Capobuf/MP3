@@ -80,7 +80,7 @@ export function VarianceChart({
                                     | VarianceRow
                                     | undefined;
                                 return active && row ? (
-                                    <div className="max-w-80 rounded-lg border bg-background p-3 font-sans text-xs tabular-nums shadow-md">
+                                    <div className="chart-tooltip">
                                         <p className="mb-2 font-medium">
                                             {row.title}
                                         </p>
@@ -103,15 +103,17 @@ export function VarianceChart({
                             maxBarSize={24}
                             className="cursor-pointer"
                             onClick={(_row, index) => open(data[index].id)}
-                            isAnimationActive={false}
+                            isAnimationActive="auto"
+                            animationDuration={450}
+                            animationEasing="ease-out"
                         >
                             {data.map((row) => (
                                 <Cell
                                     key={row.id}
                                     fill={
                                         row.value > 0
-                                            ? 'var(--destructive)'
-                                            : 'var(--chart-2)'
+                                            ? 'var(--finance-overrun)'
+                                            : 'var(--finance-saving)'
                                     }
                                 />
                             ))}
@@ -125,7 +127,7 @@ export function VarianceChart({
                         key={row.id}
                         type="button"
                         disabled={disabled}
-                        className="max-w-full truncate text-muted-foreground hover:underline"
+                        className="max-w-full rounded text-left break-words text-primary underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => open(row.id)}
                         title={row.title}
                     >

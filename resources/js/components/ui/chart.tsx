@@ -190,7 +190,7 @@ function ChartTooltipContent({
   return (
     <div
       className={cn(
-        "grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl",
+        "chart-tooltip grid min-w-32 items-start gap-2",
         className
       )}
     >
@@ -252,9 +252,9 @@ function ChartTooltipContent({
                         </span>
                       </div>
                       {item.value != null && (
-                        <span className="font-sans font-medium text-foreground tabular-nums">
+                        <span className="font-sans font-medium tracking-normal text-foreground tabular-nums">
                           {typeof item.value === "number"
-                            ? item.value.toLocaleString()
+                            ? item.value.toLocaleString("it-IT")
                             : String(item.value)}
                         </span>
                       )}
@@ -290,7 +290,7 @@ function ChartLegendContent({
   return (
     <div
       className={cn(
-        "flex items-center justify-center gap-4",
+        "flex flex-wrap items-center justify-center gap-x-4 gap-y-2",
         verticalAlign === "top" ? "pb-3" : "pt-3",
         className
       )}

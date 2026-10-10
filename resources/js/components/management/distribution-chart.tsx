@@ -63,9 +63,9 @@ export function DistributionChart({
                     Nessun importo positivo da rappresentare.
                 </EmptyChart>
             ) : (
-                <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+                <div className="grid min-w-0 grid-cols-1 items-center gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
                     <ChartContainer
-                        className="h-64 w-full"
+                        className="aspect-auto h-64 w-full min-w-0"
                         config={{
                             value: {
                                 label:
@@ -104,7 +104,9 @@ export function DistributionChart({
                                 onClick={(_row, index) =>
                                     select(data[index].id)
                                 }
-                                isAnimationActive={false}
+                                isAnimationActive="auto"
+                                animationDuration={500}
+                                animationEasing="ease-out"
                             >
                                 {data.map((row) => (
                                     <Cell
@@ -120,20 +122,20 @@ export function DistributionChart({
                             </Pie>
                         </PieChart>
                     </ChartContainer>
-                    <dl className="space-y-3 text-xs">
+                    <dl className="flex flex-col gap-3 text-sm">
                         {data.map((row) => (
                             <div
                                 key={row.id}
-                                className="flex items-start justify-between gap-2"
+                                className="flex flex-wrap items-start justify-between gap-2"
                             >
-                                <dt className="flex min-w-0 items-start gap-2">
+                                <dt className="flex min-w-0 flex-1 basis-28 items-start gap-2">
                                     <span
                                         className="mt-0.5 size-2.5 shrink-0 rounded-sm"
                                         style={{ background: row.fill }}
                                     />
                                     <button
                                         type="button"
-                                        className="text-left break-words hover:underline disabled:no-underline"
+                                        className="min-w-0 rounded text-left break-words underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring disabled:no-underline"
                                         disabled={
                                             !onSelect || row.id === 'others'
                                         }
@@ -142,7 +144,7 @@ export function DistributionChart({
                                         {row.name}
                                     </button>
                                 </dt>
-                                <dd className="shrink-0 text-right">
+                                <dd className="shrink-0 text-right financial-value">
                                     {money(row.value)}
                                     <br />
                                     <span className="text-muted-foreground">
@@ -156,7 +158,7 @@ export function DistributionChart({
                     </dl>
                 </div>
             )}
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-sm text-muted-foreground">
                 Denominatore: {money(values[key])} di importi positivi.
                 {vendorConcentration && total > 0 && (
                     <>

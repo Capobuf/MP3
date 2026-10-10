@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { Sankey } from 'recharts';
 import type { SankeyNodeProps } from 'recharts';
@@ -5,6 +6,7 @@ import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
@@ -127,8 +129,14 @@ export function ExpenseSankey({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="projects">Progetti</SelectItem>
-                            <SelectItem value="contracts">Contratti</SelectItem>
+                            <SelectGroup>
+                                <SelectItem value="projects">
+                                    Progetti
+                                </SelectItem>
+                                <SelectItem value="contracts">
+                                    Contratti
+                                </SelectItem>
+                            </SelectGroup>
                         </SelectContent>
                     </Select>
                 </div>
@@ -180,7 +188,7 @@ export function ExpenseSankey({
                                         | undefined;
                                     const flow = item?.payload;
                                     return active && flow ? (
-                                        <div className="max-w-80 rounded-lg border bg-background p-3 font-sans text-xs tabular-nums shadow-md">
+                                        <div className="chart-tooltip">
                                             <p className="mb-1 font-medium">
                                                 {flow.source && flow.target
                                                     ? `${flow.source.name} → ${flow.target.name}`
@@ -195,8 +203,32 @@ export function ExpenseSankey({
                     </ChartContainer>
                 </div>
             )}
+            <div
+                className="mt-4 flex flex-wrap gap-2"
+                aria-label="Filtra i flussi per record"
+            >
+                {data.nodes
+                    .filter((node) => node.field && node.id !== 'others')
+                    .map((node) => (
+                        <Button
+                            key={node.key}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-auto min-h-8 max-w-full whitespace-normal"
+                            onClick={() => select(node)}
+                        >
+                            {node.field === 'vendor_id'
+                                ? 'Fornitore'
+                                : node.field === 'project_id'
+                                  ? 'Progetto'
+                                  : 'Contratto'}
+                            : {node.name}
+                        </Button>
+                    ))}
+            </div>
             <Reconciliation values={analytics.current} metric={metric} />
-            <p className="mt-3 text-xs text-muted-foreground">
+            <p className="mt-3 text-sm text-muted-foreground">
                 Totale netto = positivi − valore assoluto delle rettifiche.
                 “Altri” raggruppa oltre i sei principali fornitori e
                 destinazioni; i gruppi senza associazione restano distinti.

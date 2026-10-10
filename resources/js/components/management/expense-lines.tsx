@@ -2,6 +2,10 @@ import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    NativeSelect,
+    NativeSelectOption,
+} from '@/components/ui/native-select';
 import { Input } from '@/components/ui/input';
 import {
     Table,
@@ -153,7 +157,7 @@ export function ExpenseLines({
     const format = (cents: bigint) => money(Number(cents) / 100);
     return (
         <section
-            className="min-w-0 space-y-3"
+            className="flex min-w-0 flex-col gap-3"
             aria-label="Righe economiche della spesa"
         >
             <div className="flex flex-wrap items-center gap-2">
@@ -179,17 +183,22 @@ export function ExpenseLines({
                     disabled={disabled}
                     className="min-w-40 flex-1"
                 />
-                <select
+                <NativeSelect
                     aria-label="Filtra righe per tipo"
-                    className="h-9 rounded-md border bg-background px-3 text-sm"
                     value={filter}
                     disabled={disabled}
                     onChange={(event) => setFilter(event.target.value)}
                 >
-                    <option value="all">Tutti i tipi</option>
-                    <option value="allocated">Allocati</option>
-                    <option value="actual">Effettivi</option>
-                </select>
+                    <NativeSelectOption value="all">
+                        Tutti i tipi
+                    </NativeSelectOption>
+                    <NativeSelectOption value="allocated">
+                        Allocati
+                    </NativeSelectOption>
+                    <NativeSelectOption value="actual">
+                        Effettivi
+                    </NativeSelectOption>
+                </NativeSelect>
                 {filtered && (
                     <Button
                         type="button"
@@ -201,7 +210,7 @@ export function ExpenseLines({
                     </Button>
                 )}
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
                 {visible.length} di {lines.length} righe.{' '}
                 {!readOnly &&
                     'Modifica i campi direttamente nella tabella e usa le frecce per riordinare. Le modifiche saranno salvate con la spesa.'}
@@ -215,13 +224,13 @@ export function ExpenseLines({
                 Object.keys(errors).some((key) => key.startsWith('lines.')) && (
                     <p role="alert" className="text-sm text-destructive">
                         Ci sono righe da correggere.{' '}
-                        <button
+                        <Button
                             type="button"
-                            className="underline"
+                            variant="link"
                             onClick={resetFilters}
                         >
                             Mostra tutte le righe
-                        </button>
+                        </Button>
                     </p>
                 )}
             {!readOnly && selectedLines.length > 0 && (
@@ -301,7 +310,7 @@ export function ExpenseLines({
                     </Button>
                 </div>
             )}
-            <div className="overflow-hidden rounded-md border">
+            <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -424,7 +433,6 @@ export function ExpenseLines({
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="size-7"
                                                     aria-label={`Sposta su ${label}`}
                                                     disabled={
                                                         disabled ||
@@ -435,13 +443,12 @@ export function ExpenseLines({
                                                         move(index, -1)
                                                     }
                                                 >
-                                                    <ArrowUp className="size-3" />
+                                                    <ArrowUp />
                                                 </Button>
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="size-7"
                                                     aria-label={`Sposta giù ${label}`}
                                                     disabled={
                                                         disabled ||
@@ -453,7 +460,7 @@ export function ExpenseLines({
                                                         move(index, 1)
                                                     }
                                                 >
-                                                    <ArrowDown className="size-3" />
+                                                    <ArrowDown />
                                                 </Button>
                                             </div>
                                         </TableCell>
@@ -496,13 +503,13 @@ export function ExpenseLines({
                                         {fieldError('description') && (
                                             <p
                                                 role="alert"
-                                                className="mt-1 text-xs text-destructive"
+                                                className="mt-1 text-sm text-destructive"
                                             >
                                                 {fieldError('description')}
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell className="min-w-32">
                                         {readOnly ? (
                                             line.type === 'allocated' ? (
                                                 'Allocato'
@@ -510,9 +517,11 @@ export function ExpenseLines({
                                                 'Effettivo'
                                             )
                                         ) : (
-                                            <select
+                                            <NativeSelect
                                                 aria-label={`Tipo ${label}`}
-                                                className="h-9 rounded-md border bg-background px-2 text-sm"
+                                                aria-invalid={
+                                                    !!fieldError('type')
+                                                }
                                                 value={line.type}
                                                 disabled={disabled}
                                                 onChange={(event) =>
@@ -522,24 +531,24 @@ export function ExpenseLines({
                                                     })
                                                 }
                                             >
-                                                <option value="allocated">
+                                                <NativeSelectOption value="allocated">
                                                     Allocato
-                                                </option>
-                                                <option value="actual">
+                                                </NativeSelectOption>
+                                                <NativeSelectOption value="actual">
                                                     Effettivo
-                                                </option>
-                                            </select>
+                                                </NativeSelectOption>
+                                            </NativeSelect>
                                         )}
                                         {fieldError('type') && (
                                             <p
                                                 role="alert"
-                                                className="text-xs text-destructive"
+                                                className="text-sm text-destructive"
                                             >
                                                 {fieldError('type')}
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="min-w-36 text-right">
+                                    <TableCell className="min-w-44 text-right font-medium tracking-normal tabular-nums">
                                         {readOnly ? (
                                             money(line.unit_price)
                                         ) : (
@@ -549,7 +558,7 @@ export function ExpenseLines({
                                                     !!fieldError('unit_price')
                                                 }
                                                 inputMode="decimal"
-                                                className="text-right tabular-nums"
+                                                className="text-right font-medium tracking-normal tabular-nums"
                                                 value={line.unit_price}
                                                 disabled={disabled}
                                                 placeholder="0,00"
@@ -564,13 +573,13 @@ export function ExpenseLines({
                                         {fieldError('unit_price') && (
                                             <p
                                                 role="alert"
-                                                className="mt-1 text-xs text-destructive"
+                                                className="mt-1 text-sm text-destructive"
                                             >
                                                 {fieldError('unit_price')}
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="min-w-24 text-right">
+                                    <TableCell className="min-w-32 text-right font-medium tracking-normal tabular-nums">
                                         {readOnly ? (
                                             Number(
                                                 line.quantity,
@@ -584,7 +593,7 @@ export function ExpenseLines({
                                                     !!fieldError('quantity')
                                                 }
                                                 inputMode="decimal"
-                                                className="text-right tabular-nums"
+                                                className="text-right font-medium tracking-normal tabular-nums"
                                                 value={line.quantity}
                                                 disabled={disabled}
                                                 onChange={(event) =>
@@ -598,13 +607,13 @@ export function ExpenseLines({
                                         {fieldError('quantity') && (
                                             <p
                                                 role="alert"
-                                                className="mt-1 text-xs text-destructive"
+                                                className="mt-1 text-sm text-destructive"
                                             >
                                                 {fieldError('quantity')}
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-right font-medium tabular-nums">
+                                    <TableCell className="text-right font-medium tracking-normal tabular-nums">
                                         <output aria-label={`Totale ${label}`}>
                                             {cents === null
                                                 ? 'Da completare'
@@ -618,7 +627,6 @@ export function ExpenseLines({
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="size-7"
                                                     aria-label={`Duplica ${label}`}
                                                     disabled={
                                                         disabled ||
@@ -628,20 +636,19 @@ export function ExpenseLines({
                                                         duplicate([line.key])
                                                     }
                                                 >
-                                                    <Copy className="size-3" />
+                                                    <Copy />
                                                 </Button>
                                                 <Button
                                                     type="button"
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="size-7"
                                                     aria-label={`Elimina ${label}`}
                                                     disabled={disabled}
                                                     onClick={() =>
                                                         remove([line.key])
                                                     }
                                                 >
-                                                    <Trash2 className="size-3" />
+                                                    <Trash2 />
                                                 </Button>
                                             </div>
                                         </TableCell>
@@ -653,7 +660,7 @@ export function ExpenseLines({
                 </Table>
             </div>
             {filtered && !readOnly && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                     Azzera i filtri per riordinare le righe.
                 </p>
             )}
@@ -672,10 +679,10 @@ export function ExpenseLines({
                     ] as const
                 ).map(([label, value]) => (
                     <div key={label}>
-                        <dt className="text-xs text-muted-foreground">
+                        <dt className="text-sm text-muted-foreground">
                             {label}
                         </dt>
-                        <dd className="mt-1 text-right font-semibold tabular-nums">
+                        <dd className="mt-1 font-semibold tracking-normal break-words tabular-nums">
                             {incomplete ? 'Da completare' : format(value)}
                         </dd>
                     </div>
