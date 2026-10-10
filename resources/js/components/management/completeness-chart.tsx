@@ -64,20 +64,21 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                                     />
                                 }
                             />
-                            {rows.map((row) => (
+                            {rows.map((row, index) => (
                                 <Bar
                                     key={row.id}
                                     dataKey={row.id}
                                     stackId="complete"
                                     fill={`var(--color-${row.id})`}
                                     isAnimationActive="auto"
-                                    animationDuration={450}
-                                    animationEasing="ease-out"
+                                    animationBegin={60 + index * 60}
+                                    animationDuration={650}
+                                    animationEasing="cubic-bezier(0.22,1,0.36,1)"
                                 />
                             ))}
                         </BarChart>
                     </ChartContainer>
-                    <dl className="mt-5 space-y-4 text-sm">
+                    <dl className="mt-5 flex flex-col gap-4 text-sm">
                         {rows.map((row, index) => (
                             <div
                                 key={row.id}

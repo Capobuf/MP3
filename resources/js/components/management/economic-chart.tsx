@@ -132,8 +132,9 @@ export function EconomicChart({
                                     select(data[index].id)
                                 }
                                 isAnimationActive="auto"
-                                animationDuration={450}
-                                animationEasing="ease-out"
+                                animationBegin={key === 'allocated' ? 60 : 140}
+                                animationDuration={650}
+                                animationEasing="cubic-bezier(0.22,1,0.36,1)"
                             />
                         ))}
                     </BarChart>

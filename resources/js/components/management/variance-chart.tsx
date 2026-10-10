@@ -31,8 +31,11 @@ export function VarianceChart({
     return (
         <AnalyticsCard
             title="Principali sforamenti e risparmi"
-            description="Cinque maggiori sforamenti e cinque maggiori risparmi. Effettivo − allocato sulle sole spese con entrambi gli importi. Clic per aprire il dettaglio."
+            description="Cinque maggiori sforamenti e risparmi. Seleziona una spesa per aprirla."
         >
+            <p className="mb-3 text-sm text-muted-foreground">
+                Effettivo − allocato sulle sole spese con entrambi gli importi.
+            </p>
             {data.length === 0 ? (
                 <EmptyChart>
                     Nessuno scostamento non nullo confrontabile.
@@ -104,8 +107,9 @@ export function VarianceChart({
                             className="cursor-pointer"
                             onClick={(_row, index) => open(data[index].id)}
                             isAnimationActive="auto"
-                            animationDuration={450}
-                            animationEasing="ease-out"
+                            animationBegin={60}
+                            animationDuration={650}
+                            animationEasing="cubic-bezier(0.22,1,0.36,1)"
                         >
                             {data.map((row) => (
                                 <Cell

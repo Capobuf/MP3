@@ -1,15 +1,55 @@
-import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import {
     Card,
-    CardContent,
-    CardHeader,
+    CardAction,
     CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from '@/components/ui/card';
-import type { ExpenseAnalytics } from './analytics-types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { percent } from './analytics-helpers';
+import type { ExpenseAnalytics } from './analytics-types';
 import { money } from './helpers';
+
+const signedNumber = new Intl.NumberFormat('it-IT', {
+    maximumFractionDigits: 1,
+    signDisplay: 'exceptZero',
+});
+
+function ComparisonBadge({
+    difference,
+    label,
+    year,
+}: {
+    difference: number;
+    label: string;
+    year: number;
+}) {
+    const Icon =
+        difference > 0 ? ArrowUpRight : difference < 0 ? ArrowDownRight : Minus;
+    const direction =
+        difference > 0
+            ? 'In aumento'
+            : difference < 0
+              ? 'In diminuzione'
+              : 'Invariato';
+    return (
+        <CardAction className="row-span-1">
+            <Badge
+                variant="outline"
+                className="rounded-full financial-value"
+                aria-label={`${direction}: ${label} rispetto al ${year}`}
+                title={`Rispetto al ${year}`}
+            >
+                <Icon aria-hidden="true" />
+                {label}
+            </Badge>
+        </CardAction>
+    );
+}
 
 export function DashboardSummary({
     analytics,
@@ -21,148 +61,118 @@ export function DashboardSummary({
     loading?: boolean;
 }) {
     const { current, previous, comparisons } = analytics;
+    const previousYear = previous?.year ?? year - 1;
+    const complete = current.count - current.incomplete;
+    const points = comparisons.completeness.points;
     return (
-        <div className="flex flex-col gap-3">
-            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+        <div className="@container/summary flex flex-col gap-3">
+            <div className="summary-grid @md/summary:grid-cols-2 @5xl/summary:grid-cols-4">
                 {(['allocated', 'actual', 'variance'] as const).map(
-                    (metric) => (
-                        <Card key={metric} className="min-w-0 gap-3">
-                            <CardHeader className="px-5">
-                                <CardDescription>
-                                    {
+                    (metric) => {
+                        const comparison = comparisons[metric];
+                        const comparable =
+                            !!previous && comparison.difference !== null;
+                        const badge =
+                            metric === 'variance' ||
+                            comparison.percentage === null
+                                ? money(comparison.difference)
+                                : `${signedNumber.format(comparison.percentage)}%`;
+                        return (
+                            <Card
+                                key={metric}
+                                className="@container/card min-w-0"
+                            >
+                                <CardHeader>
+                                    <CardDescription className="min-w-0">
                                         {
-                                            allocated: 'Totale allocato',
-                                            actual: 'Totale effettivo',
-                                            variance:
-                                                'Scostamento confrontabile',
-                                        }[metric]
-                                    }
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="px-5 font-sans tracking-normal tabular-nums">
-                                <div
-                                    className={cn(
-                                        'text-2xl font-semibold tracking-normal break-words',
-                                        metric === 'variance' &&
-                                            (Number(current.variance) > 0
-                                                ? 'text-finance-overrun'
-                                                : Number(current.variance) < 0
-                                                  ? 'text-finance-saving'
-                                                  : ''),
-                                    )}
-                                >
-                                    {loading ? (
-                                        <Skeleton className="h-8 w-3/4" />
-                                    ) : current[metric] === null ? (
-                                        '—'
-                                    ) : (
-                                        money(current[metric])
-                                    )}
-                                </div>
-                                <p className="mt-3 flex items-start gap-1.5 text-sm text-muted-foreground">
-                                    {previous &&
-                                        comparisons[metric].difference !==
-                                            null &&
-                                        (Number(
-                                            comparisons[metric].difference,
-                                        ) > 0 ? (
-                                            <ArrowUpRight
-                                                className="mt-0.5 size-4 shrink-0"
-                                                aria-label="In aumento"
-                                            />
-                                        ) : Number(
-                                              comparisons[metric].difference,
-                                          ) < 0 ? (
-                                            <ArrowDownRight
-                                                className="mt-0.5 size-4 shrink-0"
-                                                aria-label="In diminuzione"
-                                            />
-                                        ) : (
-                                            <Minus
-                                                className="mt-0.5 size-4 shrink-0"
-                                                aria-label="Invariato"
-                                            />
-                                        ))}
-                                    <span>
-                                        {!previous ? (
-                                            'Nessun dato di confronto'
-                                        ) : comparisons[metric].difference ===
-                                          null ? (
-                                            `Importi non disponibili per il confronto con ${year - 1}`
-                                        ) : (
-                                            <>
-                                                {money(
-                                                    comparisons[metric]
-                                                        .difference,
-                                                )}{' '}
-                                                {metric === 'variance'
-                                                    ? `di differenza sullo scostamento ${year - 1}`
-                                                    : `· ${percent(comparisons[metric].percentage)} rispetto al ${year - 1}`}
-                                            </>
+                                            {
+                                                allocated: 'Totale allocato',
+                                                actual: 'Totale effettivo',
+                                                variance:
+                                                    'Scostamento confrontabile',
+                                            }[metric]
+                                        }
+                                    </CardDescription>
+                                    <CardTitle
+                                        className={cn(
+                                            'summary-value',
+                                            metric === 'variance' &&
+                                                (Number(current.variance) > 0
+                                                    ? 'text-finance-overrun'
+                                                    : Number(current.variance) <
+                                                        0
+                                                      ? 'text-finance-saving'
+                                                      : ''),
                                         )}
-                                    </span>
-                                </p>
-                                {metric !== 'variance' && (
-                                    <p className="mt-2 text-sm text-muted-foreground">
+                                    >
+                                        {loading ? (
+                                            <Skeleton className="skeleton-shimmer h-8 w-3/4" />
+                                        ) : current[metric] === null ? (
+                                            '—'
+                                        ) : (
+                                            money(current[metric])
+                                        )}
+                                    </CardTitle>
+                                    {!loading && comparable && (
+                                        <ComparisonBadge
+                                            difference={Number(
+                                                comparison.difference,
+                                            )}
+                                            label={badge}
+                                            year={previousYear}
+                                        />
+                                    )}
+                                </CardHeader>
+                                <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
+                                    <div className="font-medium">
+                                        {comparable
+                                            ? `${money(comparison.difference)} ${metric === 'variance' ? 'di differenza sullo scostamento' : 'rispetto al'} ${previousYear}`
+                                            : previous
+                                              ? `Confronto con ${previousYear} non disponibile`
+                                              : 'Nessun dato di confronto'}
+                                    </div>
+                                    <div className="text-muted-foreground">
                                         {metric === 'allocated'
                                             ? 'Importi previsti presenti'
-                                            : 'Costi reali registrati'}
-                                    </p>
-                                )}
-                                {metric === 'variance' && (
-                                    <p className="mt-2 text-sm text-muted-foreground">
-                                        {current.count - current.incomplete}{' '}
-                                        spese confrontabili
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ),
+                                            : metric === 'actual'
+                                              ? 'Costi reali registrati'
+                                              : `${complete} spese con entrambi gli importi`}
+                                    </div>
+                                </CardFooter>
+                            </Card>
+                        );
+                    },
                 )}
-                <Card className="min-w-0 gap-3">
-                    <CardHeader className="px-5">
+                <Card className="@container/card min-w-0">
+                    <CardHeader>
                         <CardDescription>
                             Completezza delle spese
                         </CardDescription>
-                    </CardHeader>
-                    <CardContent className="px-5 font-sans tracking-normal tabular-nums">
-                        <div className="text-2xl font-semibold tracking-normal">
+                        <CardTitle className="summary-value">
                             {loading ? (
-                                <Skeleton className="h-8 w-24" />
+                                <Skeleton className="skeleton-shimmer h-8 w-24" />
                             ) : (
                                 percent(current.complete_percentage)
                             )}
+                        </CardTitle>
+                        {!loading && previous && points !== null && (
+                            <ComparisonBadge
+                                difference={points}
+                                label={`${signedNumber.format(points)} pp`}
+                                year={previousYear}
+                            />
+                        )}
+                    </CardHeader>
+                    <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
+                        <div className="font-medium">
+                            {complete}/{current.count} spese complete
                         </div>
-                        <p className="mt-3 flex items-start gap-1.5 text-sm text-muted-foreground">
-                            {previous &&
-                                comparisons.completeness.points !== null &&
-                                (comparisons.completeness.points > 0 ? (
-                                    <ArrowUpRight
-                                        className="mt-0.5 size-4 shrink-0"
-                                        aria-label="In aumento"
-                                    />
-                                ) : comparisons.completeness.points < 0 ? (
-                                    <ArrowDownRight
-                                        className="mt-0.5 size-4 shrink-0"
-                                        aria-label="In diminuzione"
-                                    />
-                                ) : (
-                                    <Minus
-                                        className="mt-0.5 size-4 shrink-0"
-                                        aria-label="Invariato"
-                                    />
-                                ))}
-                            <span>
-                                {previous
-                                    ? `${comparisons.completeness.points === null ? '—' : new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1, signDisplay: 'exceptZero' }).format(comparisons.completeness.points)} punti percentuali rispetto al ${year - 1}`
-                                    : 'Nessun dato di confronto'}
-                            </span>
-                        </p>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            {current.count - current.incomplete}/{current.count}{' '}
-                            con entrambi gli importi
-                        </p>
-                    </CardContent>
+                        <div className="text-muted-foreground">
+                            {previous && points !== null
+                                ? `${signedNumber.format(points)} punti percentuali rispetto al ${previousYear}`
+                                : 'Confronto annuale non disponibile'}
+                        </div>
+                    </CardFooter>
                 </Card>
             </div>
             <p className="text-sm text-muted-foreground">

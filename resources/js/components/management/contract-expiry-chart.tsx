@@ -21,7 +21,7 @@ export function ContractExpiryChart({
     return (
         <AnalyticsCard
             title="Scadenze contrattuali"
-            description={`Inventario di tutti i contratti del tenant, indipendente da anno e filtri economici. Data server: ${dateLabel(expiry.asOf)}.`}
+            description={`Tutti i contratti, indipendentemente dai filtri economici. Al ${dateLabel(expiry.asOf)}.`}
         >
             {count === 0 ? (
                 <EmptyChart>
@@ -55,8 +55,9 @@ export function ContractExpiryChart({
                             dataKey="count"
                             radius={3}
                             isAnimationActive="auto"
-                            animationDuration={450}
-                            animationEasing="ease-out"
+                            animationBegin={60}
+                            animationDuration={650}
+                            animationEasing="cubic-bezier(0.22,1,0.36,1)"
                         >
                             {expiry.groups.map((row) => (
                                 <Cell

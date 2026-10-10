@@ -44,7 +44,7 @@ export default function TenantDashboard(
         <>
             <Head title={`Panoramica economica · ${tenant.name}`} />
             <div
-                className="page-shell"
+                className="page-shell dashboard-enter"
                 aria-busy={refresh.pending || tableBusy}
                 onClickCapture={(event) => {
                     if (

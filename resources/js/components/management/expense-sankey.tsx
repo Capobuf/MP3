@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { Sankey } from 'recharts';
-import type { SankeyNodeProps } from 'recharts';
+import type { SankeyLinkProps, SankeyNodeProps } from 'recharts';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import {
     Select,
@@ -38,6 +38,7 @@ export function ExpenseSankey({
     const [destination, setDestination] = useState<'projects' | 'contracts'>(
         'projects',
     );
+    const [hoveredKey, setHoveredKey] = useState<string | null>(null);
     const field = destination === 'projects' ? 'project_id' : 'contract_id';
     const data = buildSankey(
         analytics.pairs[destination],
@@ -46,6 +47,7 @@ export function ExpenseSankey({
         metric,
         field,
     );
+    const activeKey = data.nodes.find((node) => node.key === hoveredKey)?.key;
     const select = (node: SankeyNode) => {
         if (node.field && node.id !== undefined && node.id !== 'others')
             onSelect(node.field, node.id);
@@ -71,6 +73,10 @@ export function ExpenseSankey({
                         ? 'cursor-pointer outline-none focus:opacity-70'
                         : ''
                 }
+                onMouseEnter={() => setHoveredKey(node.key)}
+                onMouseLeave={() => setHoveredKey(null)}
+                onFocus={() => setHoveredKey(node.key)}
+                onBlur={() => setHoveredKey(null)}
                 onClick={() => select(node)}
                 onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
@@ -93,6 +99,12 @@ export function ExpenseSankey({
                             : 'var(--chart-1)'
                     }
                     rx={3}
+                    stroke={
+                        activeKey === node.key ? 'var(--ring)' : 'transparent'
+                    }
+                    strokeWidth={2}
+                    opacity={activeKey && activeKey !== node.key ? 0.7 : 1}
+                    className="transition-[opacity,stroke] duration-200 motion-reduce:transition-none"
                 />
                 <text
                     x={target ? x - 8 : x + width + 8}
@@ -109,18 +121,51 @@ export function ExpenseSankey({
             </g>
         );
     };
+    const renderLink = ({
+        sourceX,
+        sourceY,
+        sourceControlX,
+        targetX,
+        targetY,
+        targetControlX,
+        linkWidth,
+        index,
+    }: SankeyLinkProps) => (
+        <path
+            className="recharts-sankey-link transition-[stroke-opacity] duration-200 motion-reduce:transition-none"
+            d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
+            fill="none"
+            stroke="var(--chart-1)"
+            strokeWidth={linkWidth}
+            strokeOpacity={
+                activeKey
+                    ? data.nodes[data.links[index].source].key === activeKey ||
+                      data.nodes[data.links[index].target].key === activeKey
+                        ? 0.5
+                        : 0.08
+                    : 0.25
+            }
+        />
+    );
     return (
         <AnalyticsCard
             title="Flussi economici"
-            description={`Spese → Fornitori → ${destination === 'projects' ? 'Progetti' : 'Contratti'}. Volume positivo lordo; ogni spesa contribuisce una volta per livello. Clic sui nodi per filtrare.`}
+            description={`Spese → Fornitori → ${destination === 'projects' ? 'Progetti' : 'Contratti'}. Seleziona un nodo per filtrare.`}
             controls={
                 <div className="flex flex-wrap gap-2">
-                    <MetricSelect value={metric} onChange={setMetric} />
+                    <MetricSelect
+                        value={metric}
+                        onChange={(value) => {
+                            setHoveredKey(null);
+                            setMetric(value);
+                        }}
+                    />
                     <Select
                         value={destination}
-                        onValueChange={(value) =>
-                            setDestination(value as 'projects' | 'contracts')
-                        }
+                        onValueChange={(value) => {
+                            setHoveredKey(null);
+                            setDestination(value as 'projects' | 'contracts');
+                        }}
                     >
                         <SelectTrigger
                             className="w-32"
@@ -158,7 +203,6 @@ export function ExpenseSankey({
                         }}
                     >
                         <Sankey
-                            key={`${metric}:${destination}`}
                             data={data}
                             node={renderNode}
                             nodeWidth={14}
@@ -169,10 +213,7 @@ export function ExpenseSankey({
                                 left: 12,
                                 right: 12,
                             }}
-                            link={{
-                                stroke: 'var(--chart-1)',
-                                strokeOpacity: 0.25,
-                            }}
+                            link={renderLink}
                         >
                             <ChartTooltip
                                 content={({ active, payload }) => {
@@ -229,8 +270,9 @@ export function ExpenseSankey({
             </div>
             <Reconciliation values={analytics.current} metric={metric} />
             <p className="mt-3 text-sm text-muted-foreground">
-                Totale netto = positivi − valore assoluto delle rettifiche.
-                “Altri” raggruppa oltre i sei principali fornitori e
+                Volume positivo lordo: ogni spesa contribuisce una volta per
+                livello. Totale netto = positivi − valore assoluto delle
+                rettifiche. “Altri” raggruppa oltre i sei principali fornitori e
                 destinazioni; i gruppi senza associazione restano distinti.
             </p>
         </AnalyticsCard>

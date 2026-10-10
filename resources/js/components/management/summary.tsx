@@ -1,42 +1,45 @@
-import { cn } from '@/lib/utils';
 import {
     Card,
-    CardContent,
-    CardHeader,
     CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
 } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { money } from './helpers';
 import type { Totals } from './types';
 
 export function Summary({ totals }: { totals: Totals }) {
     return (
-        <div className="flex flex-col gap-3">
-            <div className="grid gap-4 md:grid-cols-3">
+        <div className="@container/summary flex flex-col gap-3">
+            <div className="summary-grid @md/summary:grid-cols-2 @4xl/summary:grid-cols-3">
                 {[
                     {
                         label: 'Totale allocato',
                         value: totals.allocated,
                         hint: 'Importi previsti presenti',
+                        context: 'Budget delle spese nel perimetro',
                     },
                     {
                         label: 'Totale effettivo',
                         value: totals.actual,
                         hint: 'Costi reali registrati',
+                        context: 'Importi effettivi presenti nel perimetro',
                     },
                     {
                         label: 'Scostamento confrontabile',
                         value: totals.variance,
                         hint: `${totals.count - totals.incomplete} spese con entrambi gli importi`,
+                        context:
+                            'Effettivo meno allocato sulle spese confrontabili',
                     },
                 ].map((item) => (
-                    <Card key={item.label} className="min-w-0 gap-3">
-                        <CardHeader className="px-5">
+                    <Card key={item.label} className="@container/card min-w-0">
+                        <CardHeader>
                             <CardDescription>{item.label}</CardDescription>
-                        </CardHeader>
-                        <CardContent className="px-5">
-                            <p
+                            <CardTitle
                                 className={cn(
-                                    'text-2xl font-semibold tracking-normal break-words tabular-nums',
+                                    'summary-value',
                                     item.label.startsWith('Scostamento') &&
                                         (Number(item.value) > 0
                                             ? 'text-finance-overrun'
@@ -46,11 +49,14 @@ export function Summary({ totals }: { totals: Totals }) {
                                 )}
                             >
                                 {money(item.value)}
-                            </p>
-                            <p className="mt-3 text-sm text-muted-foreground">
-                                {item.hint}
-                            </p>
-                        </CardContent>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
+                            <div className="font-medium">{item.hint}</div>
+                            <div className="text-muted-foreground">
+                                {item.context}
+                            </div>
+                        </CardFooter>
                     </Card>
                 ))}
             </div>

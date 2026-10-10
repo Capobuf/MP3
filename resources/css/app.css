@@ -7,11 +7,27 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme {
-    --font-sans:
-        'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
-        'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+@theme inline {
+    --font-sans: var(--theme-font-sans);
+    --font-serif: var(--theme-font-serif);
+    --font-mono: var(--theme-font-mono);
+    --spacing: var(--theme-spacing);
+    --tracking-normal: var(--theme-tracking-normal);
 
+    --shadow-2xs: var(--theme-shadow-2xs);
+    --shadow-xs: var(--theme-shadow-xs);
+    --shadow-sm: var(--theme-shadow-sm);
+    --shadow-md: var(--theme-shadow-md);
+    --shadow-lg: var(--theme-shadow-lg);
+    --shadow-xl: var(--theme-shadow-xl);
+    --shadow-2xl: var(--theme-shadow-2xl);
+    --shadow: var(--theme-shadow);
+    --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+    --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+    --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+    --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+    --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+    --radius-xl: calc(var(--radius) + 4px);
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
@@ -63,78 +79,109 @@
     --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* TweakCN: The Uncs — https://tweakcn.com/r/themes/cmuvc5plj000304l5eg7u45qf */
 :root {
-    --background: #f7f9fc;
-    --foreground: #172033;
-    --card: #ffffff;
-    --card-foreground: #172033;
-    --popover: #ffffff;
-    --popover-foreground: #172033;
-    --primary: #3455cb;
-    --primary-foreground: #ffffff;
-    --secondary: #ecf1fa;
-    --secondary-foreground: #1d3356;
-    --muted: #f0f3f8;
-    --muted-foreground: #5f6b7d;
-    --accent: #ebf0fe;
-    --accent-foreground: #2449a4;
-    --destructive: #c9344a;
-    --destructive-foreground: #ffffff;
-    --border: #e1e7f0;
-    --input: #d5deeb;
-    --ring: #5673e9;
-    --chart-1: #2964be;
-    --chart-2: #237f80;
-    --chart-3: #9b6db9;
-    --chart-4: #d27c47;
-    --chart-5: #3e9d6d;
-    --sidebar: #f2f5fa;
-    --sidebar-foreground: #223047;
-    --sidebar-primary: #3455cb;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #e6ecfa;
-    --sidebar-accent-foreground: #2449a4;
-    --sidebar-border: #dfe5ef;
-    --sidebar-ring: #5673e9;
-    --finance-overrun: #c44c50;
+    color-scheme: light;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.81 0.1 252);
+    --chart-2: oklch(0.62 0.19 260);
+    --chart-3: oklch(0.55 0.22 263);
+    --chart-4: oklch(0.49 0.22 264);
+    --chart-5: oklch(0.42 0.18 266);
+    --radius: 0.5rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+    --theme-font-sans:
+        ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+        Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+        'Noto Color Emoji';
+    --theme-font-serif:
+        ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+    --theme-font-mono:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        'Liberation Mono', 'Courier New', monospace;
+    --letter-spacing: 0em;
+    --theme-spacing: 0.25rem;
+    --theme-shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --theme-shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --theme-shadow-sm:
+        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --theme-shadow:
+        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
+    --theme-shadow-md:
+        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
+    --theme-shadow-lg:
+        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+    --theme-shadow-xl:
+        0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
+    --theme-shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+    --theme-tracking-normal: 0em;
+    /* Economic meaning is independent of the chart palette. */
+    --finance-overrun: var(--destructive);
     --finance-saving: #13756b;
-    --radius: 0.75rem;
 }
 
 .dark {
-    --background: #0d1423;
-    --foreground: #eef2fb;
-    --card: #151f31;
-    --card-foreground: #eef2fb;
-    --popover: #19263b;
-    --popover-foreground: #eef2fb;
-    --primary: #8aa2ff;
-    --primary-foreground: #0e1626;
-    --secondary: #202d43;
-    --secondary-foreground: #e7ecf8;
-    --muted: #202c42;
-    --muted-foreground: #a6b2c5;
-    --accent: #283b5e;
-    --accent-foreground: #eaf0ff;
-    --destructive: #ff758a;
-    --destructive-foreground: #201018;
-    --border: #2d3a50;
-    --input: #35435b;
-    --ring: #8aa2ff;
-    --chart-1: #8aa2ff;
-    --chart-2: #64cbc2;
-    --chart-3: #bea5f8;
-    --chart-4: #f2b86b;
-    --chart-5: #7fd8a0;
-    --sidebar: #111b2d;
-    --sidebar-foreground: #dae2f0;
-    --sidebar-primary: #8aa2ff;
-    --sidebar-primary-foreground: #0d1423;
-    --sidebar-accent: #263653;
-    --sidebar-accent-foreground: #eff3fb;
-    --sidebar-border: #2b3952;
-    --sidebar-ring: #8aa2ff;
-    --finance-overrun: #ff758a;
+    color-scheme: dark;
+    --background: oklch(0.215 0.005 219.7018);
+    --foreground: oklch(0.9476 0.0253 86.8708);
+    --card: oklch(0.2576 0.0048 219.6571);
+    --card-foreground: oklch(0.9476 0.0253 86.8708);
+    --popover: oklch(0.2441 0.0062 214.4126);
+    --popover-foreground: oklch(0.9476 0.0253 86.8708);
+    --primary: oklch(0.6992 0.159 48.4435);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.3227 0.0097 207.0631);
+    --secondary-foreground: oklch(0.9476 0.0253 86.8708);
+    --muted: oklch(0.3491 0.0109 205.7856);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.3491 0.0109 205.7856);
+    --accent-foreground: oklch(0.9476 0.0253 86.8708);
+    --destructive: oklch(0.6729 0.2152 29.8598);
+    --destructive-foreground: oklch(0.9476 0.0253 86.8708);
+    --border: oklch(0.3185 0.0046 219.6186);
+    --input: oklch(0.1591 0 0);
+    --ring: oklch(0.6921 0.1763 49.7619);
+    --chart-1: oklch(0.7751 0.1286 56.0062);
+    --chart-2: oklch(0.6753 0.0668 122.8535);
+    --chart-3: oklch(0.5197 0.0437 114.32);
+    --chart-4: oklch(0.8509 0.0818 56.703);
+    --chart-5: oklch(0.7177 0.1631 52.4098);
+    --sidebar: oklch(0.1804 0.0038 229.0396);
+    --sidebar-foreground: oklch(0.9476 0.0253 86.8708);
+    --sidebar-primary: oklch(0.6992 0.159 48.4435);
+    --sidebar-primary-foreground: oklch(0.205 0 0);
+    --sidebar-accent: oklch(0.2998 0.0086 208.7451);
+    --sidebar-accent-foreground: oklch(0.9476 0.0253 86.8708);
+    --sidebar-border: oklch(0.3185 0.0046 219.6186);
+    --sidebar-ring: oklch(0.6921 0.1763 49.7619);
+    /* Economic meaning is independent of the chart palette. */
+    --finance-overrun: var(--destructive);
     --finance-saving: #70d7c1;
 }
 
@@ -145,6 +192,7 @@
 
     body {
         @apply bg-background font-sans text-sm text-foreground antialiased;
+        letter-spacing: var(--letter-spacing);
     }
 }
 
@@ -161,17 +209,11 @@
 }
 
 @utility chart-tooltip {
-    @apply max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border bg-popover p-3 font-sans text-sm tracking-normal text-popover-foreground tabular-nums shadow-md;
+    @apply max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border bg-popover p-3 font-sans text-sm font-medium tracking-normal text-popover-foreground tabular-nums shadow-md;
     overflow-wrap: anywhere;
 }
 
 @layer base {
-    :root {
-        color-scheme: light;
-    }
-    .dark {
-        color-scheme: dark;
-    }
     button:not(:disabled),
     [role='button']:not([aria-disabled='true']) {
         cursor: pointer;
@@ -185,5 +227,83 @@
             transition-duration: 0.01ms !important;
             scroll-behavior: auto !important;
         }
+    }
+}
+
+@utility summary-grid {
+    @apply grid grid-cols-1 gap-4;
+    & > [data-slot='card'] {
+        @apply bg-gradient-to-t from-primary/5 to-card shadow-xs;
+    }
+    @container card (width < 250px) {
+        & [data-slot='card-header']:has(> [data-slot='card-action']) {
+            grid-template-columns: minmax(0, 1fr);
+            & > [data-slot='card-action'] {
+                grid-column: 1;
+                grid-row: 1;
+            }
+            & > [data-slot='card-description'] {
+                grid-row: 2;
+            }
+            & > [data-slot='card-title'] {
+                grid-row: 3;
+            }
+        }
+    }
+}
+
+@utility summary-value {
+    @apply col-span-full text-2xl font-semibold tracking-normal break-words tabular-nums;
+    @container card (min-width: 250px) {
+        font-size: 1.875rem;
+    }
+}
+
+@utility skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    animation: none;
+    &::after {
+        position: absolute;
+        inset: 0;
+        content: '';
+        background: linear-gradient(
+            90deg,
+            transparent,
+            color-mix(in oklab, var(--background) 55%, transparent),
+            transparent
+        );
+        transform: translateX(-100%);
+        animation: skeleton-shimmer 1.8s ease-in-out infinite;
+    }
+}
+
+@keyframes skeleton-shimmer {
+    to {
+        transform: translateX(100%);
+    }
+}
+
+@utility dashboard-enter {
+    animation: dashboard-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes dashboard-enter {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .skeleton-shimmer::after {
+        display: none;
+    }
+    .dashboard-enter {
+        animation: none;
     }
 }

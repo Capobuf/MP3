@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Cell, Pie, PieChart } from 'recharts';
+import { Cell, Pie, PieChart, Sector } from 'recharts';
 import {
     ChartContainer,
     ChartTooltip,
     ChartTooltipContent,
 } from '@/components/ui/chart';
+import type { PieProps, PieSectorDataItem } from 'recharts';
 import { cents, palette, percent, topGroups } from './analytics-helpers';
 import type {
     EconomicGroup,
@@ -55,7 +56,7 @@ export function DistributionChart({
     return (
         <AnalyticsCard
             title={title}
-            description="Quote sul totale positivo lordo della metrica selezionata. Le rettifiche sono riportate separatamente."
+            description="Quote degli importi positivi. Rettifiche riportate separatamente."
             controls={<MetricSelect value={metric} onChange={setMetric} />}
         >
             {total <= 0 ? (
@@ -95,6 +96,14 @@ export function DistributionChart({
                                 }
                             />
                             <Pie
+                                activeShape={(props: PieSectorDataItem) => (
+                                    <Sector
+                                        {...props}
+                                        outerRadius={
+                                            (props.outerRadius ?? 0) + 5
+                                        }
+                                    />
+                                )}
                                 data={data}
                                 dataKey="value"
                                 nameKey="name"
@@ -105,8 +114,12 @@ export function DistributionChart({
                                     select(data[index].id)
                                 }
                                 isAnimationActive="auto"
-                                animationDuration={500}
-                                animationEasing="ease-out"
+                                animationBegin={60}
+                                animationDuration={700}
+                                // Pie's 3.8 types omit cubic-bezier; its runtime uses the same parser as Bar.
+                                animationEasing={
+                                    'cubic-bezier(0.22,1,0.36,1)' as PieProps['animationEasing']
+                                }
                             >
                                 {data.map((row) => (
                                     <Cell
