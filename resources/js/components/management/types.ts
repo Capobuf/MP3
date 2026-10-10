@@ -100,3 +100,19 @@ export const singular: Record<Kind, string> = {
     projects: 'progetto',
     expenses: 'spesa',
 };
+
+export type AttachmentResource = 'contracts' | 'expenses' | 'projects';
+export type Attachment = {
+    id: number;
+    original_name: string;
+    mime_type: string;
+    size_bytes: number;
+    created_at: string;
+    can_preview: boolean;
+};
+export type AttachmentLimits = {
+    max_size_bytes: number;
+    max_files: number;
+    extensions: string[];
+};
+export type DeletionResult = { message: string; cleanup_failed?: boolean };

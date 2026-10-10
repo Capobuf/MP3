@@ -99,3 +99,45 @@ export function matchesExpenseFilters(
         })
     );
 }
+
+export async function uploadAttachment<T>(url: string, file: File): Promise<T> {
+    const token = document.cookie
+        .split('; ')
+        .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
+        ?.slice(11);
+    const body = new FormData();
+    body.append('file', file);
+    const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            ...(token ? { 'X-XSRF-TOKEN': decodeURIComponent(token) } : {}),
+        },
+        body,
+    });
+    if (!response.ok) {
+        const error = (await response.json().catch(() => ({}))) as {
+            message?: string;
+            errors?: Record<string, string[]>;
+        };
+        throw new ApiError(
+            Object.values(error.errors ?? {}).flat()[0] ??
+                (response.status === 419
+                    ? 'Sessione scaduta. Ricarica la pagina.'
+                    : response.status === 413
+                      ? 'Il file supera il limite di caricamento del server.'
+                      : (error.message ?? 'Caricamento non riuscito.')),
+            error.errors,
+        );
+    }
+    return response.json() as Promise<T>;
+}
+
+export function fileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    const unit = bytes < 1024 * 1024 ? 'KB' : 'MB';
+    const value = bytes / (unit === 'KB' ? 1024 : 1024 * 1024);
+    return `${new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 }).format(value)} ${unit}`;
+}

@@ -1,5 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { EntitySheet } from '@/components/management/entity-sheet';
@@ -133,6 +134,12 @@ export default function ExpenseDetail({
                         )}
                     </CardContent>
                 </Card>
+                <AttachmentsSection
+                    key={`${tenant.id}:${expense.id}`}
+                    tenant={tenant}
+                    resource="expenses"
+                    recordId={expense.id}
+                />
                 <Card>
                     <CardContent className="min-w-0">
                         <ExpenseLines

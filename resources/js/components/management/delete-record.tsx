@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { api } from './helpers';
+import type { DeletionResult } from './types';
 
 export function DeleteRecord({
     url,
@@ -42,8 +43,9 @@ export function DeleteRecord({
     async function remove() {
         setBusy(true);
         try {
-            await api(url, 'DELETE');
-            toast.success('Elemento eliminato.');
+            const result = await api<DeletionResult>(url, 'DELETE');
+            if (result.cleanup_failed) toast.error(result.message);
+            else toast.success(result.message);
             setOpen(false);
             if (onDeleted) onDeleted();
             else if (redirect) router.visit(redirect);

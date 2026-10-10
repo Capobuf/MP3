@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/react';
 import { DeleteRecord } from './delete-record';
 import { Plus, ArrowLeft } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import type { Tenant } from '@/types';
+import { AttachmentsSection } from './attachments-section';
 import { DateField } from './date-field';
 import { draftLines, ExpenseLines } from './expense-lines';
 import type { DraftLine } from './expense-lines';
@@ -168,6 +169,9 @@ export function EntitySheet({
     );
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [busy, setBusy] = useState(false);
+    const [attachmentsBusy, setAttachmentsBusy] = useState(false);
+    const attachmentsChanged = useRef(false);
+    const formBusy = busy || attachmentsBusy;
     const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
     const current = frames[frames.length - 1];
     const dirty = frames.some(
@@ -180,11 +184,11 @@ export function EntitySheet({
     );
     useEffect(() => {
         const listener = (event: BeforeUnloadEvent) => {
-            if (dirty || busy) event.preventDefault();
+            if (dirty || formBusy) event.preventDefault();
         };
         window.addEventListener('beforeunload', listener);
         return () => window.removeEventListener('beforeunload', listener);
-    }, [dirty, busy]);
+    }, [dirty, formBusy]);
     function change(key: string, value: string) {
         setFrames((previous) =>
             previous.map((item, index) =>
@@ -199,12 +203,17 @@ export function EntitySheet({
         setFrames((previous) => previous.slice(0, -1));
     }
     function requestClose() {
-        if (busy) return;
+        if (formBusy) return;
         if (dirty) setDiscard('close');
-        else onClose();
+        else close();
+    }
+    function close() {
+        onClose();
+        if (attachmentsChanged.current) router.reload();
     }
     async function save(event: React.SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (formBusy) return;
         setBusy(true);
         setErrors({});
         const payload: Record<string, unknown> = Object.fromEntries(
@@ -323,7 +332,7 @@ export function EntitySheet({
                             ? 'sm:max-w-5xl'
                             : 'sm:max-w-xl',
                     )}
-                    closeDisabled={busy}
+                    closeDisabled={formBusy}
                     onEscapeKeyDown={(event) => {
                         event.preventDefault();
                         requestClose();
@@ -351,7 +360,7 @@ export function EntitySheet({
                             type="button"
                             variant="ghost"
                             className="mx-4 justify-start"
-                            disabled={busy}
+                            disabled={formBusy}
                             onClick={() => {
                                 if (
                                     JSON.stringify({
@@ -370,7 +379,7 @@ export function EntitySheet({
                     )}
                     <form
                         id="entity-form"
-                        aria-busy={busy}
+                        aria-busy={formBusy}
                         className="flex min-h-0 flex-1 flex-col"
                         onSubmit={(event) => {
                             void save(event);
@@ -438,7 +447,7 @@ export function EntitySheet({
                                         <Field
                                             key={field.key}
                                             data-invalid={!!errors[field.key]}
-                                            data-disabled={busy}
+                                            data-disabled={formBusy}
                                             className={cn(
                                                 'min-w-0 gap-2',
                                                 current.kind === 'expenses' &&
@@ -475,7 +484,7 @@ export function EntitySheet({
                                                                 selected,
                                                             )
                                                         }
-                                                        disabled={busy}
+                                                        disabled={formBusy}
                                                     />
                                                     {current.kind ===
                                                         'expenses' && (
@@ -483,7 +492,7 @@ export function EntitySheet({
                                                             variant="outline"
                                                             type="button"
                                                             size="icon"
-                                                            disabled={busy}
+                                                            disabled={formBusy}
                                                             aria-label={`Crea ${singular[field.catalog]}`}
                                                             onClick={() => {
                                                                 setErrors({});
@@ -515,7 +524,7 @@ export function EntitySheet({
                                                             selected,
                                                         )
                                                     }
-                                                    disabled={busy}
+                                                    disabled={formBusy}
                                                 >
                                                     <SelectTrigger
                                                         id={id}
@@ -567,7 +576,7 @@ export function EntitySheet({
                                                             event.target.value,
                                                         )
                                                     }
-                                                    disabled={busy}
+                                                    disabled={formBusy}
                                                     rows={3}
                                                 />
                                             ) : field.type === 'date' ? (
@@ -588,7 +597,7 @@ export function EntitySheet({
                                                             selected,
                                                         )
                                                     }
-                                                    disabled={busy}
+                                                    disabled={formBusy}
                                                 />
                                             ) : (
                                                 <Input
@@ -627,7 +636,7 @@ export function EntitySheet({
                                                         )
                                                     }
                                                     required={field.required}
-                                                    disabled={busy}
+                                                    disabled={formBusy}
                                                     aria-invalid={
                                                         !!errors[field.key]
                                                     }
@@ -665,7 +674,7 @@ export function EntitySheet({
                                             options={localOptions.cost_centers}
                                             value={current.costCenterIds}
                                             onCreate={setCreatingCostCenter}
-                                            disabled={busy}
+                                            disabled={formBusy}
                                             invalid={
                                                 !!errors.cost_center_ids ||
                                                 Object.keys(errors).some(
@@ -711,10 +720,37 @@ export function EntitySheet({
                                     </Field>
                                 )}
                             </FieldGroup>
+                            {current.kind !== 'vendors' &&
+                                (current.record ? (
+                                    <div className="flex min-w-0 flex-col gap-2">
+                                        <AttachmentsSection
+                                            key={`${current.kind}-${current.record.id}`}
+                                            tenant={tenant}
+                                            resource={current.kind}
+                                            recordId={current.record.id}
+                                            id="sheet-attachments"
+                                            disabled={busy}
+                                            onBusyChange={setAttachmentsBusy}
+                                            onChanged={() => {
+                                                attachmentsChanged.current = true;
+                                            }}
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Gli allegati sono salvati subito.
+                                            Annulla scarta solo le modifiche ai
+                                            campi del form.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">
+                                        Salva l’elemento per aggiungere
+                                        allegati.
+                                    </p>
+                                ))}
                             {current.kind === 'expenses' && (
                                 <ExpenseLines
                                     lines={current.lines}
-                                    disabled={busy}
+                                    disabled={formBusy}
                                     errors={errors}
                                     onChange={(lines) => {
                                         setErrors((previous) =>
@@ -749,7 +785,7 @@ export function EntitySheet({
                                                 current.record.title ??
                                                 'questa spesa'
                                             }
-                                            disabled={busy}
+                                            disabled={formBusy}
                                             onDeleted={() => {
                                                 onClose();
                                                 if (
@@ -768,11 +804,11 @@ export function EntitySheet({
                                 type="button"
                                 variant="outline"
                                 onClick={requestClose}
-                                disabled={busy}
+                                disabled={formBusy}
                             >
                                 Annulla
                             </Button>
-                            <Button disabled={busy} type="submit">
+                            <Button disabled={formBusy} type="submit">
                                 {busy && <Spinner />}
                                 {busy ? 'Salvataggio…' : 'Salva'}
                             </Button>
@@ -803,7 +839,7 @@ export function EntitySheet({
                         <AlertDialogAction
                             variant="destructive"
                             onClick={() => {
-                                if (discard === 'close') onClose();
+                                if (discard === 'close') close();
                                 else back();
                                 setDiscard(null);
                             }}

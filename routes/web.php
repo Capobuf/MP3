@@ -5,6 +5,7 @@ use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
 use App\Http\Controllers\Platform\TenantUserController;
 use App\Http\Controllers\Platform\UserController as PlatformUserController;
+use App\Http\Controllers\Tenant\AttachmentController;
 use App\Http\Controllers\Tenant\CatalogController;
 use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
@@ -28,6 +29,13 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::prefix('t/{tenant:slug}')->middleware('can:view,tenant')->scopeBindings()->name('tenant.')->group(function () {
+        Route::prefix('{resource}/{record}/attachments')->where(['resource' => 'contracts|expenses|projects', 'record' => '[0-9]+'])->group(function () {
+            Route::get('/', [AttachmentController::class, 'index'])->name('attachments.index');
+            Route::post('/', [AttachmentController::class, 'store'])->name('attachments.store');
+            Route::get('{attachment}/download', [AttachmentController::class, 'download'])->whereNumber('attachment')->name('attachments.download');
+            Route::get('{attachment}/view', [AttachmentController::class, 'view'])->whereNumber('attachment')->name('attachments.view');
+            Route::delete('{attachment}', [AttachmentController::class, 'destroy'])->whereNumber('attachment')->name('attachments.destroy');
+        });
         Route::get('creation-options', CreationOptionsController::class)->name('creation-options');
         Route::get('dashboard', TenantDashboardController::class)->name('dashboard');
         Route::get('cost-centers', [CostCenterController::class, 'index'])->name('cost-centers.index');

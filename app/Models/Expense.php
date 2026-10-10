@@ -18,6 +18,12 @@ class Expense extends Model
 {
     use HasCostCenters;
 
+    /** @return HasMany<Attachment, $this> */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class);
+    }
+
     /** @return HasMany<ExpenseLine, $this> */
     public function lines(): HasMany
     {
