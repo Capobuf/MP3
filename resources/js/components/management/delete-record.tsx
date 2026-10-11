@@ -84,8 +84,9 @@ export function DeleteRecord({
                 <AlertDialogHeader>
                     <AlertDialogTitle>Eliminare {label}?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        L’operazione è definitiva. Gli elementi con spese o
-                        contratti collegati devono prima essere scollegati.
+                        Gli elementi con spese o contratti collegati devono
+                        prima essere scollegati. Puoi annullare l’eliminazione
+                        con Ctrl+Z.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

@@ -100,6 +100,8 @@ export function ExpenseLines({
     onChange,
     disabled = false,
     readOnly = false,
+    showSummary = true,
+    showHeading = true,
     contractMode = false,
     defaultDescription = '',
     defaultPeriod,
@@ -109,6 +111,8 @@ export function ExpenseLines({
     onChange?: (lines: DraftLine[]) => void;
     disabled?: boolean;
     readOnly?: boolean;
+    showSummary?: boolean;
+    showHeading?: boolean;
     contractMode?: boolean;
     defaultDescription?: string;
     defaultPeriod?: Record<string, string>;
@@ -229,32 +233,38 @@ export function ExpenseLines({
         <section
             className="flex min-w-0 flex-col gap-3"
             aria-label={
-                contractMode
-                    ? 'Condizioni economiche'
-                    : 'Righe economiche della spesa'
+                readOnly
+                    ? 'Dettaglio spesa'
+                    : contractMode
+                      ? 'Condizioni economiche'
+                      : 'Righe economiche della spesa'
             }
         >
-            <div className="flex flex-wrap items-center gap-2">
-                <h2 className="mr-auto font-semibold">
-                    {contractMode
-                        ? 'Condizioni economiche'
-                        : 'Righe economiche'}
-                </h2>
-                {!readOnly && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={disabled || lines.length >= 500}
-                        onClick={add}
-                    >
-                        <Plus className="size-4" />{' '}
-                        {contractMode
-                            ? 'Aggiungi condizione economica'
-                            : 'Aggiungi riga'}
-                    </Button>
-                )}
-            </div>
+            {showHeading && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="mr-auto font-semibold">
+                        {readOnly
+                            ? 'Dettaglio spesa'
+                            : contractMode
+                              ? 'Condizioni economiche'
+                              : 'Righe economiche'}
+                    </h2>
+                    {!readOnly && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={disabled || lines.length >= 500}
+                            onClick={add}
+                        >
+                            <Plus className="size-4" />{' '}
+                            {contractMode
+                                ? 'Aggiungi condizione economica'
+                                : 'Aggiungi riga'}
+                        </Button>
+                    )}
+                </div>
+            )}
             <div className="flex flex-wrap gap-2">
                 <Input
                     aria-label={
@@ -303,12 +313,14 @@ export function ExpenseLines({
                     </Button>
                 )}
             </div>
-            <p className="text-sm text-muted-foreground">
-                {visible.length} di {lines.length}{' '}
-                {contractMode ? 'condizioni economiche' : 'righe'}.{' '}
-                {!readOnly &&
-                    'Modifica i campi direttamente nella tabella e usa le frecce per riordinare. Le modifiche saranno salvate con la spesa.'}
-            </p>
+            {!readOnly && (
+                <p className="text-sm text-muted-foreground">
+                    {visible.length} di {lines.length}{' '}
+                    {contractMode ? 'condizioni economiche' : 'righe'}. Modifica
+                    i campi direttamente nella tabella e usa le frecce per
+                    riordinare. Le modifiche saranno salvate con la spesa.
+                </p>
+            )}
             {errors.lines && (
                 <p role="alert" className="text-sm text-destructive">
                     {errors.lines[0]}
@@ -904,43 +916,53 @@ export function ExpenseLines({
                         : 'Azzera i filtri per riordinare le righe.'}
                 </p>
             )}
-            <h3 className="font-semibold">Riepilogo</h3>
-            <dl
-                className="grid gap-3 rounded-md bg-muted/50 p-3 sm:grid-cols-3"
-                aria-live="polite"
-            >
-                {(
-                    [
-                        [
-                            contractMode ? 'Totale previsto' : allocatedLabel,
-                            totals.allocated,
-                        ],
-                        [
-                            contractMode ? 'Totale effettivo' : 'Effettivo',
-                            totals.actual,
-                        ],
-                        [
-                            `Scostamento (effettivo − ${allocatedLabel.toLowerCase()})`,
-                            variance,
-                        ],
-                    ] as const
-                ).map(([label, value]) => (
-                    <div key={label}>
-                        <dt className="text-sm text-muted-foreground">
-                            {label}
-                        </dt>
-                        <dd
-                            className={cn(
-                                'mt-1 font-semibold tracking-normal break-words text-foreground tabular-nums',
-                                label.startsWith('Scostamento') &&
-                                    varianceTextClass(value),
-                            )}
-                        >
-                            {value === null ? 'Da completare' : format(value)}
-                        </dd>
-                    </div>
-                ))}
-            </dl>
+            {showSummary && (
+                <>
+                    <h3 className="font-semibold">Riepilogo</h3>
+                    <dl
+                        className="grid gap-3 rounded-md bg-muted/50 p-3 sm:grid-cols-3"
+                        aria-live="polite"
+                    >
+                        {(
+                            [
+                                [
+                                    contractMode
+                                        ? 'Totale previsto'
+                                        : allocatedLabel,
+                                    totals.allocated,
+                                ],
+                                [
+                                    contractMode
+                                        ? 'Totale effettivo'
+                                        : 'Effettivo',
+                                    totals.actual,
+                                ],
+                                [
+                                    `Scostamento (effettivo − ${allocatedLabel.toLowerCase()})`,
+                                    variance,
+                                ],
+                            ] as const
+                        ).map(([label, value]) => (
+                            <div key={label}>
+                                <dt className="text-sm text-muted-foreground">
+                                    {label}
+                                </dt>
+                                <dd
+                                    className={cn(
+                                        'mt-1 font-semibold tracking-normal break-words text-foreground tabular-nums',
+                                        label.startsWith('Scostamento') &&
+                                            varianceTextClass(value),
+                                    )}
+                                >
+                                    {value === null
+                                        ? 'Da completare'
+                                        : format(value)}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </>
+            )}
         </section>
     );
 }

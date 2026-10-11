@@ -11,6 +11,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { UserInfo } from '@/components/user-info';
 import { UserMenuContent } from '@/components/user-menu-content';
+import { UndoControls } from '@/components/undo-controls';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
 export function AppSidebarHeader({
@@ -29,6 +30,7 @@ export function AppSidebarHeader({
                 </div>
             </div>
             <div className="ml-auto flex shrink-0 items-center gap-2">
+                <UndoControls />
                 <QuickNavigation />
                 <QuickCreate key={currentTenant?.id ?? 'platform'} />
                 <DropdownMenu>

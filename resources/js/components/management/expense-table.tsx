@@ -541,9 +541,8 @@ export function ExpenseTable({
                             ?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Le spese selezionate verranno eliminate
-                            definitivamente. L’operazione non può essere
-                            annullata.
+                            Le spese selezionate verranno eliminate. Puoi
+                            annullare l’eliminazione con Ctrl+Z.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     {error && (

@@ -499,8 +499,8 @@ export function AttachmentsSection({
                             Eliminare l’allegato?
                         </AlertDialogTitle>
                         <AlertDialogDescription className="break-words">
-                            {selected?.original_name} verrà eliminato
-                            definitivamente.
+                            {selected?.original_name} verrà eliminato. Puoi
+                            annullare l’eliminazione con Ctrl+Z.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

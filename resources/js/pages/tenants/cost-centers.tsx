@@ -244,7 +244,7 @@ export default function CostCenters({
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {confirmCascade
-                                ? 'Attenzione: verranno eliminati il padre e tutti i suoi figli, insieme alle loro associazioni. Questa operazione è definitiva.'
+                                ? 'Verranno eliminati il padre e tutti i suoi figli, insieme alle loro associazioni. Puoi annullare l’eliminazione con Ctrl+Z.'
                                 : 'Le associazioni di questo centro saranno rimosse. Spese, progetti e contratti resteranno disponibili.'}
                         </AlertDialogDescription>
                     </AlertDialogHeader>

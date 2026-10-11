@@ -1,3 +1,5 @@
+import { beginMutation, clearLocalUndo } from '@/lib/undo-state';
+
 const euro = new Intl.NumberFormat('it-IT', {
     style: 'currency',
     useGrouping: 'always',
@@ -56,6 +58,19 @@ export async function api<T>(
     method = 'GET',
     data?: unknown,
 ): Promise<T> {
+    const finish = method.toUpperCase() === 'GET' ? () => {} : beginMutation();
+    try {
+        return await requestJson<T>(url, method, data);
+    } finally {
+        finish();
+    }
+}
+
+async function requestJson<T>(
+    url: string,
+    method: string,
+    data?: unknown,
+): Promise<T> {
     const token = document.cookie
         .split('; ')
         .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
@@ -67,6 +82,8 @@ export async function api<T>(
             Accept: 'application/json',
             'Content-Type': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
+            'X-Undo-Location':
+                window.location.pathname + window.location.search,
             ...(token ? { 'X-XSRF-TOKEN': decodeURIComponent(token) } : {}),
         },
         ...(data === undefined ? {} : { body: JSON.stringify(data) }),
@@ -85,6 +102,7 @@ export async function api<T>(
             error.errors,
         );
     }
+    if (response.headers.has('X-Undo-Action')) clearLocalUndo();
     return response.json() as Promise<T>;
 }
 
@@ -111,6 +129,15 @@ export function matchesExpenseFilters(
 }
 
 export async function uploadAttachment<T>(url: string, file: File): Promise<T> {
+    const finish = beginMutation();
+    try {
+        return await uploadFile<T>(url, file);
+    } finally {
+        finish();
+    }
+}
+
+async function uploadFile<T>(url: string, file: File): Promise<T> {
     const token = document.cookie
         .split('; ')
         .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
@@ -142,6 +169,7 @@ export async function uploadAttachment<T>(url: string, file: File): Promise<T> {
             error.errors,
         );
     }
+    if (response.headers.has('X-Undo-Action')) clearLocalUndo();
     return response.json() as Promise<T>;
 }
 

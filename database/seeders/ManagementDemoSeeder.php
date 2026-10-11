@@ -2,8 +2,10 @@
 
 namespace Database\Seeders;
 
+use App\Http\Controllers\Tenant\ExpenseController;
 use App\Models\Tenant;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -34,10 +36,7 @@ class ManagementDemoSeeder extends Seeder
                     ->map(fn (string $contract, int $i) => $tenant->contracts()->create([
                         'name' => $contract,
                         'vendor_id' => $vendors[$i]->id,
-                        'reference_amount' => (string) (12000 + $i * 3000),
-                        'starts_on' => $i === 1 ? '2025-12-01' : '2025-01-01',
-                        'ends_on' => $i === 4 ? now()->addDays(30)->toDateString() : '2027-12-31',
-                        'notes' => 'Importo informativo dell’accordo; le spese sono imputate manualmente.',
+                        'notes' => 'Contratto dimostrativo con condizioni economiche nelle spese collegate.',
                     ]));
                 $projects = collect(['Migrazione cloud', 'Sicurezza e continuità', 'Rinnovo postazioni', 'Progetto senza spese'])
                     ->map(fn (string $project, int $i) => $tenant->projects()->create([
@@ -48,40 +47,49 @@ class ManagementDemoSeeder extends Seeder
                         'ends_on' => $i === 2 ? '2026-06-30' : null,
                     ]));
                 $titles = ['Hosting applicazioni', 'Licenze produttività', 'Backup immutabile', 'Notebook e monitor', 'Assistenza sistemistica', 'Firewall e sicurezza', 'Storage documentale', 'Connettività sedi'];
+                $periodMonths = [];
+                $expenses = app(ExpenseController::class);
                 for ($i = 0; $i < 32; $i++) {
                     $vendorIndex = [0, 1, 2, 3, 4, 4, 0, 0][$i % 8];
                     $year = $i < 16 ? 2025 : 2026;
                     $allocated = [1200, 2400, 3600, 1800, 0, null, 750, 4200][$i % 8];
                     $actual = [1200, 2750, 3100, null, 650, 920, null, 4200][$i % 8];
-                    $expense = $tenant->expenses()->create([
-                        'title' => $titles[$i % 8].' · '.($i % 16 + 1),
+                    $contractId = $i % 6 === 5 || ($year === 2025 && $vendorIndex === 1) ? null : $contracts[$vendorIndex]->id;
+                    $period = [];
+                    if ($contractId !== null) {
+                        // Distinct monthly periods keep expenses of the same contract from overlapping.
+                        $month = $periodMonths[$contractId][$year] = ($periodMonths[$contractId][$year] ?? 0) + 1;
+                        $start = Carbon::create($year, $month, 1)->startOfDay();
+                        $period = ['period_starts_on' => $start->toDateString(), 'period_ends_on' => $start->copy()->endOfMonth()->toDateString(), 'year' => $year];
+                    }
+                    $title = $titles[$i % 8].' · '.($i % 16 + 1);
+                    $lines = [];
+                    foreach (['allocated' => $allocated, 'actual' => $actual] as $type => $amount) {
+                        if ($amount !== null) {
+                            $lines[] = [
+                                'description' => $title.' · '.($type === 'allocated' ? 'previsione' : 'consuntivo'),
+                                'type' => $type,
+                                'unit_price' => (string) ($amount + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
+                                'quantity' => '1',
+                                ...$period,
+                            ];
+                        }
+                    }
+                    // Use the same persistence as the UI: totals derive from lines, missing contract types stay null.
+                    $expenses->createForTenant($tenant, [
+                        'title' => $title,
                         'year' => $year,
                         'vendor_id' => $vendors[$vendorIndex]->id,
-                        'contract_id' => $i % 6 === 5 || ($year === 2025 && $vendorIndex === 1) ? null : $contracts[$vendorIndex]->id,
+                        'contract_id' => $contractId,
                         'project_id' => match ($i % 8) {
                             0, 6 => $projects[0]->id,
                             2, 5 => $projects[1]->id,
                             3 => $projects[2]->id,
                             default => null,
                         },
-                        'allocated_amount' => $allocated === null ? '0' : (string) ($allocated + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
-                        'actual_amount' => $actual === null ? '0' : (string) ($actual + ($key === 'beta' && $allocated > 0 ? 300 : 0)),
-                        'notes' => $year === 2026 && $vendorIndex === 1 ? 'Costo imputato manualmente al 2026; contratto stipulato nel dicembre 2025.' : 'Dato fittizio; importi inseriti manualmente.',
+                        'lines' => $lines,
+                        'notes' => $contractId === null ? 'Spesa dimostrativa con righe previste ed effettive.' : 'Condizioni economiche dimostrative per il periodo coperto.',
                     ]);
-                    $position = 0;
-                    foreach (['allocated' => $allocated, 'actual' => $actual] as $type => $amount) {
-                        if ($amount !== null) {
-                            $price = $type === 'allocated' ? $expense->allocated_amount : $expense->actual_amount;
-                            $expense->lines()->create([
-                                'description' => $expense->title,
-                                'type' => $type,
-                                'unit_price' => $price,
-                                'quantity' => '1',
-                                'total' => $price,
-                                'position' => $position++,
-                            ]);
-                        }
-                    }
                 }
             });
             $this->command->info($name.': creato con 6 fornitori, 5 contratti, 4 progetti e 32 spese.');
