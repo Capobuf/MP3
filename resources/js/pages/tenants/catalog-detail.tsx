@@ -1,3 +1,4 @@
+import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
@@ -96,6 +97,13 @@ export default function CatalogDetail({
                             disabled={tableBusy}
                         />
                     </div>
+                    <SpreadsheetActions
+                        slug={tenant.slug}
+                        resource={catalog}
+                        label={labels[catalog]}
+                        filters={{ record: record.id, year: year ?? undefined }}
+                        exportOnly
+                    />
                 </header>
                 <Card>
                     <CardContent className="min-w-0">

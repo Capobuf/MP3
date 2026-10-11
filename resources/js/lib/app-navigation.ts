@@ -6,6 +6,7 @@ import {
     LayoutGrid,
     Receipt,
     Tags,
+    Settings,
 } from 'lucide-react';
 import type { NavItem, Tenant } from '@/types';
 
@@ -55,5 +56,20 @@ export function getPrimaryNavItems(
             href: `/t/${tenant.slug}/cost-centers`,
             icon: Tags,
         },
+    ];
+}
+
+export function getAdministrativeNavItems(tenant: Tenant | null): NavItem[] {
+    return [
+        ...(tenant
+            ? [
+                  {
+                      title: 'Impostazioni ambiente',
+                      href: `/t/${tenant.slug}/settings/data`,
+                      icon: Settings,
+                  },
+              ]
+            : []),
+        { title: 'Piattaforma', href: '/platform', icon: LayoutGrid },
     ];
 }

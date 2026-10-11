@@ -1,3 +1,4 @@
+import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, router } from '@inertiajs/react';
 import { CornerDownRight, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -163,10 +164,18 @@ export default function CostCenters({
                             Sono consentiti due livelli: padre e figlio.
                         </p>
                     </div>
-                    <Button onClick={() => router.visit(`${path}/create`)}>
-                        <Plus data-icon="inline-start" />
-                        Nuovo Centro di Costo
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                        <SpreadsheetActions
+                            slug={tenant.slug}
+                            resource="cost-centers"
+                            label="Centri di costo"
+                            filters={filters}
+                        />
+                        <Button onClick={() => router.visit(`${path}/create`)}>
+                            <Plus data-icon="inline-start" />
+                            Nuovo Centro di Costo
+                        </Button>
+                    </div>
                 </header>
                 <form
                     className="flex gap-2"

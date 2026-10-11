@@ -108,7 +108,7 @@ class BudgetController extends Controller
     }
 
     /** @param array<string, mixed> $data */
-    private function add(Tenant $tenant, BudgetYear $year, array $data, int $index): void
+    public function add(Tenant $tenant, BudgetYear $year, array $data, int $index): void
     {
         $type = $data['type'];
         if ($type === 'manual') {

@@ -1,3 +1,4 @@
+import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, Link, router } from '@inertiajs/react';
 import { Plus, Ellipsis, Search } from 'lucide-react';
 import { useState } from 'react';
@@ -95,10 +96,18 @@ export default function CatalogPage({
                             }
                         </p>
                     </div>
-                    <Button onClick={() => router.visit(`${path}/create`)}>
-                        <Plus className="mr-2 size-4" />
-                        Nuovo {singular[catalog]}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                        <SpreadsheetActions
+                            slug={tenant.slug}
+                            resource={catalog}
+                            label={labels[catalog]}
+                            filters={filters}
+                        />
+                        <Button onClick={() => router.visit(`${path}/create`)}>
+                            <Plus className="mr-2 size-4" />
+                            Nuovo {singular[catalog]}
+                        </Button>
+                    </div>
                 </header>
                 <Card>
                     <CardContent className="flex min-w-0 flex-col gap-5">

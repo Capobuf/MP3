@@ -137,13 +137,31 @@ export async function uploadAttachment<T>(url: string, file: File): Promise<T> {
     }
 }
 
-async function uploadFile<T>(url: string, file: File): Promise<T> {
+export async function uploadTransfer<T>(
+    url: string,
+    file: File,
+    token?: string,
+): Promise<T> {
+    const finish = token ? beginMutation() : () => {};
+    try {
+        return await uploadFile<T>(url, file, token);
+    } finally {
+        finish();
+    }
+}
+
+async function uploadFile<T>(
+    url: string,
+    file: File,
+    previewToken?: string,
+): Promise<T> {
     const token = document.cookie
         .split('; ')
         .find((cookie) => cookie.startsWith('XSRF-TOKEN='))
         ?.slice(11);
     const body = new FormData();
     body.append('file', file);
+    if (previewToken) body.append('token', previewToken);
     const response = await fetch(url, {
         method: 'POST',
         credentials: 'same-origin',

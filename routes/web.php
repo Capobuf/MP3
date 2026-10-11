@@ -11,6 +11,8 @@ use App\Http\Controllers\Tenant\CatalogController;
 use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
+use App\Http\Controllers\Tenant\SpreadsheetController;
+use App\Http\Controllers\Tenant\TenantDataTransferController;
 use App\Http\Controllers\Tenant\UndoController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Middleware\EnsureSuperAdmin;
@@ -34,6 +36,18 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::prefix('t/{tenant:slug}')->middleware(['can:view,tenant', RecordUndo::class])->scopeBindings()->name('tenant.')->group(function () {
+        Route::prefix('{resource}')->whereIn('resource', ['vendors', 'contracts', 'projects', 'expenses', 'cost-centers', 'budget'])->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('export.xlsx', [SpreadsheetController::class, 'export'])->name('spreadsheet.export');
+            Route::get('import-template.xlsx', [SpreadsheetController::class, 'template'])->name('spreadsheet.template');
+            Route::post('import/preview', [SpreadsheetController::class, 'preview'])->name('spreadsheet.preview');
+            Route::post('import/commit', [SpreadsheetController::class, 'commit'])->name('spreadsheet.commit');
+        });
+        Route::prefix('settings/data')->middleware(EnsureSuperAdmin::class)->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('/', [TenantDataTransferController::class, 'index'])->name('data.index');
+            Route::get('export.csv', [TenantDataTransferController::class, 'export'])->name('data.export');
+            Route::post('import/preview', [TenantDataTransferController::class, 'preview'])->name('data.preview');
+            Route::post('import/commit', [TenantDataTransferController::class, 'commit'])->name('data.commit');
+        });
         Route::post('undo', [UndoController::class, 'undo'])->name('undo.apply');
         Route::post('undo/restore', [UndoController::class, 'restore'])->name('undo.restore');
         Route::prefix('{resource}/{record}/attachments')->where(['resource' => 'contracts|expenses|projects', 'record' => '[0-9]+'])->group(function () {
