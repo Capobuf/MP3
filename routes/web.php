@@ -6,17 +6,22 @@ use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
 use App\Http\Controllers\Platform\TenantUserController;
 use App\Http\Controllers\Platform\UserController as PlatformUserController;
 use App\Http\Controllers\Tenant\AttachmentController;
+use App\Http\Controllers\Tenant\BudgetController;
 use App\Http\Controllers\Tenant\CatalogController;
 use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
+use App\Http\Controllers\Tenant\UndoController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Middleware\EnsureSuperAdmin;
+use App\Http\Middleware\RecordUndo;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
 
 Route::middleware('auth')->group(function () {
+    Route::post('undo', [UndoController::class, 'undoAny'])->name('undo.apply');
+    Route::post('undo/restore', [UndoController::class, 'restoreAny'])->name('undo.restore');
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::prefix('platform')->middleware(EnsureSuperAdmin::class)->name('platform.')->group(function () {
@@ -28,7 +33,9 @@ Route::middleware('auth')->group(function () {
         Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'destroy'])->name('tenants.users.destroy');
     });
 
-    Route::prefix('t/{tenant:slug}')->middleware('can:view,tenant')->scopeBindings()->name('tenant.')->group(function () {
+    Route::prefix('t/{tenant:slug}')->middleware(['can:view,tenant', RecordUndo::class])->scopeBindings()->name('tenant.')->group(function () {
+        Route::post('undo', [UndoController::class, 'undo'])->name('undo.apply');
+        Route::post('undo/restore', [UndoController::class, 'restore'])->name('undo.restore');
         Route::prefix('{resource}/{record}/attachments')->where(['resource' => 'contracts|expenses|projects', 'record' => '[0-9]+'])->group(function () {
             Route::get('/', [AttachmentController::class, 'index'])->name('attachments.index');
             Route::post('/', [AttachmentController::class, 'store'])->name('attachments.store');
@@ -44,6 +51,17 @@ Route::middleware('auth')->group(function () {
         Route::post('cost-centers', [CostCenterController::class, 'store'])->name('cost-centers.store');
         Route::patch('cost-centers/{costCenter}', [CostCenterController::class, 'update'])->name('cost-centers.update');
         Route::delete('cost-centers/{costCenter}', [CostCenterController::class, 'destroy'])->name('cost-centers.destroy');
+        Route::get('budget', [BudgetController::class, 'index'])->name('budget.index');
+        Route::get('budget/options', [BudgetController::class, 'options'])->name('budget.options');
+        Route::post('budget/years', [BudgetController::class, 'storeYear'])->name('budget.years.store');
+        Route::prefix('budget/years/{budgetYear}')->group(function () {
+            Route::get('/', [BudgetController::class, 'state'])->name('budget.state');
+            Route::get('missing', [BudgetController::class, 'missing'])->name('budget.missing');
+            Route::post('entries/assist', [BudgetController::class, 'assist'])->name('budget.entries.assist');
+            Route::post('entries', [BudgetController::class, 'store'])->name('budget.entries.store');
+            Route::patch('entries', [BudgetController::class, 'batch'])->name('budget.entries.batch');
+            Route::post('copy', [BudgetController::class, 'copy'])->name('budget.copy');
+        });
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
         Route::patch('expenses/batch', [ExpenseController::class, 'batch'])->name('expenses.batch');

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Models\BudgetEntry;
 use App\Models\CostCenter;
 use App\Models\Tenant;
 use Illuminate\Http\JsonResponse;
@@ -80,6 +81,10 @@ class CostCenterController extends Controller
         DB::transaction(function () use ($data, $tenant, $costCenter) {
             Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
             $record = $tenant->costCenters()->whereKey($costCenter->id)->firstOrFail();
+            $ids = [$record->id, ...($data['delete_children'] ? $record->children()->pluck('id')->all() : [])];
+            if (BudgetEntry::where('tenant_id', $tenant->id)->whereIn('cost_center_id', $ids)->exists()) {
+                throw ValidationException::withMessages(['budget' => 'Questo Centro di costo è utilizzato nel Budget. Rimuovi prima l’attribuzione dalle voci interessate.']);
+            }
             if ($data['delete_children']) {
                 $record->children()->delete();
             } else {

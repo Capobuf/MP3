@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Support\ExpensePeriods;
 use App\Support\Money;
 use Database\Seeders\ManagementDemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -158,9 +159,27 @@ class ExpenseLinesTest extends TestCase
             foreach ($tenant->expenses()->with('lines')->get() as $expense) {
                 $this->assertNotEmpty($expense->lines);
                 foreach (['allocated' => 'allocated_amount', 'actual' => 'actual_amount'] as $type => $field) {
-                    $this->assertSame(Money::cents($expense->{$field}), $expense->lines->where('type', $type)->sum(fn ($line) => Money::cents($line->total)));
+                    $lines = $expense->lines->where('type', $type);
+                    if ($expense->contract_id !== null && $lines->isEmpty()) {
+                        $this->assertNull($expense->{$field});
+                    } else {
+                        $this->assertSame(Money::cents($expense->{$field}), $lines->sum(fn ($line) => Money::cents((string) $line->total)));
+                    }
+                }
+                if ($expense->contract_id !== null) {
+                    $this->assertNotNull($expense->period_starts_on);
+                    $this->assertNotNull($expense->period_ends_on);
+                    ExpensePeriods::validate($expense);
+                    foreach ($expense->lines as $line) {
+                        $this->assertSame($expense->year, $line->year);
+                        $this->assertSame($expense->period_starts_on->toDateString(), $line->getRawOriginal('period_starts_on'));
+                        $this->assertSame($expense->period_ends_on->toDateString(), $line->getRawOriginal('period_ends_on'));
+                    }
                 }
             }
+            $this->assertFalse($tenant->contracts()->doesntHave('expenses.lines')->exists());
+            $this->assertTrue($tenant->expenses()->whereNotNull('contract_id')->whereNull('actual_amount')->exists());
+            $this->assertTrue($tenant->expenses()->whereNotNull('contract_id')->where('allocated_amount', '0')->exists());
         }
     }
 
@@ -172,8 +191,8 @@ class ExpenseLinesTest extends TestCase
         $migration->down();
         $migration->up();
         $line->refresh();
-        $this->assertSame('2026-06-05', $line->period_starts_on->toDateString());
-        $this->assertSame('2027-02-18', $line->period_ends_on->toDateString());
+        $this->assertSame('2026-06-05', $line->getRawOriginal('period_starts_on'));
+        $this->assertSame('2027-02-18', $line->getRawOriginal('period_ends_on'));
         $this->assertSame(2027, $line->year);
         $this->assertSame('0.00', $line->total);
         $this->assertSame('0.00', $expense->refresh()->allocated_amount);

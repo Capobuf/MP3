@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Models\Tenant;
 use App\Policies\TenantPolicy;
+use App\Services\AttachmentFiles;
+use App\Services\UndoHistory;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +20,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->scoped(UndoHistory::class);
+        $this->app->scoped(AttachmentFiles::class);
     }
 
     /**

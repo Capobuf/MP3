@@ -115,7 +115,12 @@ export function CostCenterForm({
                 title={`${record ? 'Modifica' : 'Nuovo'} Centro di Costo`}
                 description="Crea un centro indipendente oppure un figlio di un centro di primo livello."
             >
-                <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
+                <form
+                    onSubmit={save}
+                    aria-busy={busy}
+                    data-undo-dirty={dirty}
+                    className="flex min-h-0 flex-1 flex-col"
+                >
                     <FieldGroup className="flex-1 overflow-y-auto p-5 sm:px-6">
                         {errors._form && (
                             <p

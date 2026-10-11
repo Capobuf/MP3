@@ -1,0 +1,362 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Attachment;
+use App\Models\Tenant;
+use App\Models\UndoAction;
+use App\Models\User;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia as Assert;
+use Tests\TestCase;
+
+class UndoTest extends TestCase
+{
+    use DatabaseMigrations;
+
+    private Tenant $tenant;
+
+    private User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('attachments');
+        $this->tenant = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa']);
+        $this->user = User::factory()->create(['undo_popup_seconds' => 30]);
+        $this->user->tenants()->attach($this->tenant);
+        $this->actingAs($this->user);
+    }
+
+    private function undo(): int
+    {
+        return $this->postJson('/t/alfa/undo')->assertOk()->assertJsonPath('seconds', 30)->json('action_id');
+    }
+
+    private function redo(int $id): void
+    {
+        $this->postJson('/t/alfa/undo/restore', ['action_id' => $id])->assertOk();
+    }
+
+    public function test_saved_changes_can_be_undone_in_order_and_restored_with_original_ids(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Originale']);
+        $url = '/t/alfa/vendors/'.$vendor->id;
+        $this->patchJson($url, ['name' => 'Prima'])->assertOk()->assertHeader('X-Undo-Action');
+        $this->patchJson($url, ['name' => 'Seconda'])->assertOk();
+        $last = $this->undo();
+        $this->assertSame('Prima', $vendor->fresh()->name);
+        $first = $this->undo();
+        $this->assertSame('Originale', $vendor->fresh()->name);
+        $this->postJson('/t/alfa/undo/restore', ['action_id' => $last])->assertConflict();
+        $this->redo($first);
+        $this->assertSame('Prima', $vendor->fresh()->name);
+        $this->redo($last);
+        $this->assertSame('Seconda', $vendor->fresh()->name);
+        $this->deleteJson($url)->assertOk();
+        $deleted = $this->undo();
+        $this->assertDatabaseHas('vendors', ['id' => $vendor->id, 'name' => 'Seconda']);
+        $this->redo($deleted);
+        $this->assertDatabaseMissing('vendors', ['id' => $vendor->id]);
+    }
+
+    public function test_contract_creation_is_one_operation_including_economic_conditions_and_centers(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $id = $this->postJson('/t/alfa/contracts', [
+            'name' => 'Contratto', 'vendor_id' => $vendor->id, 'cost_center_ids' => [$center->id],
+            'initial_expense' => ['title' => 'Condizioni', 'year' => 2026, 'lines' => [
+                ['description' => 'Licenze', 'type' => 'allocated', 'unit_price' => '100.25', 'quantity' => '2'],
+                ['description' => 'Fattura', 'type' => 'actual', 'unit_price' => '80'],
+            ]],
+        ])->assertCreated()->json('record.id');
+        $expense = $this->tenant->expenses()->sole();
+        $lineIds = $expense->lines()->pluck('id')->all();
+        $this->assertDatabaseCount('undo_actions', 1);
+        $action = $this->undo();
+        $this->assertDatabaseMissing('contracts', ['id' => $id]);
+        $this->assertDatabaseMissing('expenses', ['id' => $expense->id]);
+        $this->assertDatabaseCount('expense_lines', 0);
+        $this->assertDatabaseCount('contract_cost_center', 0);
+        $this->redo($action);
+        $restored = $expense->fresh();
+        $this->assertSame($id, $restored->contract_id);
+        $this->assertSame($vendor->id, $restored->vendor_id);
+        $this->assertSame('200.50', $restored->allocated_amount);
+        $this->assertSame('80.00', $restored->actual_amount);
+        $this->assertSame($lineIds, $restored->lines()->pluck('id')->all());
+        $this->assertSame([$center->id], $restored->costCenters()->pluck('cost_centers.id')->all());
+        $this->assertDatabaseHas('contract_cost_center', ['contract_id' => $id, 'cost_center_id' => $center->id]);
+    }
+
+    public function test_expense_update_restores_replaced_lines_and_links(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Originale', 'year' => 2026, 'allocated_amount' => '20']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $expense->costCenters()->attach($center);
+        $line = $expense->lines()->create(['description' => 'Prima', 'type' => 'allocated', 'unit_price' => '20', 'quantity' => '1', 'total' => '20', 'year' => 2026, 'position' => 0]);
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['title' => 'Nuova', 'cost_center_ids' => [], 'lines' => [
+            ['description' => 'Dopo', 'type' => 'allocated', 'unit_price' => '30'],
+        ]])->assertOk();
+        $action = $this->undo();
+        $this->assertDatabaseHas('expense_lines', ['id' => $line->id, 'description' => 'Prima']);
+        $this->assertSame('20.00', $expense->fresh()->allocated_amount);
+        $this->assertSame('Originale', $expense->fresh()->title);
+        $this->assertDatabaseHas('cost_center_expense', ['expense_id' => $expense->id, 'cost_center_id' => $center->id]);
+        $this->redo($action);
+        $this->assertSame('Nuova', $expense->fresh()->title);
+        $this->assertSame('30.00', $expense->fresh()->allocated_amount);
+        $this->assertSame('Dopo', $expense->fresh()->lines()->sole()->description);
+        $this->assertDatabaseCount('cost_center_expense', 0);
+    }
+
+    public function test_deleted_expense_restores_attachment_bytes_lines_and_links(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026]);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $expense->costCenters()->attach($center);
+        $expense->lines()->create(['description' => 'Riga', 'type' => 'actual', 'unit_price' => '10', 'quantity' => '1', 'total' => '10', 'year' => 2026, 'position' => 0]);
+        $disk = Storage::disk('attachments');
+        $disk->put('original.txt', "Documento originale\n");
+        $file = $expense->attachments()->forceCreate(['tenant_id' => $this->tenant->id, 'disk' => 'attachments', 'path' => 'original.txt',
+            'original_name' => 'documento.txt', 'mime_type' => 'text/plain', 'size_bytes' => 20, 'uploaded_by' => $this->user->id]);
+        $this->withHeader('X-Undo-Location', '/t/alfa/expenses/'.$expense->id)->deleteJson('/t/alfa/expenses/'.$expense->id)->assertOk();
+        $disk->assertMissing($file->path);
+        $id = $this->undo();
+        $this->assertDatabaseHas('attachments', ['id' => $file->id, 'expense_id' => $expense->id]);
+        $this->assertDatabaseHas('cost_center_expense', ['expense_id' => $expense->id, 'cost_center_id' => $center->id]);
+        $this->assertDatabaseHas('expense_lines', ['expense_id' => $expense->id, 'description' => 'Riga']);
+        $this->assertSame("Documento originale\n", $this->get('/t/alfa/expenses/'.$expense->id.'/attachments/'.$file->id.'/download')->assertOk()->streamedContent());
+        $this->postJson('/t/alfa/undo/restore', ['action_id' => $id])->assertOk()->assertJsonPath('href', '/t/alfa/expenses');
+        $disk->assertMissing($file->path);
+        $this->assertDatabaseMissing('attachments', ['id' => $file->id]);
+        $disk->assertExists(UndoAction::findOrFail($id)->files[0]['backup']);
+    }
+
+    public function test_uploaded_attachment_can_be_undone_and_restored(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $fake = UploadedFile::fake()->createWithContent('file.txt', 'Contenuto');
+        $file = new UploadedFile($fake->getPathname(), 'file.txt', null, null, true);
+        $url = '/t/alfa/projects/'.$project->id.'/attachments';
+        $id = $this->postJson($url, ['file' => $file])->assertCreated()->json('attachment.id');
+        $attachment = Attachment::findOrFail($id);
+        $action = $this->undo();
+        Storage::disk('attachments')->assertMissing($attachment->path);
+        $this->assertDatabaseMissing('attachments', ['id' => $id]);
+        $this->redo($action);
+        $this->assertSame('Contenuto', $this->get($url.'/'.$id.'/download')->assertOk()->streamedContent());
+    }
+
+    public function test_backup_failure_preserves_deleted_records_and_removes_failed_uploads(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026]);
+        $disk = Storage::disk('attachments');
+        $disk->put('original.txt', 'Originale');
+        $disk->put('__undo', 'Cannot create a directory here');
+        $file = $expense->attachments()->forceCreate(['tenant_id' => $this->tenant->id, 'disk' => 'attachments', 'path' => 'original.txt',
+            'original_name' => 'file.txt', 'mime_type' => 'text/plain', 'size_bytes' => 9, 'uploaded_by' => $this->user->id]);
+        $url = '/t/alfa/expenses/'.$expense->id.'/attachments';
+        $this->deleteJson($url.'/'.$file->id)->assertStatus(500);
+        $this->assertDatabaseHas('attachments', ['id' => $file->id]);
+        $this->assertSame('Originale', $disk->get('original.txt'));
+        $fake = UploadedFile::fake()->createWithContent('new.txt', 'Nuovo documento');
+        $upload = new UploadedFile($fake->getPathname(), 'new.txt', null, null, true);
+        $this->postJson($url, ['file' => $upload])->assertStatus(500);
+        $this->assertDatabaseCount('attachments', 1);
+        $this->assertDatabaseCount('undo_actions', 0);
+        $this->assertCount(2, $disk->allFiles());
+    }
+
+    public function test_storage_restore_failure_does_not_restore_metadata_or_consume_action(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026]);
+        $disk = Storage::disk('attachments');
+        $disk->put('original.txt', 'Originale');
+        $file = $expense->attachments()->forceCreate(['tenant_id' => $this->tenant->id, 'disk' => 'attachments', 'path' => 'original.txt',
+            'original_name' => 'file.txt', 'mime_type' => 'text/plain', 'size_bytes' => 9, 'uploaded_by' => $this->user->id]);
+        $this->deleteJson('/t/alfa/expenses/'.$expense->id.'/attachments/'.$file->id)->assertOk();
+        $action = UndoAction::sole();
+        $disk->delete($action->files[0]['backup']);
+        $this->postJson('/t/alfa/undo')->assertStatus(500);
+        $this->assertDatabaseMissing('attachments', ['id' => $file->id]);
+        $this->assertNull($action->fresh()->undone_at);
+    }
+
+    public function test_batch_deletion_is_undone_and_restored_as_a_single_operation(): void
+    {
+        $ids = [];
+        foreach (['Prima', 'Seconda'] as $title) {
+            $ids[] = $this->postJson('/t/alfa/expenses', ['title' => $title, 'year' => 2026, 'lines' => [
+                ['description' => 'Riga', 'type' => 'allocated', 'unit_price' => '10'],
+            ]])
+                ->assertCreated()->json('record.id');
+        }
+        $this->deleteJson('/t/alfa/expenses/batch', ['ids' => $ids])->assertOk();
+        $this->assertDatabaseCount('expenses', 0);
+        $id = $this->undo();
+        $this->assertSame($ids, $this->tenant->expenses()->orderBy('id')->pluck('id')->all());
+        $this->assertDatabaseCount('expense_lines', 2);
+        $this->redo($id);
+        $this->assertDatabaseCount('expenses', 0);
+        $this->assertDatabaseCount('expense_lines', 0);
+    }
+
+    public function test_budget_exclusion_removal_and_year_creation_are_undoable(): void
+    {
+        $year = $this->postJson('/t/alfa/budget/years', ['year' => 2026])->assertCreated()->json('year.id');
+        $this->assertNotNull($year);
+        $url = '/t/alfa/budget/years/'.$year.'/entries';
+        $entry = $this->postJson($url, ['entries' => [['type' => 'manual', 'description' => 'Libera', 'manual_allocated' => '42.10']]])->assertOk()->json('budget.entries.0.id');
+        $this->patchJson($url, ['action' => 'exclude', 'ids' => [$entry]])->assertOk();
+        $exclude = $this->undo();
+        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'included' => true]);
+        $this->redo($exclude);
+        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'included' => false]);
+        $this->patchJson($url, ['action' => 'remove', 'ids' => [$entry]])->assertOk();
+        $remove = $this->undo();
+        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'manual_allocated' => '42.10', 'included' => false]);
+        $this->redo($remove);
+        $this->undo(); // Undo removal again.
+        $this->undo(); // Undo exclusion.
+        $this->undo(); // Undo entry addition.
+        $this->assertDatabaseCount('budget_entries', 0);
+        $yearAction = $this->undo();
+        $this->assertDatabaseCount('budget_years', 0);
+        $this->redo($yearAction);
+        $this->assertDatabaseHas('budget_years', ['id' => $year, 'year' => 2026]);
+    }
+
+    public function test_deleted_cost_center_restores_children_and_cascaded_relations(): void
+    {
+        $parent = $this->tenant->costCenters()->create(['name' => 'Padre']);
+        $child = $this->tenant->costCenters()->create(['name' => 'Figlio', 'parent_id' => $parent->id]);
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract->costCenters()->attach($child);
+        foreach ([false, true] as $deleteChildren) {
+            $this->deleteJson('/t/alfa/cost-centers/'.$parent->id, ['delete_children' => $deleteChildren])->assertOk();
+            $id = $this->undo();
+            $this->assertSame($parent->id, $child->fresh()->parent_id);
+            $this->assertDatabaseHas('contract_cost_center', ['contract_id' => $contract->id, 'cost_center_id' => $child->id]);
+            $this->redo($id);
+            $this->undo();
+        }
+    }
+
+    public function test_other_users_changes_block_undo_without_overwriting_them(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Prima']);
+        $this->patchJson('/t/alfa/vendors/'.$vendor->id, ['name' => 'Mia modifica'])->assertOk();
+        $other = User::factory()->create();
+        $other->tenants()->attach($this->tenant);
+        $this->actingAs($other)->patchJson('/t/alfa/vendors/'.$vendor->id, ['name' => 'Modifica altrui'])->assertOk();
+        $this->actingAs($this->user)->postJson('/t/alfa/undo')->assertConflict();
+        $this->assertSame('Modifica altrui', $vendor->fresh()->name);
+        $this->assertNull(UndoAction::where('user_id', $this->user->id)->sole()->undone_at);
+    }
+
+    public function test_history_is_scoped_to_actor_and_access_to_tenant(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Prima']);
+        $this->patchJson('/t/alfa/vendors/'.$vendor->id, ['name' => 'Dopo'])->assertOk();
+        $other = User::factory()->create();
+        $other->tenants()->attach($this->tenant);
+        $this->actingAs($other)->postJson('/t/alfa/undo')->assertConflict();
+        $this->actingAs($this->user)->postJson('/undo')->assertOk()->assertJsonPath('href', '/t/alfa/dashboard');
+        $action = UndoAction::sole();
+        $this->actingAs($other)->postJson('/undo/restore', ['action_id' => $action->id])->assertNotFound();
+        $this->actingAs($this->user);
+        $this->user->tenants()->detach($this->tenant);
+        $this->postJson('/t/alfa/undo/restore', ['action_id' => $action->id])->assertForbidden();
+        $this->postJson('/undo/restore', ['action_id' => $action->id])->assertForbidden();
+        $this->assertSame('Prima', $vendor->fresh()->name);
+    }
+
+    public function test_popup_expiry_and_new_changes_invalidate_restore(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Prima']);
+        $url = '/t/alfa/vendors/'.$vendor->id;
+        $this->patchJson($url, ['name' => 'Dopo'])->assertOk();
+        $id = $this->undo();
+        $this->travel(31)->seconds();
+        $this->postJson('/t/alfa/undo/restore', ['action_id' => $id])->assertConflict();
+        $this->assertSame('Prima', $vendor->fresh()->name);
+        $this->travelBack();
+        $this->patchJson($url, ['name' => 'Nuova'])->assertOk();
+        $this->postJson('/t/alfa/undo/restore', ['action_id' => $id])->assertConflict();
+        $this->assertSame('Nuova', $vendor->fresh()->name);
+    }
+
+    public function test_failed_and_unchanged_requests_do_not_add_history(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Prima']);
+        $this->postJson('/t/alfa/vendors', [])->assertUnprocessable();
+        $this->patchJson('/t/alfa/vendors/'.$vendor->id, ['name' => 'Prima'])->assertOk();
+        $this->get('/t/alfa/vendors')->assertOk();
+        $this->assertDatabaseCount('undo_actions', 0);
+    }
+
+    public function test_expired_history_and_private_backups_are_pruned_without_deleting_originals(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026]);
+        $fake = UploadedFile::fake()->createWithContent('file.txt', 'Originale');
+        $file = new UploadedFile($fake->getPathname(), 'file.txt', null, null, true);
+        $id = $this->postJson('/t/alfa/expenses/'.$expense->id.'/attachments', ['file' => $file])->assertCreated()->json('attachment.id');
+        $action = UndoAction::sole();
+        $path = Attachment::findOrFail($id)->path;
+        $backup = $action->files[0]['backup'];
+        $this->travel(25)->hours();
+        $this->postJson('/t/alfa/undo')->assertConflict();
+        $this->artisan('undo:prune')->assertSuccessful();
+        $this->assertDatabaseCount('undo_actions', 0);
+        Storage::disk('attachments')->assertMissing($backup);
+        Storage::disk('attachments')->assertExists($path);
+        $this->travelBack();
+    }
+
+    public function test_history_limit_keeps_latest_operations(): void
+    {
+        config(['undo.history_limit' => 2]);
+        $vendor = $this->tenant->vendors()->create(['name' => 'Prima']);
+        foreach (['Uno', 'Due', 'Tre'] as $name) {
+            $this->patchJson('/t/alfa/vendors/'.$vendor->id, ['name' => $name])->assertOk();
+        }
+        $this->assertDatabaseCount('undo_actions', 2);
+        $this->undo();
+        $this->undo();
+        $this->postJson('/t/alfa/undo')->assertConflict();
+        $this->assertSame('Uno', $vendor->fresh()->name);
+    }
+
+    public function test_popup_remains_restorable_when_history_reaches_retention_deadline(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Prima']);
+        $this->patchJson('/t/alfa/vendors/'.$vendor->id, ['name' => 'Dopo'])->assertOk();
+        $this->travel(24 * 3600 - 10)->seconds();
+        $id = $this->undo();
+        $this->travel(15)->seconds();
+        $this->artisan('undo:prune')->assertSuccessful();
+        $this->assertDatabaseHas('undo_actions', ['id' => $id]);
+        $this->redo($id);
+        $this->assertSame('Dopo', $vendor->fresh()->name);
+        $this->artisan('undo:prune')->assertSuccessful();
+        $this->assertDatabaseCount('undo_actions', 0);
+        $this->travelBack();
+    }
+
+    public function test_duration_setting_is_persistent_validated_and_used_by_undo(): void
+    {
+        foreach ([4, 121, 'abc', 5.5] as $invalid) {
+            $this->patchJson('/settings/undo', ['undo_popup_seconds' => $invalid])->assertUnprocessable();
+        }
+        $this->patch('/settings/undo', ['undo_popup_seconds' => 7])->assertRedirect('/settings/undo');
+        $this->assertSame(7, $this->user->fresh()->undo_popup_seconds);
+        $this->get('/settings/undo')->assertInertia(fn (Assert $page) => $page->component('settings/undo')->where('auth.user.undo_popup_seconds', 7));
+        $this->postJson('/t/alfa/vendors', ['name' => 'Fornitore'])->assertCreated();
+        $result = $this->postJson('/t/alfa/undo')->assertOk()->assertJsonPath('seconds', 7);
+        $this->assertEqualsWithDelta(now()->addSeconds(7)->getTimestamp(), strtotime($result->json('expires_at')), 1);
+    }
+}

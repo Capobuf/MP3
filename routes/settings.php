@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\UndoSettingsController;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
@@ -24,6 +25,8 @@ Route::middleware(['auth'])->group(function () {
         ->name('user-password.update');
 
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
+    Route::inertia('settings/undo', 'settings/undo')->name('undo-settings.edit');
+    Route::patch('settings/undo', [UndoSettingsController::class, 'update'])->name('undo-settings.update');
 });
 
 Route::get('.well-known/passkey-endpoints', function () {

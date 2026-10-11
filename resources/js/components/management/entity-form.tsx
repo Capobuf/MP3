@@ -1,7 +1,8 @@
 import { router } from '@inertiajs/react';
 import { DeleteRecord } from './delete-record';
 import { Plus, ArrowLeft } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useImperativeHandle, useState } from 'react';
+import type { Ref } from 'react';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -194,7 +195,12 @@ function frame(
         returnField,
     };
 }
+export type EntityFormHandle = {
+    requestClose: () => void;
+};
+
 export function EntityForm({
+    ref,
     tenant,
     kind,
     record,
@@ -203,7 +209,9 @@ export function EntityForm({
     contractContext,
     onClose,
     onSaved,
+    onBusyChange,
 }: {
+    ref?: Ref<EntityFormHandle>;
     tenant: Tenant;
     kind: Kind;
     record?: RecordData;
@@ -212,6 +220,7 @@ export function EntityForm({
     contractContext?: RecordData;
     onClose: () => void;
     onSaved: (record: RecordData) => void;
+    onBusyChange?: (busy: boolean) => void;
 }) {
     const [frames, setFrames] = useState<Frame[]>(() => {
         const initial = frame(kind, year, record);
@@ -250,6 +259,11 @@ export function EntityForm({
     const [busy, setBusy] = useState(false);
     const [attachmentsBusy, setAttachmentsBusy] = useState(false);
     const formBusy = busy || attachmentsBusy;
+    useEffect(() => {
+        onBusyChange?.(formBusy);
+        return () => onBusyChange?.(false);
+    }, [formBusy, onBusyChange]);
+    useImperativeHandle(ref, () => ({ requestClose }));
     const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
     const current = frames[frames.length - 1];
     const initialExpense = current.initialExpense;
@@ -606,6 +620,7 @@ export function EntityForm({
                 <form
                     id="entity-form"
                     aria-busy={formBusy}
+                    data-undo-dirty={dirty}
                     className="flex min-h-0 flex-1 flex-col"
                     onSubmit={(event) => {
                         void save(event);

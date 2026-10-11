@@ -178,6 +178,7 @@ export default function ExpenseDetail({
                     <CardContent className="min-w-0">
                         <ExpenseLines
                             readOnly
+                            showSummary={false}
                             contractMode={!!expense.contract_id}
                             lines={(expense.lines ?? []).map((line, index) => ({
                                 ...line,

@@ -1,5 +1,6 @@
 import {
     FileText,
+    Calculator,
     FolderKanban,
     Handshake,
     LayoutGrid,
@@ -28,6 +29,7 @@ export function getPrimaryNavItems(
             href: `/t/${tenant.slug}/dashboard`,
             icon: LayoutGrid,
         },
+        { title: 'Budget', href: `/t/${tenant.slug}/budget`, icon: Calculator },
         {
             title: 'Spese',
             href: `/t/${tenant.slug}/expenses`,
