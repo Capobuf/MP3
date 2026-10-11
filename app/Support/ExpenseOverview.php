@@ -81,6 +81,54 @@ final class ExpenseOverview
         ];
     }
 
+    /**
+     * Bounded breakdown of the same economic rows used by totals, independent of pagination.
+     * Keep positive attributions separate from adjustments, including across project years.
+     *
+     * @param  Builder<Expense>  $query
+     * @return array<string, array<string, mixed>>
+     */
+    public static function breakdown(Builder $query): array
+    {
+        $result = [];
+        foreach (['allocated', 'actual'] as $metric) {
+            $field = $metric.'_amount';
+            $cents = "CAST(ROUND($field * 100, 0) AS SIGNED)";
+            $positive = "CASE WHEN $field > 0 THEN $cents ELSE 0 END";
+            $row = (clone $query)->reorder()->selectRaw("
+                COALESCE(SUM($positive), 0) as positive_cents,
+                COALESCE(SUM(CASE WHEN $field < 0 THEN $cents ELSE 0 END), 0) as negative_cents,
+                COUNT($field) as present_count,
+                COUNT(*) - COUNT($field) as missing_count,
+                COALESCE(SUM(CASE WHEN $field = 0 THEN 1 ELSE 0 END), 0) as zero_count
+            ")->first();
+            $gross = (int) $row->getAttribute('positive_cents');
+            $negative = (int) $row->getAttribute('negative_cents');
+            $items = (clone $query)->reorder()->select(['id', 'title'])->selectRaw("SUM($positive) as positive_cents")
+                ->groupBy('id', 'title')->havingRaw("SUM($positive) > 0")
+                ->orderByDesc('positive_cents')->orderBy('id')->limit(7)->get()
+                ->map(fn (Expense $expense) => [
+                    'id' => (string) $expense->id,
+                    'name' => $expense->title,
+                    'amount' => Money::decimal((int) $expense->getAttribute('positive_cents')),
+                ])->all();
+            $remainder = $gross - array_sum(array_map(fn ($item) => Money::cents($item['amount']), $items));
+            if ($remainder > 0) {
+                $items[] = ['id' => 'other', 'name' => 'Altre voci', 'amount' => Money::decimal($remainder)];
+            }
+            $result[$metric] = [
+                'items' => $items,
+                'positive' => Money::decimal($gross),
+                'negative' => Money::decimal($negative),
+                'net' => (int) $row->getAttribute('present_count') > 0 ? Money::decimal($gross + $negative) : null,
+                'missing' => (int) $row->getAttribute('missing_count'),
+                'zero' => (int) $row->getAttribute('zero_count'),
+            ];
+        }
+
+        return $result;
+    }
+
     /** @param Builder<Expense> $query
      * @return array<int, array<string, mixed>>
      */

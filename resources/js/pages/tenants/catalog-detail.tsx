@@ -5,12 +5,16 @@ import { AttachmentsSection } from '@/components/management/attachments-section'
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { ExpenseTable } from '@/components/management/expense-table';
-import { dateLabel } from '@/components/management/helpers';
+import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
+import { DetailKpis } from '@/components/management/detail-kpis';
+import { DetailNotes } from '@/components/management/detail-notes';
+import { dateLabel, money } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import { Summary } from '@/components/management/summary';
 import { labels } from '@/components/management/types';
 import type {
     Catalog,
+    DetailBreakdown,
     Expense,
     Options,
     Pagination as Page,
@@ -37,6 +41,7 @@ export default function CatalogDetail({
     record,
     expenses,
     totals,
+    breakdown,
     contracts,
     year,
     years,
@@ -47,6 +52,7 @@ export default function CatalogDetail({
     options: Options;
     expenses: Page<Expense>;
     totals: Totals;
+    breakdown: DetailBreakdown | null;
     contracts: Page<RecordData> | null;
     year: number | null;
     years: number[];
@@ -65,173 +71,95 @@ export default function CatalogDetail({
                   ['Data finale', dateLabel(record.ends_on)],
                   ...(catalog === 'projects' ? [['Stato', record.status]] : []),
               ];
-    return (
+    const economics = (
         <>
-            <Head title={`${record.name} · ${tenant.name}`} />
-            <div className="page-shell">
-                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <Link
-                            href={path}
-                            className="text-sm text-muted-foreground"
-                        >
-                            {tenant.name} / {labels[catalog]}
-                        </Link>
-                        <h1 className="mt-2 page-title break-words">
-                            {record.name}
-                        </h1>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                        <Button
-                            disabled={tableBusy}
-                            onClick={() =>
-                                router.visit(`${path}/${record.id}/edit`)
-                            }
-                        >
-                            Modifica
-                        </Button>
-                        <DeleteRecord
-                            url={`${path}/${record.id}`}
-                            redirect={path}
-                            label={record.name ?? ''}
-                            disabled={tableBusy}
-                        />
-                    </div>
-                    <SpreadsheetActions
-                        slug={tenant.slug}
-                        resource={catalog}
-                        label={labels[catalog]}
-                        filters={{ record: record.id, year: year ?? undefined }}
-                        exportOnly
-                    />
-                </header>
-                <Card>
-                    <CardContent className="min-w-0">
-                        <dl className="grid gap-5 sm:grid-cols-3">
-                            {info.map(([label, value]) => (
-                                <div key={label}>
-                                    <dt className="text-sm text-muted-foreground">
-                                        {label}
-                                    </dt>
-                                    <dd className="mt-1 text-sm font-medium">
-                                        {value ?? '—'}
-                                    </dd>
-                                </div>
-                            ))}
-                            {catalog === 'contracts' && (
-                                <div>
-                                    <dt className="text-sm text-muted-foreground">
-                                        Fornitore
-                                    </dt>
-                                    <dd className="mt-1">
-                                        {record.vendor ? (
-                                            <Link
-                                                className="text-sm text-primary"
-                                                href={`/t/${tenant.slug}/vendors/${record.vendor.id}`}
+            <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="font-semibold">
+                        Totali delle spese collegate ·{' '}
+                        {year ?? 'tutti gli anni'}
+                    </h2>
+                    {catalog === 'projects' && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Label htmlFor="project-expense-year">
+                                Anno di imputazione
+                            </Label>
+                            <Select
+                                value={year === null ? 'all' : String(year)}
+                                disabled={tableBusy}
+                                onValueChange={(value) => {
+                                    router.get(
+                                        `${path}/${record.id}`,
+                                        value === 'all'
+                                            ? {}
+                                            : { year: Number(value) },
+                                        {
+                                            preserveState: true,
+                                            preserveScroll: true,
+                                        },
+                                    );
+                                }}
+                            >
+                                <SelectTrigger
+                                    id="project-expense-year"
+                                    className="w-40"
+                                >
+                                    <SelectValue>
+                                        {year ?? 'Tutti gli anni'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectGroup>
+                                        <SelectItem value="all">
+                                            Tutti gli anni
+                                        </SelectItem>
+                                        {years.map((value) => (
+                                            <SelectItem
+                                                key={value}
+                                                value={String(value)}
                                             >
-                                                {record.vendor.name}
-                                            </Link>
-                                        ) : (
-                                            '—'
-                                        )}
-                                    </dd>
-                                </div>
-                            )}
-                        </dl>
-                        {(record.notes || record.description) && (
-                            <p className="mt-6 text-sm whitespace-pre-wrap text-muted-foreground">
-                                {record.notes ?? record.description}
-                            </p>
-                        )}
-                        {catalog !== 'vendors' && (
-                            <div className="mt-6 flex flex-col gap-2">
-                                <p className="text-sm text-muted-foreground">
-                                    Centri di Costo
-                                </p>
-                                {record.cost_centers?.length ? (
-                                    <CostCenterTags
-                                        centers={record.cost_centers}
-                                    />
-                                ) : (
-                                    <p className="text-sm">Nessuno</p>
-                                )}
-                            </div>
-                        )}
-                        {catalog === 'projects' && (
-                            <p className="mt-4 text-sm text-muted-foreground">
-                                Gli importi allocati ed effettivi del progetto
-                                sono la somma delle spese collegate.
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
-                {catalog !== 'vendors' && (
-                    <AttachmentsSection
-                        key={`${tenant.id}:${catalog}:${record.id}`}
-                        tenant={tenant}
-                        resource={catalog}
-                        recordId={record.id}
+                                                {value}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectGroup>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </div>
+                {catalog === 'vendors' ? (
+                    <Summary totals={totals} />
+                ) : (
+                    <DetailKpis
+                        aggregate
+                        allocated={
+                            breakdown?.allocated.net == null
+                                ? null
+                                : totals.allocated
+                        }
+                        actual={
+                            breakdown?.actual.net == null ? null : totals.actual
+                        }
+                        variance={
+                            totals.count > totals.incomplete
+                                ? totals.variance
+                                : null
+                        }
+                        count={totals.count}
+                        incomplete={totals.incomplete}
                     />
                 )}
-                <div>
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <h2 className="font-semibold">
-                            Totali delle spese collegate ·{' '}
-                            {year ?? 'tutti gli anni'}
-                        </h2>
-                        {catalog === 'projects' && (
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Label htmlFor="project-expense-year">
-                                    Anno di imputazione
-                                </Label>
-                                <Select
-                                    value={year === null ? 'all' : String(year)}
-                                    disabled={tableBusy}
-                                    onValueChange={(value) => {
-                                        router.get(
-                                            `${path}/${record.id}`,
-                                            value === 'all'
-                                                ? {}
-                                                : { year: Number(value) },
-                                            {
-                                                preserveState: true,
-                                                preserveScroll: true,
-                                            },
-                                        );
-                                    }}
-                                >
-                                    <SelectTrigger
-                                        id="project-expense-year"
-                                        className="w-40"
-                                    >
-                                        <SelectValue>
-                                            {year ?? 'Tutti gli anni'}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectGroup>
-                                            <SelectItem value="all">
-                                                Tutti gli anni
-                                            </SelectItem>
-                                            {years.map((value) => (
-                                                <SelectItem
-                                                    key={value}
-                                                    value={String(value)}
-                                                >
-                                                    {value}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-                    </div>
-                    <Summary totals={totals} />
-                </div>
+            </div>
+            <div
+                className={
+                    catalog === 'vendors'
+                        ? 'min-w-0'
+                        : 'grid min-w-0 items-start gap-6 @5xl/detail:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]'
+                }
+            >
                 <section
                     aria-label="Spese collegate"
-                    className="flex min-w-0 flex-col gap-3"
+                    className="order-2 flex min-w-0 flex-col gap-3 @5xl/detail:order-1"
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <h2 className="font-semibold">Spese collegate</h2>
@@ -271,6 +199,168 @@ export default function CatalogDetail({
                         <Pagination page={expenses} />
                     </div>
                 </section>
+                {catalog !== 'vendors' && breakdown && (
+                    <div className="order-1 min-w-0 @5xl/detail:order-2">
+                        <DetailBreakdownChart
+                            breakdown={breakdown}
+                            description={`Totale delle spese collegate → singole spese · ${year ?? 'tutti gli anni'}.`}
+                        />
+                    </div>
+                )}
+            </div>
+        </>
+    );
+    return (
+        <>
+            <Head title={`${record.name} · ${tenant.name}`} />
+            <div className="@container/detail page-shell">
+                <header className="flex detail-enter flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                        <Link
+                            href={path}
+                            className="text-sm text-muted-foreground"
+                        >
+                            {tenant.name} / {labels[catalog]}
+                        </Link>
+                        <h1 className="mt-2 page-title [overflow-wrap:anywhere]">
+                            {record.name}
+                        </h1>
+                        {catalog !== 'vendors' && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                                {catalog === 'projects' && (
+                                    <Badge variant="secondary">
+                                        {record.status}
+                                    </Badge>
+                                )}
+                                <span>
+                                    {catalog === 'projects'
+                                        ? (year ?? 'Tutti gli anni')
+                                        : `${dateLabel(record.starts_on)} – ${dateLabel(record.ends_on)}`}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                        <Button
+                            disabled={tableBusy}
+                            onClick={() =>
+                                router.visit(`${path}/${record.id}/edit`)
+                            }
+                        >
+                            Modifica
+                        </Button>
+                        <DeleteRecord
+                            url={`${path}/${record.id}`}
+                            redirect={path}
+                            label={record.name ?? ''}
+                            disabled={tableBusy}
+                        />
+                        <SpreadsheetActions
+                            slug={tenant.slug}
+                            resource={catalog}
+                            label={labels[catalog]}
+                            filters={{
+                                record: record.id,
+                                year: year ?? undefined,
+                            }}
+                            exportOnly
+                        />
+                    </div>
+                </header>
+                {catalog !== 'vendors' && economics}
+                <Card className="min-w-0 gap-4">
+                    <CardHeader>
+                        <CardTitle>Informazioni</CardTitle>
+                    </CardHeader>
+                    <CardContent className="min-w-0">
+                        <dl className="grid gap-5 sm:grid-cols-3">
+                            {info
+                                .filter(([, value]) => value && value !== '—')
+                                .map(([label, value]) => (
+                                    <div key={label}>
+                                        <dt className="text-sm text-muted-foreground">
+                                            {label}
+                                        </dt>
+                                        <dd className="mt-1 text-sm font-medium">
+                                            {value ?? '—'}
+                                        </dd>
+                                    </div>
+                                ))}
+                            {catalog === 'contracts' && record.vendor && (
+                                <div>
+                                    <dt className="text-sm text-muted-foreground">
+                                        Fornitore
+                                    </dt>
+                                    <dd className="mt-1">
+                                        {record.vendor ? (
+                                            <Link
+                                                className="text-sm text-primary"
+                                                href={`/t/${tenant.slug}/vendors/${record.vendor.id}`}
+                                            >
+                                                {record.vendor.name}
+                                            </Link>
+                                        ) : (
+                                            '—'
+                                        )}
+                                    </dd>
+                                </div>
+                            )}
+                            {catalog === 'contracts' &&
+                                record.reference_amount != null && (
+                                    <div>
+                                        <dt className="text-sm text-muted-foreground">
+                                            Valore di riferimento
+                                        </dt>
+                                        <dd className="mt-1 financial-value text-sm">
+                                            {money(record.reference_amount)}
+                                        </dd>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                            Autonomo rispetto alle spese
+                                            collegate
+                                        </p>
+                                    </div>
+                                )}
+                        </dl>
+                        {catalog !== 'vendors' &&
+                            !!record.cost_centers?.length && (
+                                <div className="mt-6 flex flex-col gap-2">
+                                    <p className="text-sm text-muted-foreground">
+                                        Centri di Costo
+                                    </p>
+                                    {record.cost_centers?.length ? (
+                                        <CostCenterTags
+                                            centers={record.cost_centers}
+                                        />
+                                    ) : (
+                                        <p className="text-sm">Nessuno</p>
+                                    )}
+                                </div>
+                            )}
+                        {catalog === 'projects' && (
+                            <p className="mt-4 text-sm text-muted-foreground">
+                                Gli importi allocati ed effettivi del progetto
+                                sono la somma delle spese collegate.
+                            </p>
+                        )}
+                    </CardContent>
+                </Card>
+                {(record.notes || record.description) && (
+                    <DetailNotes
+                        key={record.id}
+                        text={record.notes ?? record.description ?? ''}
+                        title={catalog === 'projects' ? 'Descrizione' : 'Note'}
+                    />
+                )}
+                {catalog !== 'vendors' && (
+                    <AttachmentsSection
+                        compact
+                        key={`${tenant.id}:${catalog}:${record.id}`}
+                        tenant={tenant}
+                        resource={catalog}
+                        recordId={record.id}
+                    />
+                )}
+                {catalog === 'vendors' && economics}
                 {contracts && (
                     <Card>
                         <CardHeader>

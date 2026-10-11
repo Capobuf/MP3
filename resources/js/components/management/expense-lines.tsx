@@ -16,6 +16,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 import { dateLabel, decimalInput, money, varianceTextClass } from './helpers';
 import { DateField } from './date-field';
 import { MoneyField, MoneyOutput } from './money-field';
@@ -244,11 +245,16 @@ export function ExpenseLines({
                 <div className="flex flex-wrap items-center gap-2">
                     <h2 className="mr-auto font-semibold">
                         {readOnly
-                            ? 'Dettaglio spesa'
+                            ? 'Righe economiche'
                             : contractMode
                               ? 'Condizioni economiche'
                               : 'Righe economiche'}
                     </h2>
+                    {readOnly && (
+                        <Badge variant="secondary">
+                            {visible.length} di {lines.length}
+                        </Badge>
+                    )}
                     {!readOnly && (
                         <Button
                             type="button"
@@ -265,54 +271,61 @@ export function ExpenseLines({
                     )}
                 </div>
             )}
-            <div className="flex flex-wrap gap-2">
-                <Input
-                    aria-label={
-                        contractMode
-                            ? 'Cerca nelle condizioni economiche'
-                            : 'Cerca nelle descrizioni delle righe'
-                    }
-                    placeholder={
-                        contractMode
-                            ? 'Cerca nelle condizioni…'
-                            : 'Cerca nelle righe…'
-                    }
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    disabled={disabled}
-                    className="min-w-40 flex-1"
-                />
-                <NativeSelect
-                    aria-label={
-                        contractMode
-                            ? 'Filtra condizioni per tipo'
-                            : 'Filtra righe per tipo'
-                    }
-                    value={filter}
-                    disabled={disabled}
-                    onChange={(event) => setFilter(event.target.value)}
-                >
-                    <NativeSelectOption value="all">
-                        Tutti i tipi
-                    </NativeSelectOption>
-                    <NativeSelectOption value="allocated">
-                        {contractMode ? 'Previste' : 'Allocati'}
-                    </NativeSelectOption>
-                    <NativeSelectOption value="actual">
-                        Effettivi
-                    </NativeSelectOption>
-                </NativeSelect>
-                {filtered && (
-                    <Button
-                        type="button"
-                        variant="ghost"
+            {(!readOnly || lines.length > 5) && (
+                <div className="flex flex-wrap gap-2">
+                    <Input
+                        aria-label={
+                            contractMode
+                                ? 'Cerca nelle condizioni economiche'
+                                : 'Cerca nelle descrizioni delle righe'
+                        }
+                        placeholder={
+                            contractMode
+                                ? 'Cerca nelle condizioni…'
+                                : 'Cerca nelle righe…'
+                        }
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
                         disabled={disabled}
-                        onClick={resetFilters}
+                        className="min-w-40 flex-1"
+                    />
+                    <NativeSelect
+                        aria-label={
+                            contractMode
+                                ? 'Filtra condizioni per tipo'
+                                : 'Filtra righe per tipo'
+                        }
+                        value={filter}
+                        disabled={disabled}
+                        onChange={(event) => setFilter(event.target.value)}
                     >
-                        Azzera filtri
-                    </Button>
-                )}
-            </div>
+                        <NativeSelectOption value="all">
+                            Tutti i tipi
+                        </NativeSelectOption>
+                        <NativeSelectOption value="allocated">
+                            {contractMode ? 'Previste' : 'Allocati'}
+                        </NativeSelectOption>
+                        <NativeSelectOption value="actual">
+                            Effettivi
+                        </NativeSelectOption>
+                    </NativeSelect>
+                    {filtered && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            disabled={disabled}
+                            onClick={resetFilters}
+                        >
+                            Azzera filtri
+                        </Button>
+                    )}
+                </div>
+            )}
+            {readOnly && (
+                <p className="text-xs text-muted-foreground">
+                    {visible.length} di {lines.length} righe visibili
+                </p>
+            )}
             {!readOnly && (
                 <p className="text-sm text-muted-foreground">
                     {visible.length} di {lines.length}{' '}
@@ -427,7 +440,12 @@ export function ExpenseLines({
                     </Button>
                 </div>
             )}
-            <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
+            <div
+                className={cn(
+                    'min-w-0 overflow-hidden rounded-lg bg-card',
+                    !readOnly && 'border',
+                )}
+            >
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -475,12 +493,30 @@ export function ExpenseLines({
                                 </TableHead>
                             )}
                             {!readOnly && <TableHead>Ordine</TableHead>}
-                            <TableHead>Tipo</TableHead>
+                            <TableHead
+                                className={
+                                    readOnly
+                                        ? 'hidden sm:table-cell'
+                                        : undefined
+                                }
+                            >
+                                Tipo
+                            </TableHead>
                             <TableHead>Descrizione</TableHead>
-                            <TableHead className="w-32 text-right whitespace-normal">
+                            <TableHead
+                                className={cn(
+                                    'w-32 text-right whitespace-normal',
+                                    readOnly && 'hidden md:table-cell',
+                                )}
+                            >
                                 Prezzo unitario
                             </TableHead>
-                            <TableHead className="w-24 text-right">
+                            <TableHead
+                                className={cn(
+                                    'w-24 text-right',
+                                    readOnly && 'hidden md:table-cell',
+                                )}
+                            >
                                 Quantità
                             </TableHead>
                             <TableHead className="text-right">Totale</TableHead>
@@ -536,11 +572,11 @@ export function ExpenseLines({
                             return (
                                 <TableRow
                                     key={line.key}
-                                    className={
+                                    className={cn(
                                         readOnly
-                                            ? '[&>td]:align-middle'
-                                            : '[&>td]:align-top'
-                                    }
+                                            ? 'transition-colors hover:bg-muted/40 [&>td]:align-middle'
+                                            : '[&>td]:align-top',
+                                    )}
                                     data-state={
                                         selected.includes(line.key)
                                             ? 'selected'
@@ -615,13 +651,25 @@ export function ExpenseLines({
                                             </div>
                                         </TableCell>
                                     )}
-                                    <TableCell className="min-w-32">
+                                    <TableCell
+                                        className={cn(
+                                            readOnly
+                                                ? 'hidden sm:table-cell'
+                                                : 'min-w-32',
+                                        )}
+                                    >
                                         {readOnly ? (
-                                            line.type === 'allocated' ? (
-                                                allocatedLabel
-                                            ) : (
-                                                'Effettivo'
-                                            )
+                                            <Badge
+                                                variant={
+                                                    line.type === 'allocated'
+                                                        ? 'outline'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {line.type === 'allocated'
+                                                    ? allocatedLabel
+                                                    : 'Effettivo'}
+                                            </Badge>
                                         ) : (
                                             <NativeSelect
                                                 aria-label={`Tipo ${label}`}
@@ -654,9 +702,34 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="w-full min-w-80 whitespace-normal">
+                                    <TableCell
+                                        className={cn(
+                                            'w-full whitespace-normal',
+                                            readOnly
+                                                ? 'min-w-32 font-medium [overflow-wrap:anywhere] sm:min-w-48'
+                                                : 'min-w-80',
+                                        )}
+                                    >
                                         {readOnly ? (
-                                            line.description
+                                            <div className="flex flex-col gap-1.5">
+                                                <span>{line.description}</span>
+                                                <span className="financial-value text-xs text-muted-foreground md:hidden">
+                                                    {Number(
+                                                        line.quantity,
+                                                    ).toLocaleString('it-IT', {
+                                                        maximumFractionDigits: 4,
+                                                    })}{' '}
+                                                    × {money(line.unit_price)}
+                                                </span>
+                                                <Badge
+                                                    className="self-start sm:hidden"
+                                                    variant="outline"
+                                                >
+                                                    {line.type === 'allocated'
+                                                        ? allocatedLabel
+                                                        : 'Effettivo'}
+                                                </Badge>
+                                            </div>
                                         ) : (
                                             <Input
                                                 ref={(input) => {
@@ -698,12 +771,14 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="w-32 min-w-32 text-right font-medium tracking-normal tabular-nums">
+                                    <TableCell
+                                        className={cn(
+                                            'w-32 min-w-32 text-right financial-value',
+                                            readOnly && 'hidden md:table-cell',
+                                        )}
+                                    >
                                         {readOnly ? (
-                                            <MoneyOutput
-                                                value={line.unit_price}
-                                                label={`Prezzo unitario ${label}`}
-                                            />
+                                            money(line.unit_price)
                                         ) : (
                                             <MoneyField
                                                 aria-label={`Prezzo unitario ${label}`}
@@ -731,7 +806,12 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="w-24 min-w-24 text-right font-medium tracking-normal tabular-nums">
+                                    <TableCell
+                                        className={cn(
+                                            'w-24 min-w-24 text-right financial-value',
+                                            readOnly && 'hidden md:table-cell',
+                                        )}
+                                    >
                                         {readOnly ? (
                                             Number(
                                                 line.quantity,
@@ -765,19 +845,28 @@ export function ExpenseLines({
                                             </p>
                                         )}
                                     </TableCell>
-                                    <TableCell className="min-w-36 text-right font-medium tracking-normal tabular-nums">
-                                        <MoneyOutput
-                                            label={`Totale ${label}`}
-                                            value={
-                                                cents !== null
-                                                    ? Number(cents) / 100
-                                                    : decimalInput(
-                                                            line.unit_price,
-                                                        ) === null
-                                                      ? 0
-                                                      : null
-                                            }
-                                        />
+                                    <TableCell
+                                        className={cn(
+                                            'text-right financial-value',
+                                            readOnly ? 'min-w-28' : 'min-w-36',
+                                        )}
+                                    >
+                                        {readOnly ? (
+                                            money(line.total)
+                                        ) : (
+                                            <MoneyOutput
+                                                label={`Totale ${label}`}
+                                                value={
+                                                    cents !== null
+                                                        ? Number(cents) / 100
+                                                        : decimalInput(
+                                                                line.unit_price,
+                                                            ) === null
+                                                          ? 0
+                                                          : null
+                                                }
+                                            />
+                                        )}
                                     </TableCell>
                                     {contractMode &&
                                         (

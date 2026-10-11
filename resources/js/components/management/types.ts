@@ -74,6 +74,15 @@ export type Totals = {
     count: number;
     incomplete: number;
 };
+export type BreakdownMetric = {
+    items: { id: string; name: string; amount: string }[];
+    positive: string;
+    negative: string;
+    net: string | null;
+    missing: number;
+    zero: number;
+};
+export type DetailBreakdown = Record<'allocated' | 'actual', BreakdownMetric>;
 export type Filters = {
     year?: number;
     search?: string;

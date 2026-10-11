@@ -67,7 +67,7 @@ class CatalogController extends Controller
             $item->load('vendor:id,name');
             $item->setAttribute('has_period_expenses', $item->expenses()->whereNotNull('period_starts_on')->exists());
         }
-        $expenses = $item->expenses()->getQuery();
+        $expenses = $item->expenses()->where('expenses.tenant_id', $tenant->id)->getQuery();
         if ($item instanceof Contract) {
             $expenses->orderByRaw('period_starts_on IS NULL')->orderBy('period_starts_on')->orderBy('period_ends_on');
         }
@@ -91,6 +91,7 @@ class CatalogController extends Controller
             'year' => $year,
             'years' => $years,
             'totals' => ExpenseOverview::totals($expenses),
+            'breakdown' => $catalog !== 'vendors' ? ExpenseOverview::breakdown($expenses) : null,
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
         ]);

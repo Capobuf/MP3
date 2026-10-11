@@ -211,11 +211,11 @@ export function ExpenseTable({
     }
     const allSelected = rows.length > 0 && selected.length === rows.length;
     const amountCell =
-        'col-span-2 col-start-2 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-0.5 pl-0 whitespace-normal xl:table-cell xl:w-44 xl:px-3 xl:py-3 xl:text-right';
+        'col-span-2 col-start-2 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-0.5 pl-0 whitespace-normal @5xl/expense-table:table-cell @5xl/expense-table:w-44 @5xl/expense-table:px-3 @5xl/expense-table:py-3 @5xl/expense-table:text-right';
 
     return (
         <div
-            className="flex min-w-0 flex-col gap-3"
+            className="@container/expense-table flex min-w-0 flex-col gap-3"
             aria-busy={busy || loading}
         >
             {selected.length > 0 && (
@@ -265,10 +265,10 @@ export function ExpenseTable({
                 </p>
             )}
             <div className="min-w-0 overflow-hidden rounded-xl border bg-card px-3 shadow-xs sm:px-4">
-                <Table className="block table-fixed xl:table">
-                    <TableHeader className="block xl:table-header-group">
-                        <TableRow className="grid grid-cols-[2rem_minmax(0,1fr)_2.5rem] items-center border-border/60 hover:bg-transparent xl:table-row">
-                            <TableHead className="flex items-center pl-0 xl:table-cell xl:w-10 xl:pl-2">
+                <Table className="block table-fixed @5xl/expense-table:table">
+                    <TableHeader className="block @5xl/expense-table:table-header-group">
+                        <TableRow className="grid grid-cols-[2rem_minmax(0,1fr)_2.5rem] items-center border-border/60 hover:bg-transparent @5xl/expense-table:table-row">
+                            <TableHead className="flex items-center pl-0 @5xl/expense-table:table-cell @5xl/expense-table:w-10 @5xl/expense-table:pl-2">
                                 <Checkbox
                                     aria-label="Seleziona tutte le spese della pagina"
                                     disabled={busy || !rows.length}
@@ -292,16 +292,16 @@ export function ExpenseTable({
                                 aria-sort={
                                     onSort ? sortDirection('title') : undefined
                                 }
-                                className="flex items-center px-0 text-sm text-muted-foreground xl:table-cell xl:px-2"
+                                className="flex items-center px-0 text-sm text-muted-foreground @5xl/expense-table:table-cell @5xl/expense-table:px-2"
                             >
                                 {heading('Descrizione', 'title')}
                             </TableHead>
                             {contractMode && (
                                 <>
-                                    <TableHead className="hidden w-52 xl:table-cell">
+                                    <TableHead className="hidden w-52 @5xl/expense-table:table-cell">
                                         Periodo coperto
                                     </TableHead>
-                                    <TableHead className="hidden w-24 xl:table-cell">
+                                    <TableHead className="hidden w-24 @5xl/expense-table:table-cell">
                                         Anno di imputazione
                                     </TableHead>
                                 </>
@@ -312,7 +312,7 @@ export function ExpenseTable({
                                         ? sortDirection('allocated_amount')
                                         : undefined
                                 }
-                                className="hidden w-44 text-right text-sm text-muted-foreground xl:table-cell"
+                                className="hidden w-44 text-right text-sm text-muted-foreground @5xl/expense-table:table-cell"
                             >
                                 {heading(
                                     contractMode ? 'Previsto' : 'Allocato',
@@ -325,12 +325,12 @@ export function ExpenseTable({
                                         ? sortDirection('actual_amount')
                                         : undefined
                                 }
-                                className="hidden w-44 text-right text-sm text-muted-foreground xl:table-cell"
+                                className="hidden w-44 text-right text-sm text-muted-foreground @5xl/expense-table:table-cell"
                             >
                                 {heading('Effettivo', 'actual_amount')}
                             </TableHead>
                             {!contractMode && (
-                                <TableHead className="hidden w-44 text-right text-sm text-muted-foreground xl:table-cell">
+                                <TableHead className="hidden w-44 text-right text-sm text-muted-foreground @5xl/expense-table:table-cell">
                                     Scostamento
                                 </TableHead>
                             )}
@@ -339,12 +339,12 @@ export function ExpenseTable({
                             </TableHead>
                         </TableRow>
                     </TableHeader>
-                    <TableBody className="block xl:table-row-group">
+                    <TableBody className="block @5xl/expense-table:table-row-group">
                         {!rows.length && (
-                            <TableRow className="block xl:table-row">
+                            <TableRow className="block @5xl/expense-table:table-row">
                                 <TableCell
                                     colSpan={contractMode ? 7 : 6}
-                                    className="block py-10 text-center whitespace-normal text-muted-foreground xl:table-cell"
+                                    className="block py-10 text-center whitespace-normal text-muted-foreground @5xl/expense-table:table-cell"
                                 >
                                     {loading ? (
                                         <Skeleton className="mx-auto h-10 w-3/4" />
@@ -362,9 +362,9 @@ export function ExpenseTable({
                                         ? 'selected'
                                         : undefined
                                 }
-                                className="grid grid-cols-[2rem_minmax(0,1fr)_2.5rem] gap-y-0 border-border/50 py-3 hover:bg-muted/50 data-[state=selected]:bg-accent xl:table-row xl:h-14 xl:py-0"
+                                className="grid grid-cols-[2rem_minmax(0,1fr)_2.5rem] gap-y-0 border-border/50 py-3 hover:bg-muted/50 data-[state=selected]:bg-accent @5xl/expense-table:table-row @5xl/expense-table:h-14 @5xl/expense-table:py-0"
                             >
-                                <TableCell className="col-start-1 row-start-1 pl-0 xl:pl-2">
+                                <TableCell className="col-start-1 row-start-1 pl-0 @5xl/expense-table:pl-2">
                                     <Checkbox
                                         aria-label={`Seleziona ${expense.title}`}
                                         checked={selected.includes(expense.id)}
@@ -381,7 +381,7 @@ export function ExpenseTable({
                                         }
                                     />
                                 </TableCell>
-                                <TableCell className="col-start-2 row-start-1 min-w-0 px-0 whitespace-normal xl:px-2">
+                                <TableCell className="col-start-2 row-start-1 min-w-0 px-0 whitespace-normal @5xl/expense-table:px-2">
                                     <Link
                                         href={`/t/${slug}/expenses/${expense.id}`}
                                         className="block rounded font-medium break-words focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -412,7 +412,7 @@ export function ExpenseTable({
                                 {contractMode && (
                                     <>
                                         <TableCell className={amountCell}>
-                                            <span className="text-sm text-muted-foreground xl:hidden">
+                                            <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
                                                 Periodo coperto
                                             </span>
                                             <span>
@@ -423,7 +423,7 @@ export function ExpenseTable({
                                             </span>
                                         </TableCell>
                                         <TableCell className={amountCell}>
-                                            <span className="text-sm text-muted-foreground xl:hidden">
+                                            <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
                                                 Anno di imputazione
                                             </span>
                                             {[
@@ -445,13 +445,13 @@ export function ExpenseTable({
                                     </>
                                 )}
                                 <TableCell className={amountCell}>
-                                    <span className="text-sm text-muted-foreground xl:hidden">
+                                    <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
                                         {contractMode ? 'Previsto' : 'Allocato'}
                                     </span>
                                     {amount(expense, 'allocated_amount')}
                                 </TableCell>
                                 <TableCell className={amountCell}>
-                                    <span className="text-sm text-muted-foreground xl:hidden">
+                                    <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
                                         Effettivo
                                     </span>
                                     {amount(expense, 'actual_amount')}
@@ -464,7 +464,7 @@ export function ExpenseTable({
                                             varianceTextClass(expense.variance),
                                         )}
                                     >
-                                        <span className="text-xs font-normal text-muted-foreground xl:hidden">
+                                        <span className="text-xs font-normal text-muted-foreground @5xl/expense-table:hidden">
                                             Scostamento
                                         </span>
                                         <span className="tracking-normal whitespace-nowrap">
@@ -474,7 +474,7 @@ export function ExpenseTable({
                                         </span>
                                     </TableCell>
                                 )}
-                                <TableCell className="col-start-3 row-start-1 px-0 text-right xl:px-2">
+                                <TableCell className="col-start-3 row-start-1 px-0 text-right @5xl/expense-table:px-2">
                                     <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
                                             <Button
