@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Http\Controllers\Tenant\ExpenseController;
 use App\Models\Tenant;
+use App\Services\ExpenseWriter;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +48,7 @@ class ManagementDemoSeeder extends Seeder
                     ]));
                 $titles = ['Hosting applicazioni', 'Licenze produttività', 'Backup immutabile', 'Notebook e monitor', 'Assistenza sistemistica', 'Firewall e sicurezza', 'Storage documentale', 'Connettività sedi'];
                 $periodMonths = [];
-                $expenses = app(ExpenseController::class);
+                $expenses = app(ExpenseWriter::class);
                 for ($i = 0; $i < 32; $i++) {
                     $vendorIndex = [0, 1, 2, 3, 4, 4, 0, 0][$i % 8];
                     $year = $i < 16 ? 2025 : 2026;
@@ -76,7 +76,7 @@ class ManagementDemoSeeder extends Seeder
                         }
                     }
                     // Use the same persistence as the UI: totals derive from lines, missing contract types stay null.
-                    $expenses->createForTenant($tenant, [
+                    $expenses->create($tenant, [
                         'title' => $title,
                         'year' => $year,
                         'vendor_id' => $vendors[$vendorIndex]->id,

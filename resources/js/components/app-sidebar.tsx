@@ -1,5 +1,4 @@
 import { Link, usePage } from '@inertiajs/react';
-import { LayoutGrid } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -13,7 +12,10 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { getPrimaryNavItems } from '@/lib/app-navigation';
+import {
+    getAdministrativeNavItems,
+    getPrimaryNavItems,
+} from '@/lib/app-navigation';
 
 export function AppSidebar() {
     const { auth, currentTenant } = usePage().props;
@@ -57,13 +59,7 @@ export function AppSidebar() {
                 />
                 {currentTenant && auth.user.is_super_admin && (
                     <NavMain
-                        items={[
-                            {
-                                title: 'Piattaforma',
-                                href: '/platform',
-                                icon: LayoutGrid,
-                            },
-                        ]}
+                        items={getAdministrativeNavItems(currentTenant)}
                         label="Amministrazione"
                     />
                 )}

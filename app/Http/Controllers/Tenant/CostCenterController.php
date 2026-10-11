@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BudgetEntry;
 use App\Models\CostCenter;
 use App\Models\Tenant;
+use App\Support\CostCenterQuery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,13 +19,7 @@ class CostCenterController extends Controller
 {
     public function index(Request $request, Tenant $tenant): Response
     {
-        $query = $tenant->costCenters()->whereNull('parent_id')
-            ->withCount(['expenses', 'projects', 'contracts'])
-            ->with(['children' => fn ($query) => $query->withCount(['expenses', 'projects', 'contracts'])]);
-        if ($search = $request->string('search')->trim()->toString()) {
-            $query->where(fn ($query) => $query->where('name', 'like', '%'.$search.'%')
-                ->orWhereHas('children', fn ($children) => $children->where('name', 'like', '%'.$search.'%')));
-        }
+        $query = CostCenterQuery::filtered($tenant, $request);
 
         return Inertia::render('tenants/cost-centers', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
@@ -35,7 +30,7 @@ class CostCenterController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request, Tenant $tenant, ?CostCenter $record = null): array
+    public function validated(Request $request, Tenant $tenant, ?CostCenter $record = null): array
     {
         $data = $request->validate([
             'tenant_id' => ['prohibited'],

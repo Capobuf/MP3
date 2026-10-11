@@ -9,6 +9,8 @@ use App\Models\Project;
 use App\Models\Tenant;
 use App\Models\Vendor;
 use App\Services\AttachmentFiles;
+use App\Services\ExpenseWriter;
+use App\Support\CatalogQuery;
 use App\Support\ExpenseOverview;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
@@ -34,28 +36,7 @@ class CatalogController extends Controller
 
     public function index(Request $request, Tenant $tenant, string $catalog): Response
     {
-        $query = $this->records($tenant, $catalog)->withCount('expenses');
-        if ($catalog !== 'vendors') {
-            $query->with('costCenters.parent:id,name');
-        }
-        if ($catalog === 'contracts') {
-            $query->with('vendor:id,name');
-            if ($request->filled('vendor_id')) {
-                $query->where('vendor_id', $request->integer('vendor_id'));
-            }
-            if ($request->input('expiring') === '1') {
-                $query->whereBetween('ends_on', [now()->toDateString(), now()->addDays(90)->toDateString()]);
-            }
-        }
-        if ($catalog === 'projects' && $request->filled('status')) {
-            $query->where('status', $request->input('status'));
-        }
-        if ($catalog === 'vendors' && $request->input('linked') === '1') {
-            $query->whereHas('expenses');
-        }
-        if ($search = $request->string('search')->trim()->toString()) {
-            $query->where('name', 'like', '%'.$search.'%');
-        }
+        $query = CatalogQuery::filtered($tenant, $catalog, $request);
         $sort = in_array($request->input('sort'), ['name', 'updated_at'], true) ? $request->string('sort')->toString() : 'name';
         $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
 
@@ -116,7 +97,7 @@ class CatalogController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private function validated(Request $request, Tenant $tenant, string $catalog): array
+    public function validated(Request $request, Tenant $tenant, string $catalog): array
     {
         $rules = [
             'tenant_id' => ['prohibited'],
@@ -194,7 +175,7 @@ class CatalogController extends Controller
             }
             if ($record instanceof Contract && $initialExpense !== null) {
                 try {
-                    app(ExpenseController::class)->createForTenant($tenant, [
+                    app(ExpenseWriter::class)->create($tenant, [
                         ...$initialExpense,
                         'contract_id' => $record->id,
                         'contract_entry' => true,

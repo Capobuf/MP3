@@ -7,12 +7,11 @@ use App\Http\Requests\ExpenseRequest;
 use App\Models\Expense;
 use App\Models\Tenant;
 use App\Services\AttachmentFiles;
+use App\Services\ExpenseWriter;
 use App\Support\ExpenseOverview;
 use App\Support\ExpensePeriods;
-use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -38,21 +37,9 @@ class ExpenseController extends Controller
 
     public function store(ExpenseRequest $request, Tenant $tenant): JsonResponse
     {
-        $expense = $this->createForTenant($tenant, $request->validated());
+        $expense = app(ExpenseWriter::class)->create($tenant, $request->validated());
 
         return response()->json(['record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
-    }
-
-    /** @param array<string, mixed> $data Validated expense fields. */
-    public function createForTenant(Tenant $tenant, array $data): Expense
-    {
-        return DB::transaction(function () use ($data, $tenant): Expense {
-            $expense = $tenant->expenses()->make();
-            ExpensePeriods::lockContracts($tenant, [$data['contract_id'] ?? null]);
-            $this->persist($expense, $data);
-
-            return $expense;
-        });
     }
 
     public function update(ExpenseRequest $request, Tenant $tenant, Expense $expense): JsonResponse
@@ -60,7 +47,7 @@ class ExpenseController extends Controller
         DB::transaction(function () use ($request, $tenant, $expense): void {
             $locked = $tenant->expenses()->whereKey($expense->id)->lockForUpdate()->firstOrFail();
             ExpensePeriods::lockContracts($tenant, [$locked->contract_id, $request->validated('contract_id')]);
-            $this->persist($locked, $request->validated());
+            app(ExpenseWriter::class)->persist($locked, $request->validated());
         });
 
         return response()->json(['record' => $expense->refresh()->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
@@ -127,7 +114,7 @@ class ExpenseController extends Controller
                 abort_unless($record !== null, 404);
                 unset($update['id']);
                 try {
-                    $this->persist($record, $update, $records->all());
+                    app(ExpenseWriter::class)->persist($record, $update, $records->all());
                 } catch (ValidationException $error) {
                     $errors = [];
                     foreach ($error->errors() as $field => $messages) {
@@ -139,113 +126,5 @@ class ExpenseController extends Controller
         });
 
         return response()->json(['message' => 'Modifiche salvate.']);
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     * @param  array<int, Expense>  $pending
-     */
-    private function persist(Expense $expense, array $data, array $pending = []): void
-    {
-        $hasLines = $expense->exists && $expense->lines()->exists();
-        $contractEntry = $data['contract_entry'] ?? false;
-        unset($data['contract_entry']);
-        $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
-        $individualPeriods = isset($data['lines']) && array_filter($data['lines'], fn ($line) => array_key_exists('year', $line) || array_key_exists('period_starts_on', $line) || array_key_exists('period_ends_on', $line)) !== [];
-        if ($individualPeriods) {
-            $starts = array_filter(array_column($data['lines'], 'period_starts_on'));
-            $ends = array_filter(array_column($data['lines'], 'period_ends_on'));
-            $data['period_starts_on'] = $starts === [] ? null : min($starts);
-            $data['period_ends_on'] = $ends === [] ? null : max($ends);
-            $data['year'] = $data['lines'][0]['year'] ?? $expense->year;
-            $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
-        }
-        $sharedPeriodUpdate = array_intersect_key($data, array_flip(['year', 'period_starts_on', 'period_ends_on']));
-        ExpensePeriods::validate($expense, $pending, ! $individualPeriods && (! $hasLines || $sharedPeriodUpdate !== []));
-        if ($contractEntry && $expense->contract_id === null) {
-            throw ValidationException::withMessages(['contract_id' => 'Seleziona il contratto della spesa.']);
-        }
-        $costCenterIds = $data['cost_center_ids'] ?? null;
-        unset($data['cost_center_ids']);
-        if (! array_key_exists('lines', $data)) {
-            if ($contractEntry && $expense->allocated_amount === null && $expense->actual_amount === null) {
-                throw ValidationException::withMessages(['allocated_amount' => 'Nel contratto indica almeno un importo previsto o effettivo, anche zero.']);
-            }
-            if ($hasLines &&
-                (array_key_exists('allocated_amount', $data) || array_key_exists('actual_amount', $data))) {
-                throw ValidationException::withMessages(['lines' => 'Modifica le righe della spesa: gli importi complessivi sono calcolati automaticamente.']);
-            }
-            // Keep the former shared-period API compatible without changing independent conditions.
-            $periodUpdate = array_intersect_key($data, array_flip(['period_starts_on', 'period_ends_on', 'year']));
-            if ($hasLines && $periodUpdate !== []) {
-                $expense->lines()->where('period_starts_on', $expense->getRawOriginal('period_starts_on'))
-                    ->where('period_ends_on', $expense->getRawOriginal('period_ends_on'))
-                    ->where(fn ($query) => $query->where('year', $expense->getRawOriginal('year'))->orWhereNull('year'))
-                    ->update($periodUpdate);
-            }
-            $expense->fill($data)->save();
-            if ($costCenterIds !== null) {
-                $expense->costCenters()->sync($costCenterIds);
-            }
-
-            return;
-        }
-
-        if ($contractEntry && $data['lines'] === []) {
-            throw ValidationException::withMessages(['lines' => 'Inserisci almeno una riga economica completa, anche di valore zero.']);
-        }
-
-        $lines = [];
-        $totals = ['allocated' => 0, 'actual' => 0];
-        $limit = 99999999999999;
-        foreach ($data['lines'] as $position => $line) {
-            $start = array_key_exists('period_starts_on', $line) ? $line['period_starts_on'] : $expense->period_starts_on?->toDateString();
-            $end = array_key_exists('period_ends_on', $line) ? $line['period_ends_on'] : $expense->period_ends_on?->toDateString();
-            $year = $line['year'] ?? $expense->year;
-            if ($start !== null && $end !== null && ! in_array((int) $year, [Carbon::parse($start)->year, Carbon::parse($end)->year], true)) {
-                throw ValidationException::withMessages(["lines.{$position}.year" => 'Scegli l’anno iniziale o finale del periodo della condizione economica.']);
-            }
-            $quantity = (string) ($line['quantity'] ?? '1');
-            $parts = explode('.', $quantity);
-            $scaledQuantity = (int) $parts[0] * 10000 + (int) str_pad($parts[1] ?? '', 4, '0');
-            $price = Money::cents((string) $line['unit_price']);
-            if (abs($price) > intdiv($limit * 10000, $scaledQuantity)) {
-                throw ValidationException::withMessages(["lines.{$position}.unit_price" => 'Il totale della riga supera l’importo massimo consentito.']);
-            }
-            $product = $price * $scaledQuantity;
-            $cents = intdiv(abs($product) + 5000, 10000) * ($product < 0 ? -1 : 1);
-            $totals[$line['type']] += $cents;
-            $lines[] = [
-                'description' => $line['description'],
-                'type' => $line['type'],
-                'unit_price' => Money::decimal($price),
-                'quantity' => $quantity,
-                'total' => Money::decimal($cents),
-                'position' => $position,
-                'period_starts_on' => $start,
-                'period_ends_on' => $end,
-                'year' => $expense->contract_id !== null || array_key_exists('year', $line) ? $year : null,
-            ];
-        }
-        foreach ($totals as $total) {
-            if (abs($total) > $limit) {
-                throw ValidationException::withMessages(['lines' => 'La somma delle righe supera l’importo massimo consentito.']);
-            }
-        }
-        unset($data['lines']);
-        // Missing types are unknown for contracts; retain the ordinary expense defaults.
-        foreach (['allocated' => 'allocated_amount', 'actual' => 'actual_amount'] as $type => $field) {
-            $hasType = in_array($type, array_column($lines, 'type'), true);
-            $data[$field] = ! $hasType &&
-                ($expense->contract_id !== null || $expense->getRawOriginal('contract_id') !== null ||
-                    ($hasLines && $expense->getRawOriginal($field) === null))
-                ? null : Money::decimal($totals[$type]);
-        }
-        $expense->fill($data)->save();
-        $expense->lines()->delete();
-        $expense->lines()->createMany($lines);
-        if ($costCenterIds !== null) {
-            $expense->costCenters()->sync($costCenterIds);
-        }
     }
 }

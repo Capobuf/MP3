@@ -42,6 +42,7 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'transferLimits' => ['xlsxMaxKb' => (int) config('transfers.xlsx_max_kb'), 'xlsxMaxRows' => (int) config('transfers.xlsx_max_rows')],
             'auth' => [
                 'user' => $user,
                 'tenants' => function () use ($user) {

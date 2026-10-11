@@ -1,3 +1,4 @@
+import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -102,6 +103,13 @@ function BudgetHeader({
                 <h1 className="page-title">Budget</h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+                <SpreadsheetActions
+                    slug={props.tenant.slug}
+                    resource="budget"
+                    label="Budget"
+                    filters={{ year: props.selectedYear }}
+                    disabled={busy}
+                />
                 <Button
                     variant="outline"
                     size="icon"

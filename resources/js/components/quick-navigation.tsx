@@ -1,7 +1,6 @@
 import { router, usePage } from '@inertiajs/react';
 import {
     Building2,
-    LayoutGrid,
     Palette,
     Search,
     ShieldCheck,
@@ -18,7 +17,10 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { getPrimaryNavItems } from '@/lib/app-navigation';
+import {
+    getAdministrativeNavItems,
+    getPrimaryNavItems,
+} from '@/lib/app-navigation';
 import { toUrl } from '@/lib/utils';
 import type { NavItem } from '@/types';
 
@@ -79,13 +81,7 @@ export function QuickNavigation() {
         {
             heading: 'Amministrazione',
             items: auth.user.is_super_admin
-                ? [
-                      {
-                          title: 'Piattaforma',
-                          href: '/platform',
-                          icon: LayoutGrid,
-                      },
-                  ]
+                ? getAdministrativeNavItems(currentTenant)
                 : [],
         },
     ];
