@@ -59,7 +59,6 @@ export type BudgetYear = {
 export type BudgetProps = {
     tenant: Tenant;
     selectedYear: number;
-    years: BudgetYear[];
     budgetYear: BudgetYear | null;
     budget: BudgetSnapshot | null;
     options: Options;

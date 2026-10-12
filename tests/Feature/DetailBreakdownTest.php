@@ -61,10 +61,10 @@ class DetailBreakdownTest extends TestCase
             ->where('totals.variance', '-30.07')->where('breakdown.actual.positive', '30.05')
             ->where('breakdown.actual.negative', '-10.04')->where('breakdown.actual.net', '20.01')
             ->where('breakdown.allocated.missing', 1)->has('expenses.data', 2));
-        $this->get($path)->assertInertia(fn (Assert $page) => $page
-            ->where('totals.count', 3)->where('breakdown.actual.positive', '110.07')
-            ->where('breakdown.actual.negative', '-10.04')->where('breakdown.actual.net', '100.03')
-            ->where('breakdown.actual.items.0.amount', '80.02')->has('breakdown.actual.items', 2));
+        $this->get($path.'?history=1')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.count', 2)->where('breakdown.actual.positive', '30.05')
+            ->where('breakdown.actual.negative', '-10.04')->where('breakdown.actual.net', '20.01')
+            ->where('breakdown.actual.items.0.amount', '30.05')->has('breakdown.actual.items', 1)->has('expenses.data', 3));
     }
 
     public function test_missing_zero_negative_and_comparable_variance_have_distinct_meanings(): void
@@ -111,6 +111,6 @@ class DetailBreakdownTest extends TestCase
             $this->get('/t/altro/'.$catalog.'/'.$record->id)->assertNotFound();
         }
         $this->get('/t/dettagli/vendors/'.$vendor->id)->assertInertia(fn (Assert $page) => $page
-            ->where('breakdown', null)->has('contracts.data', 0)->where('totals.count', 1));
+            ->where('breakdown.actual.net', '1.01')->has('contracts.data', 0)->where('totals.count', 1));
     }
 }

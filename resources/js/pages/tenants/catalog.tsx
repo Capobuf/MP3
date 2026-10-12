@@ -303,7 +303,7 @@ export default function CatalogPage({
                                                   : 'Stato / periodo'}
                                         </TableHead>
                                         <TableHead className="text-right">
-                                            Spese collegate
+                                            Spese collegate · storico
                                         </TableHead>
                                         <TableHead className="w-12">
                                             <span className="sr-only">

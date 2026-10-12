@@ -11,6 +11,7 @@ use App\Models\Vendor;
 use App\Services\AttachmentFiles;
 use App\Services\ExpenseWriter;
 use App\Support\CatalogQuery;
+use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
@@ -67,20 +68,19 @@ class CatalogController extends Controller
             $item->load('vendor:id,name');
             $item->setAttribute('has_period_expenses', $item->expenses()->whereNotNull('period_starts_on')->exists());
         }
-        $expenses = $item->expenses()->where('expenses.tenant_id', $tenant->id)->getQuery();
+        $year = EconomicYearContext::year($tenant, $request);
+        $history = $request->query('history') === '1';
+        $field = match ($catalog) {
+            'contracts' => 'contract_id', 'projects' => 'project_id', 'vendors' => 'vendor_id',
+            default => abort(404),
+        };
+        $expenses = ExpenseOverview::economicQuery($tenant)->where($field, $item->id);
+        $annual = (clone $expenses)->where('year', $year);
+        if (! $history) {
+            $expenses->where('year', $year);
+        }
         if ($item instanceof Contract) {
             $expenses->orderByRaw('period_starts_on IS NULL')->orderBy('period_starts_on')->orderBy('period_ends_on');
-        }
-        $year = null;
-        $years = [];
-        if ($item instanceof Project) {
-            $expenses = ExpenseOverview::economicQuery($tenant)->where('project_id', $item->id);
-            $data = $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
-            $year = isset($data['year']) ? (int) $data['year'] : null;
-            $years = (clone $expenses)->select('year')->distinct()->orderByDesc('year')->pluck('year')->all();
-            if ($year !== null) {
-                $expenses->where('year', $year);
-            }
         }
 
         return Inertia::render('tenants/catalog-detail', [
@@ -89,9 +89,9 @@ class CatalogController extends Controller
             'record' => $item,
             'options' => ExpenseOverview::options($tenant),
             'year' => $year,
-            'years' => $years,
-            'totals' => ExpenseOverview::totals($expenses),
-            'breakdown' => $catalog !== 'vendors' ? ExpenseOverview::breakdown($expenses) : null,
+            'history' => $history,
+            'totals' => ExpenseOverview::totals($annual),
+            'breakdown' => ExpenseOverview::breakdown($annual),
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
         ]);

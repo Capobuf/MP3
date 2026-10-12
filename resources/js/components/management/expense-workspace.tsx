@@ -13,7 +13,6 @@ export function ExpenseWorkspace({
     tenant,
     expenses,
     filters,
-    years,
     options,
     dashboard = false,
     showFilters = true,
@@ -52,7 +51,6 @@ export function ExpenseWorkspace({
                     tenant={tenant}
                     expenses={expenses}
                     filters={filters}
-                    years={years}
                     options={options}
                     path={path}
                     busy={busy}

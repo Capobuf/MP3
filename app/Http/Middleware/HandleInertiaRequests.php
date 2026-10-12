@@ -3,7 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\Tenant;
+use App\Support\EconomicYearContext;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -60,6 +62,15 @@ class HandleInertiaRequests extends Middleware
             'currentTenant' => $tenant instanceof Tenant
                 ? $tenant->only('id', 'name', 'slug')
                 : null,
+            // Evaluate after route authorization and include even in partial reloads.
+            'economicContext' => Inertia::always(function () use ($tenant, $request) {
+                if (! $tenant instanceof Tenant) {
+                    return null;
+                }
+                $year = EconomicYearContext::year($tenant, $request);
+
+                return ['year' => $year, 'years' => EconomicYearContext::years($tenant, $year)];
+            }),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }

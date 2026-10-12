@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
+import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
     Sheet,
     SheetContent,
@@ -109,102 +120,136 @@ export function BudgetManualForm({
     const [center, setCenter] = useState<number | null>(
         entry?.cost_center_id ?? null,
     );
+    const dirty =
+        description !== (entry?.description ?? '') ||
+        allocated !== (entry?.manual_allocated ?? '') ||
+        actual !== (entry?.manual_actual ?? '') ||
+        center !== (entry?.cost_center_id ?? null);
+    const navigation = useUnsavedNavigation(dirty && !disabled);
     return (
-        <form
-            aria-busy={disabled}
-            data-undo-dirty={
-                description !== (entry?.description ?? '') ||
-                allocated !== (entry?.manual_allocated ?? '') ||
-                actual !== (entry?.manual_actual ?? '') ||
-                center !== (entry?.cost_center_id ?? null)
-            }
-            onSubmit={(event) => {
-                event.preventDefault();
-                void onSave({
-                    description,
-                    manual_allocated: decimalInput(allocated),
-                    manual_actual: decimalInput(actual),
-                    cost_center_id: center,
-                });
-            }}
-            className="flex flex-col gap-4"
-        >
-            <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                <Field className="sm:col-span-2">
-                    <FieldLabel htmlFor={`description-${entry?.id ?? 'new'}`}>
-                        Descrizione
-                    </FieldLabel>
-                    <Input
-                        id={`description-${entry?.id ?? 'new'}`}
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        required
-                        maxLength={255}
-                        disabled={disabled}
-                    />
-                </Field>
-                <Field
-                    data-budget-incomplete={
-                        highlightIncomplete && allocated.trim() === ''
-                    }
-                    className={cn(
-                        highlightIncomplete &&
-                            allocated.trim() === '' &&
-                            'rounded-md bg-accent p-3 ring-1 ring-primary/40',
-                    )}
-                >
-                    <FieldLabel htmlFor={`allocated-${entry?.id ?? 'new'}`}>
-                        Previsto facoltativo
-                    </FieldLabel>
-                    <MoneyField
-                        id={`allocated-${entry?.id ?? 'new'}`}
-                        value={allocated}
-                        onChange={setAllocated}
-                        disabled={disabled}
-                    />
-                </Field>
-                <Field
-                    data-budget-incomplete={
-                        highlightIncomplete && actual.trim() === ''
-                    }
-                    className={cn(
-                        highlightIncomplete &&
-                            actual.trim() === '' &&
-                            'rounded-md bg-accent p-3 ring-1 ring-primary/40',
-                    )}
-                >
-                    <FieldLabel htmlFor={`actual-${entry?.id ?? 'new'}`}>
-                        Effettivo facoltativo
-                    </FieldLabel>
-                    <MoneyField
-                        id={`actual-${entry?.id ?? 'new'}`}
-                        value={actual}
-                        onChange={setActual}
-                        disabled={disabled}
-                    />
-                </Field>
-                <Field className="sm:col-span-2">
-                    <FieldLabel>Centro di costo principale</FieldLabel>
-                    <BudgetCenterSelect
-                        centers={centers}
-                        value={center}
-                        onChange={setCenter}
-                        disabled={disabled}
-                    />
-                </Field>
-            </FieldGroup>
-            <p className="text-sm text-muted-foreground">
-                Vuoto indica un importo da compilare. Zero è un importo
-                disponibile.
-            </p>
-            <Button type="submit" disabled={disabled} className="self-end">
-                {disabled
-                    ? 'Salvataggio…'
-                    : entry
-                      ? 'Salva voce'
-                      : 'Aggiungi voce libera'}
-            </Button>
-        </form>
+        <>
+            <form
+                aria-busy={disabled}
+                data-undo-dirty={dirty}
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    void onSave({
+                        description,
+                        manual_allocated: decimalInput(allocated),
+                        manual_actual: decimalInput(actual),
+                        cost_center_id: center,
+                    });
+                }}
+                className="flex flex-col gap-4"
+            >
+                <FieldGroup className="grid gap-4 sm:grid-cols-2">
+                    <Field className="sm:col-span-2">
+                        <FieldLabel
+                            htmlFor={`description-${entry?.id ?? 'new'}`}
+                        >
+                            Descrizione
+                        </FieldLabel>
+                        <Input
+                            id={`description-${entry?.id ?? 'new'}`}
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            required
+                            maxLength={255}
+                            disabled={disabled}
+                        />
+                    </Field>
+                    <Field
+                        data-budget-incomplete={
+                            highlightIncomplete && allocated.trim() === ''
+                        }
+                        className={cn(
+                            highlightIncomplete &&
+                                allocated.trim() === '' &&
+                                'rounded-md bg-accent p-3 ring-1 ring-primary/40',
+                        )}
+                    >
+                        <FieldLabel htmlFor={`allocated-${entry?.id ?? 'new'}`}>
+                            Previsto facoltativo
+                        </FieldLabel>
+                        <MoneyField
+                            id={`allocated-${entry?.id ?? 'new'}`}
+                            value={allocated}
+                            onChange={setAllocated}
+                            disabled={disabled}
+                        />
+                    </Field>
+                    <Field
+                        data-budget-incomplete={
+                            highlightIncomplete && actual.trim() === ''
+                        }
+                        className={cn(
+                            highlightIncomplete &&
+                                actual.trim() === '' &&
+                                'rounded-md bg-accent p-3 ring-1 ring-primary/40',
+                        )}
+                    >
+                        <FieldLabel htmlFor={`actual-${entry?.id ?? 'new'}`}>
+                            Effettivo facoltativo
+                        </FieldLabel>
+                        <MoneyField
+                            id={`actual-${entry?.id ?? 'new'}`}
+                            value={actual}
+                            onChange={setActual}
+                            disabled={disabled}
+                        />
+                    </Field>
+                    <Field className="sm:col-span-2">
+                        <FieldLabel>Centro di costo principale</FieldLabel>
+                        <BudgetCenterSelect
+                            centers={centers}
+                            value={center}
+                            onChange={setCenter}
+                            disabled={disabled}
+                        />
+                    </Field>
+                </FieldGroup>
+                <p className="text-sm text-muted-foreground">
+                    Vuoto indica un importo da compilare. Zero è un importo
+                    disponibile.
+                </p>
+                <Button type="submit" disabled={disabled} className="self-end">
+                    {disabled
+                        ? 'Salvataggio…'
+                        : entry
+                          ? 'Salva voce'
+                          : 'Aggiungi voce libera'}
+                </Button>
+            </form>
+            <AlertDialog
+                open={navigation.pending !== null}
+                onOpenChange={(open) => {
+                    if (!open) navigation.cancel();
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Scartare le modifiche?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Ci sono dati non salvati nel form. Puoi tornare a
+                            modificarli.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>
+                            Continua a modificare
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            onClick={navigation.confirm}
+                        >
+                            Scarta modifiche
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
 

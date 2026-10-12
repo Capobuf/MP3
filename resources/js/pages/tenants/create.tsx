@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { CostCenterForm } from '@/components/management/cost-center-form';
 import { EntityForm } from '@/components/management/entity-form';
 import { labels, singular } from '@/components/management/types';
@@ -27,13 +27,15 @@ export default function CreateRecord({
     parentId: number | null;
     record: RecordData | null;
 }) {
+    const { economicContext } = usePage().props;
+    const workingYear = economicContext!.year;
     const path = `/t/${tenant.slug}/${kind}`;
     const returnPath = contractContext
         ? `/t/${tenant.slug}/contracts/${contractContext.id}`
         : record && kind !== 'cost-centers'
           ? `${path}/${record.id}`
           : kind === 'expenses'
-            ? `${path}?year=${year}`
+            ? `${path}?year=${workingYear}`
             : path;
     const close = () => router.visit(returnPath);
     return (
@@ -74,7 +76,7 @@ export default function CreateRecord({
                                     ? `${path}/${record.id}`
                                     : contractContext
                                       ? returnPath
-                                      : `${path}?year=${record.year ?? year}`,
+                                      : `${path}?year=${workingYear}`,
                             )
                         }
                     />

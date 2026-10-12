@@ -41,7 +41,7 @@ final class ExpenseOverview
     {
         $query = self::economicQuery($tenant);
         if ($withYear) {
-            $query->where('year', $request->integer('year', (int) now()->format('Y')));
+            $query->where('year', EconomicYearContext::year($tenant, $request));
         }
         if ($search = $request->string('search')->trim()->toString()) {
             $query->where('title', 'like', '%'.$search.'%');
@@ -166,8 +166,7 @@ final class ExpenseOverview
             'tenant' => $tenant->only('id', 'name', 'slug'),
             'expenses' => (clone $query)->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderBy($sort, $direction)->orderBy('id')->paginate(50)->withQueryString(),
             'totals' => $totals ?? self::totals($query),
-            'filters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $request->integer('year', (int) now()->format('Y')), 'sort' => $sort, 'direction' => $direction],
-            'years' => self::economicQuery($tenant)->select('year')->distinct()->orderByDesc('year')->pluck('year')->push((int) now()->format('Y'), $request->integer('year', (int) now()->format('Y')))->unique()->values(),
+            'filters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => EconomicYearContext::year($tenant, $request), 'sort' => $sort, 'direction' => $direction],
             'options' => self::options($tenant),
         ];
     }

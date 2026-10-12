@@ -38,7 +38,6 @@ export function DashboardFilters({
     tenant,
     expenses,
     filters,
-    years,
     options,
     path,
     busy = false,
@@ -103,32 +102,6 @@ export function DashboardFilters({
             <Button type="submit" variant="outline" disabled={busy}>
                 Cerca
             </Button>
-            <Select
-                value={String(year)}
-                disabled={busy}
-                onValueChange={(value) =>
-                    applyFilters(path, {
-                        ...filters,
-                        year: Number(value),
-                    })
-                }
-            >
-                <SelectTrigger
-                    className="w-28"
-                    aria-label="Anno di imputazione"
-                >
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectGroup>
-                        {years.map((value) => (
-                            <SelectItem key={value} value={String(value)}>
-                                {value}
-                            </SelectItem>
-                        ))}
-                    </SelectGroup>
-                </SelectContent>
-            </Select>
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
                 <PopoverTrigger asChild>
                     <Button type="button" variant="outline" disabled={busy}>

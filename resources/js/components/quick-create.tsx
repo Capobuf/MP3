@@ -9,7 +9,7 @@ import {
     Tags,
 } from 'lucide-react';
 import { useState } from 'react';
-import type { Expense, Filters, Kind } from '@/components/management/types';
+import type { Kind } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -30,22 +30,12 @@ const items = [
 ] as const;
 
 export function QuickCreate() {
-    const {
-        currentTenant: tenant,
-        filters,
-        expense,
-        year: pageYear,
-    } = usePage<{
-        filters?: Filters;
-        expense?: Expense;
-        year?: number | null;
-    }>().props;
+    const { currentTenant: tenant, economicContext } = usePage().props;
     const [loading, setLoading] = useState(false);
-    const year =
-        filters?.year ?? expense?.year ?? pageYear ?? new Date().getFullYear();
+    const year = economicContext?.year;
 
     function create(kind: CreationKind) {
-        if (!tenant || loading) return;
+        if (!tenant || year === undefined || loading) return;
         router.visit(`/t/${tenant.slug}/${kind}/create?year=${year}`, {
             onStart: () => setLoading(true),
             onFinish: () => setLoading(false),

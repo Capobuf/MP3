@@ -1,4 +1,5 @@
 import { router } from '@inertiajs/react';
+import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 import { useId, useState } from 'react';
 import { Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
@@ -68,6 +69,7 @@ export function DataImport({
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<Preview | null>(null);
     const [busy, setBusy] = useState<'preview' | 'commit' | null>(null);
+    const navigation = useUnsavedNavigation(false, busy !== null);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<string | null>(null);
     function select(next: File | null) {
@@ -120,6 +122,7 @@ export function DataImport({
                 setPreview(null);
                 setFile(null);
                 toast.success(response.message);
+                navigation.allow();
                 router.reload();
             }
         } catch (failure) {

@@ -12,6 +12,7 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             currentTenant: Tenant | null;
+            economicContext: { year: number; years: number[] } | null;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

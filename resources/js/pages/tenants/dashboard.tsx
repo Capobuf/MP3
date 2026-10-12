@@ -1,3 +1,4 @@
+import { changeEconomicYear } from '@/lib/economic-year';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { AnalyticsLoadingContext } from '@/components/management/analytics-ui';
 import { Head } from '@inertiajs/react';
@@ -98,11 +99,8 @@ export default function TenantDashboard(
                                     rows={analytics.annual}
                                     year={year}
                                     onSelect={(year) => {
-                                        if (!tableBusy)
-                                            applyFilters(path, {
-                                                ...filters,
-                                                year,
-                                            });
+                                        if (!tableBusy && !refresh.pending)
+                                            changeEconomicYear(year);
                                     }}
                                 />
                             </div>

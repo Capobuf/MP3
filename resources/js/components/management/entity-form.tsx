@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { DeleteRecord } from './delete-record';
 import { Plus, ArrowLeft } from 'lucide-react';
 import { useEffect, useImperativeHandle, useState } from 'react';
@@ -204,7 +204,7 @@ export function EntityForm({
     tenant,
     kind,
     record,
-    year = new Date().getFullYear(),
+    year: providedYear,
     options,
     contractContext,
     onClose,
@@ -222,6 +222,8 @@ export function EntityForm({
     onSaved: (record: RecordData) => void;
     onBusyChange?: (busy: boolean) => void;
 }) {
+    const { economicContext } = usePage().props;
+    const year = providedYear ?? record?.year ?? economicContext!.year;
     const [frames, setFrames] = useState<Frame[]>(() => {
         const initial = frame(kind, year, record);
         if (kind === 'expenses' && contractContext && !record) {
@@ -282,6 +284,7 @@ export function EntityForm({
     const dirty = frames.some((item) => snapshot(item) !== item.original);
     const navigation = useUnsavedNavigation(
         dirty && !formBusy && creatingCostCenter === null,
+        formBusy,
     );
     useEffect(() => {
         const listener = (event: BeforeUnloadEvent) => {
@@ -1218,7 +1221,7 @@ export function EntityForm({
                                             router.visit(
                                                 contractContext
                                                     ? `/t/${tenant.slug}/contracts/${contractContext.id}`
-                                                    : `/t/${tenant.slug}/expenses?year=${current.record!.year}`,
+                                                    : `/t/${tenant.slug}/expenses?year=${economicContext!.year}`,
                                             );
                                         }}
                                     />

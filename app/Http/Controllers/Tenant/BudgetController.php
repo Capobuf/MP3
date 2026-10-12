@@ -7,6 +7,7 @@ use App\Http\Requests\BudgetEntriesRequest;
 use App\Models\BudgetYear;
 use App\Models\Tenant;
 use App\Services\AnnualBudget;
+use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,13 +21,11 @@ class BudgetController extends Controller
 {
     public function index(Request $request, Tenant $tenant, AnnualBudget $budget): Response
     {
-        $data = $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
-        $selected = (int) ($data['year'] ?? now()->year);
+        $selected = EconomicYearContext::year($tenant, $request);
         $year = $tenant->budgetYears()->where('year', $selected)->first();
 
         return Inertia::render('tenants/budget', [
             'tenant' => $tenant->only('id', 'name', 'slug'), 'selectedYear' => $selected,
-            'years' => $tenant->budgetYears()->orderByDesc('year')->get(['id', 'year']),
             'budgetYear' => $year?->only('id', 'year', 'structure_copied'),
             'budget' => $year ? $budget->snapshot($tenant, $year) : null,
             'options' => ExpenseOverview::options($tenant),

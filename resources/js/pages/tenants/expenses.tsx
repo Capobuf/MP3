@@ -10,7 +10,7 @@ export default function Expenses(props: ExpensePageProps) {
             <div className="page-shell">
                 <div>
                     <p className="text-sm text-muted-foreground">
-                        {props.tenant.name}
+                        {props.tenant.name} · {props.filters.year}
                     </p>
                     <h1 className="page-title">Spese</h1>
                 </div>

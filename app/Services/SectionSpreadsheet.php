@@ -11,6 +11,7 @@ use App\Models\Tenant;
 use App\Models\Vendor;
 use App\Support\CatalogQuery;
 use App\Support\CostCenterQuery;
+use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -91,7 +92,7 @@ class SectionSpreadsheet
 
     public function export(Tenant $tenant, string $resource, Request $request): SectionWorkbook
     {
-        $request->validate(['year' => ['nullable', 'integer', 'between:2000,2100']]);
+        $selected = EconomicYearContext::year($tenant, $request);
         if ($resource === 'budget') {
             return $this->budget($tenant, $request);
         }
@@ -100,7 +101,7 @@ class SectionSpreadsheet
             $sort = in_array($request->input('sort'), ['title', 'allocated_amount', 'actual_amount', 'updated_at'], true) ? $request->input('sort') : 'title';
             $expenses = $query->with(['vendor', 'contract', 'project', 'lines', 'costCenters.parent'])->orderBy($sort, $request->input('direction') === 'desc' ? 'desc' : 'asc')->orderBy('id')->get();
 
-            return new SectionWorkbook([$this->expensesSheet('Spese', $expenses), $this->linesSheet($expenses)]);
+            return new SectionWorkbook([$this->expensesSheet('Spese', $expenses), $this->linesSheet($expenses), $this->periodSheet($selected)]);
         }
         if ($resource === 'cost-centers') {
             $roots = CostCenterQuery::filtered($tenant, $request)->orderBy('name')->get();
@@ -136,13 +137,17 @@ class SectionSpreadsheet
         $sheets = [new ReportSheet(self::LABELS[$resource], array_keys(self::columns($resource)), $rows, $formats)];
         if ($resource !== 'vendors') {
             $expenses = ExpenseOverview::economicQuery($tenant)->whereIn($resource === 'contracts' ? 'contract_id' : 'project_id', $items->pluck('id'));
-            if ($request->filled('year')) {
-                $expenses->where('year', $request->integer('year'));
-            }
+            $expenses->where('year', $selected);
             $sheets[] = $this->expensesSheet('Spese collegate', $expenses->with(['vendor', 'contract', 'project', 'costCenters.parent'])->orderBy('year')->orderBy('title')->get());
+            $sheets[] = $this->periodSheet($selected);
         }
 
         return new SectionWorkbook($sheets);
+    }
+
+    private function periodSheet(int $year): ReportSheet
+    {
+        return new ReportSheet('Periodo', ['Anno di imputazione economica'], [[$year]]);
     }
 
     /** @param Collection<int, Expense> $expenses */
@@ -176,7 +181,7 @@ class SectionSpreadsheet
 
     private function budget(Tenant $tenant, Request $request): SectionWorkbook
     {
-        $selected = $request->integer('year', now()->year);
+        $selected = EconomicYearContext::year($tenant, $request);
         $year = $tenant->budgetYears()->where('year', $selected)->first();
         $snapshot = $year ? app(AnnualBudget::class)->snapshot($tenant, $year) : ['entries' => [], 'totals' => [], 'groups' => []];
         $typeNames = ['manual' => 'Voce libera', 'contract' => 'Contratto', 'project' => 'Progetto', 'expense' => 'Spesa'];
@@ -191,6 +196,7 @@ class SectionSpreadsheet
         return new SectionWorkbook([
             new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Previsto', 'Effettivo', 'Scostamento', 'Completezza', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::EUR, 'K' => self::DATE, 'L' => self::DATE]),
             new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Previsto', 'Effettivo', 'Scostamento', 'Voci incomplete'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::EUR]),
+            $this->periodSheet($selected),
         ]);
     }
 }

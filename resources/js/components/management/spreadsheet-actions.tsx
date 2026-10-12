@@ -26,7 +26,7 @@ export function SpreadsheetActions({
     disabled?: boolean;
     exportOnly?: boolean;
 }) {
-    const { transferLimits } = usePage<{
+    const { transferLimits, economicContext } = usePage<{
         transferLimits: { xlsxMaxKb: number; xlsxMaxRows: number };
     }>().props;
     const [open, setOpen] = useState(false);
@@ -40,6 +40,12 @@ export function SpreadsheetActions({
             )
             .map(([key, value]) => [key, String(value)]),
     );
+    if (
+        economicContext &&
+        ['expenses', 'budget', 'contracts', 'projects'].includes(resource)
+    ) {
+        query.set('year', String(economicContext.year));
+    }
     return (
         <div className="flex flex-wrap gap-2">
             {!exportOnly && (

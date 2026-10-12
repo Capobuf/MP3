@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Models\Tenant;
+use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
@@ -45,7 +46,6 @@ class CreationOptionsController extends Controller
     private function form(Request $request, Tenant $tenant, string $kind, ?Model $record = null): Response
     {
         $data = $request->validate([
-            'year' => ['nullable', 'integer', 'between:2000,2100'],
             'contract_id' => ['nullable', 'integer', Rule::exists('contracts', 'id')->where('tenant_id', $tenant->id)],
             'parent_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)->whereNull('parent_id')],
         ]);
@@ -61,7 +61,7 @@ class CreationOptionsController extends Controller
             'tenant' => $tenant->only('id', 'name', 'slug'),
             'kind' => $kind,
             'record' => $record,
-            'year' => $record instanceof Expense ? $record->year : (int) ($data['year'] ?? now()->year),
+            'year' => $record instanceof Expense ? $record->year : EconomicYearContext::year($tenant, $request),
             'options' => ExpenseOverview::options($tenant),
             'contractContext' => $contract,
             'parentId' => $kind === 'cost-centers' && isset($data['parent_id']) ? (int) $data['parent_id'] : null,

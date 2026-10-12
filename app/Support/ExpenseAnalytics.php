@@ -61,7 +61,7 @@ final class ExpenseAnalytics
     /** @return array<string, mixed> */
     public static function data(Tenant $tenant, Request $request): array
     {
-        $year = $request->integer('year', (int) now()->format('Y'));
+        $year = EconomicYearContext::year($tenant, $request);
         $allYears = ExpenseOverview::query($tenant, $request, false)->toBase();
         $selected = (clone $allYears)->where('year', $year);
         $current = self::summary((clone $selected)->selectRaw(self::columns())->sole());

@@ -1,13 +1,8 @@
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
+import { changeEconomicYear } from '@/lib/economic-year';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import {
-    ChevronLeft,
-    ChevronRight,
-    Ellipsis,
-    Plus,
-    RefreshCw,
-} from 'lucide-react';
+import { Ellipsis, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { BudgetSankey } from '@/components/management/budget-sankey';
 import { BudgetTable } from '@/components/management/budget-table';
@@ -56,14 +51,6 @@ import {
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import {
     Empty,
     EmptyHeader,
     EmptyTitle,
@@ -74,31 +61,24 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
+import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 
 function BudgetHeader({
     props,
     busy,
     onNewYear,
-    onSelectYear,
     onCopy,
 }: {
     props: BudgetProps;
     busy: boolean;
     onNewYear: (year: number) => void;
-    onSelectYear: (year: number) => void;
     onCopy?: () => void;
 }) {
-    const years = [
-        ...new Set([
-            ...props.years.map((year) => year.year),
-            props.selectedYear,
-        ]),
-    ].sort((a, b) => b - a);
     return (
         <header className="flex flex-wrap items-center justify-between gap-4">
             <div>
                 <p className="text-sm text-muted-foreground">
-                    {props.tenant.name}
+                    {props.tenant.name} · {props.selectedYear}
                 </p>
                 <h1 className="page-title">Budget</h1>
             </div>
@@ -110,45 +90,6 @@ function BudgetHeader({
                     filters={{ year: props.selectedYear }}
                     disabled={busy}
                 />
-                <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Anno precedente"
-                    disabled={props.selectedYear <= 2000 || busy}
-                    onClick={() => onSelectYear(props.selectedYear - 1)}
-                >
-                    <ChevronLeft />
-                </Button>
-                <Select
-                    value={String(props.selectedYear)}
-                    onValueChange={(value) => onSelectYear(Number(value))}
-                    disabled={busy}
-                >
-                    <SelectTrigger
-                        aria-label="Anno del Budget"
-                        className="w-28"
-                    >
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectGroup>
-                            {years.map((year) => (
-                                <SelectItem key={year} value={String(year)}>
-                                    {year}
-                                </SelectItem>
-                            ))}
-                        </SelectGroup>
-                    </SelectContent>
-                </Select>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label="Anno successivo"
-                    disabled={props.selectedYear >= 2100 || busy}
-                    onClick={() => onSelectYear(props.selectedYear + 1)}
-                >
-                    <ChevronRight />
-                </Button>
                 <Button
                     variant="outline"
                     onClick={() =>
@@ -194,14 +135,12 @@ function BudgetWorkspace({
     year,
     initial,
     onNewYear,
-    onSelectYear,
     pending,
 }: {
     props: BudgetProps;
     year: BudgetYear;
     initial: BudgetSnapshot;
     onNewYear: (year: number) => void;
-    onSelectYear: (year: number) => void;
     pending: boolean;
 }) {
     const [budget, setBudget] = useState(initial);
@@ -295,7 +234,6 @@ function BudgetWorkspace({
                 props={props}
                 busy={busy || loading || pending}
                 onNewYear={onNewYear}
-                onSelectYear={onSelectYear}
                 onCopy={() => {
                     void mutate('copy', 'POST');
                 }}
@@ -452,10 +390,11 @@ export default function Budget(props: BudgetProps) {
     const [draftYear, setDraftYear] = useState(String(props.selectedYear));
     const [creating, setCreating] = useState(false);
     const [yearError, setYearError] = useState('');
+    const navigation = useUnsavedNavigation(false, creating);
     const path = `/t/${props.tenant.slug}/budget`;
     const refresh = usePageRefresh(path);
     function selectYear(year: number) {
-        router.get(path, { year }, { preserveScroll: true });
+        changeEconomicYear(year);
     }
     function createDialog(year: number) {
         setDraftYear(String(year));
@@ -475,6 +414,7 @@ export default function Budget(props: BudgetProps) {
             );
             setNewYear(false);
             toast.success('Anno di Budget creato.');
+            navigation.allow();
             selectYear(result.year.year);
         } catch (failure) {
             setYearError(
@@ -497,7 +437,6 @@ export default function Budget(props: BudgetProps) {
                         props={props}
                         busy={refresh.pending}
                         onNewYear={createDialog}
-                        onSelectYear={selectYear}
                     />
                 )}
                 {refresh.visible && !props.budget ? (
@@ -517,7 +456,6 @@ export default function Budget(props: BudgetProps) {
                         year={props.budgetYear}
                         initial={props.budget}
                         onNewYear={createDialog}
-                        onSelectYear={selectYear}
                         pending={refresh.pending}
                     />
                 ) : (

@@ -1,3 +1,4 @@
+import { usePage } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -119,6 +120,7 @@ export function ExpenseLines({
     defaultPeriod?: Record<string, string>;
     errors?: Record<string, string[]>;
 }) {
+    const { economicContext } = usePage().props;
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState<string[]>([]);
@@ -166,7 +168,7 @@ export function ExpenseLines({
                             year: String(
                                 next.year ??
                                     defaultPeriod?.year ??
-                                    new Date().getFullYear(),
+                                    economicContext!.year,
                             ),
                             period_starts_on: next.period_starts_on ?? '',
                             period_ends_on: next.period_ends_on ?? '',
@@ -189,8 +191,7 @@ export function ExpenseLines({
             line.year = periodYear(
                 {
                     ...defaultPeriod,
-                    year:
-                        defaultPeriod?.year ?? String(new Date().getFullYear()),
+                    year: defaultPeriod?.year ?? String(economicContext!.year),
                 },
                 true,
             );

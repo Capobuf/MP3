@@ -100,7 +100,6 @@ export type ExpensePageProps = {
     expenses: Pagination<Expense>;
     totals: Totals;
     filters: Filters;
-    years: number[];
     options: Options;
 };
 export const labels: Record<Kind, string> = {

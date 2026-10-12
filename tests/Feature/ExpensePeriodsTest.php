@@ -375,7 +375,7 @@ class ExpensePeriodsTest extends TestCase
         $this->postJson('/t/periodi/expenses', $this->data('2024-01-01', '2024-12-31', 2024))->assertCreated();
         $this->patchJson('/t/periodi/contracts/'.$this->contract->id, ['name' => 'Corretto', 'starts_on' => '2027-01-01', 'ends_on' => '2027-12-31'])->assertOk();
         $this->assertDatabaseCount('expenses', 1);
-        $this->get('/t/periodi/contracts/'.$this->contract->id)->assertInertia(fn (Assert $page) => $page
+        $this->get('/t/periodi/contracts/'.$this->contract->id.'?year=2024')->assertInertia(fn (Assert $page) => $page
             ->where('totals.allocated', '650.00')->where('record.has_period_expenses', true));
     }
 
@@ -388,8 +388,8 @@ class ExpensePeriodsTest extends TestCase
             $this->get('/t/periodi/dashboard?year='.$year)->assertInertia(fn (Assert $page) => $page
                 ->where('totals.allocated', $year === 2028 ? '650.00' : '0.00')->where('totals.count', $year === 2027 ? 0 : 1));
         }
-        $this->get('/t/periodi/contracts/'.$this->contract->id)->assertInertia(fn (Assert $page) => $page
+        $this->get('/t/periodi/contracts/'.$this->contract->id.'?history=1')->assertInertia(fn (Assert $page) => $page
             ->where('expenses.data.0.period_starts_on', '2025-01-01')->where('expenses.data.1.period_starts_on', '2027-01-01')
-            ->where('expenses.data.2.period_starts_on', null)->where('totals.allocated', '1300.00'));
+            ->where('expenses.data.2.period_starts_on', null)->where('totals.allocated', '650.00'));
     }
 }

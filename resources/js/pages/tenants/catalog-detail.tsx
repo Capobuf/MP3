@@ -24,15 +24,6 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import type { Tenant } from '@/types';
 
 export default function CatalogDetail({
@@ -44,7 +35,7 @@ export default function CatalogDetail({
     breakdown,
     contracts,
     year,
-    years,
+    history,
 }: {
     tenant: Tenant;
     catalog: Catalog;
@@ -54,8 +45,8 @@ export default function CatalogDetail({
     totals: Totals;
     breakdown: DetailBreakdown | null;
     contracts: Page<RecordData> | null;
-    year: number | null;
-    years: number[];
+    year: number;
+    history: boolean;
 }) {
     const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/${catalog}`;
@@ -76,56 +67,8 @@ export default function CatalogDetail({
             <div>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <h2 className="font-semibold">
-                        Totali delle spese collegate ·{' '}
-                        {year ?? 'tutti gli anni'}
+                        Totali delle spese collegate · {year}
                     </h2>
-                    {catalog === 'projects' && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Label htmlFor="project-expense-year">
-                                Anno di imputazione
-                            </Label>
-                            <Select
-                                value={year === null ? 'all' : String(year)}
-                                disabled={tableBusy}
-                                onValueChange={(value) => {
-                                    router.get(
-                                        `${path}/${record.id}`,
-                                        value === 'all'
-                                            ? {}
-                                            : { year: Number(value) },
-                                        {
-                                            preserveState: true,
-                                            preserveScroll: true,
-                                        },
-                                    );
-                                }}
-                            >
-                                <SelectTrigger
-                                    id="project-expense-year"
-                                    className="w-40"
-                                >
-                                    <SelectValue>
-                                        {year ?? 'Tutti gli anni'}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectGroup>
-                                        <SelectItem value="all">
-                                            Tutti gli anni
-                                        </SelectItem>
-                                        {years.map((value) => (
-                                            <SelectItem
-                                                key={value}
-                                                value={String(value)}
-                                            >
-                                                {value}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectGroup>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    )}
                 </div>
                 {catalog === 'vendors' ? (
                     <Summary totals={totals} />
@@ -150,19 +93,35 @@ export default function CatalogDetail({
                     />
                 )}
             </div>
-            <div
-                className={
-                    catalog === 'vendors'
-                        ? 'min-w-0'
-                        : 'grid min-w-0 items-start gap-6 @5xl/detail:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]'
-                }
-            >
+            <div className="grid min-w-0 items-start gap-6 @5xl/detail:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
                 <section
                     aria-label="Spese collegate"
                     className="order-2 flex min-w-0 flex-col gap-3 @5xl/detail:order-1"
                 >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 className="font-semibold">Spese collegate</h2>
+                        <h2 className="font-semibold">
+                            Spese collegate ·{' '}
+                            {history ? 'Tutti gli anni' : year}
+                        </h2>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={tableBusy}
+                            onClick={() =>
+                                router.get(
+                                    `${path}/${record.id}`,
+                                    {
+                                        year,
+                                        ...(history ? {} : { history: 1 }),
+                                    },
+                                    { preserveScroll: true },
+                                )
+                            }
+                        >
+                            {history
+                                ? `Mostra solo ${year}`
+                                : 'Mostra storico completo'}
+                        </Button>
                         {catalog === 'contracts' && (
                             <Button
                                 disabled={tableBusy}
@@ -177,6 +136,7 @@ export default function CatalogDetail({
                         )}
                     </div>
                     <ExpenseTable
+                        key={`${tenant.id}:${record.id}:${year}:${history}`}
                         rows={expenses.data}
                         slug={tenant.slug}
                         showYear
@@ -199,11 +159,11 @@ export default function CatalogDetail({
                         <Pagination page={expenses} />
                     </div>
                 </section>
-                {catalog !== 'vendors' && breakdown && (
+                {breakdown && (
                     <div className="order-1 min-w-0 @5xl/detail:order-2">
                         <DetailBreakdownChart
                             breakdown={breakdown}
-                            description={`Totale delle spese collegate → singole spese · ${year ?? 'tutti gli anni'}.`}
+                            description={`Totale delle spese collegate → singole spese · ${year}.`}
                         />
                     </div>
                 )}
@@ -234,7 +194,7 @@ export default function CatalogDetail({
                                 )}
                                 <span>
                                     {catalog === 'projects'
-                                        ? (year ?? 'Tutti gli anni')
+                                        ? year
                                         : `${dateLabel(record.starts_on)} – ${dateLabel(record.ends_on)}`}
                                 </span>
                             </div>
@@ -261,7 +221,7 @@ export default function CatalogDetail({
                             label={labels[catalog]}
                             filters={{
                                 record: record.id,
-                                year: year ?? undefined,
+                                year,
                             }}
                             exportOnly
                         />

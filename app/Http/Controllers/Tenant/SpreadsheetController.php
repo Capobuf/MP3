@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Services\SectionSpreadsheet;
 use App\Services\SpreadsheetImport;
+use App\Support\EconomicYearContext;
 use App\Support\Transfers\TransferPreview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class SpreadsheetController extends Controller
 {
     public function export(Request $request, Tenant $tenant, string $resource, SectionSpreadsheet $reports): BinaryFileResponse
     {
-        $suffix = in_array($resource, ['expenses', 'budget'], true) ? '_'.$request->integer('year', now()->year) : '';
+        $suffix = in_array($resource, ['expenses', 'budget', 'contracts', 'projects'], true) ? '_'.EconomicYearContext::year($tenant, $request) : '';
         $name = 'MP3_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $tenant->slug).'-'.$resource.$suffix.'_'.now()->toDateString().'.xlsx';
 
         return Excel::download($reports->export($tenant, $resource, $request), $name, \Maatwebsite\Excel\Excel::XLSX, ['Cache-Control' => 'private, no-store']);

@@ -116,7 +116,7 @@ class ManagementTest extends TestCase
         $this->assertSame('500.00', $expense->allocated_amount);
         $this->assertSame('280.00', $expense->actual_amount);
         $this->assertCount(2, $expense->lines);
-        $this->get('/t/alfa/contracts/'.$expense->contract_id)->assertInertia(fn (Assert $page) => $page
+        $this->get('/t/alfa/contracts/'.$expense->contract_id.'?year=2027')->assertInertia(fn (Assert $page) => $page
             ->where('totals.allocated', '500.00')->where('totals.actual', '280.00')->has('expenses.data.0.lines', 2)
             ->where('expenses.data.0.year', 2027)->where('record.has_period_expenses', true));
         $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page
@@ -158,11 +158,11 @@ class ManagementTest extends TestCase
             ->where('analytics.current.actual', '280.00')->where('analytics.current.allocated', null)
             ->where('analytics.previous.allocated', '500.00')->where('analytics.previous.actual', null));
         $this->get('/t/alfa/contracts/'.$response->json('record.id'))->assertInertia(fn (Assert $page) => $page
-            ->where('totals.allocated', '500.00')->where('totals.actual', '280.00')->has('expenses.data', 1));
+            ->where('totals.allocated', '0.00')->where('totals.actual', '280.00')->has('expenses.data', 1));
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $expense->update(['project_id' => $project->id]);
         $this->get('/t/alfa/projects/'.$project->id.'?year=2027')->assertInertia(fn (Assert $page) => $page
-            ->where('totals.allocated', '0.00')->where('totals.actual', '280.00')->where('years', [2027, 2026]));
+            ->where('totals.allocated', '0.00')->where('totals.actual', '280.00')->where('economicContext.years', [2027, 2026]));
         $initial['lines'][1]['year'] = 2026;
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['lines' => $initial['lines']])->assertOk();
         $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0));
@@ -445,13 +445,13 @@ class ManagementTest extends TestCase
         }
     }
 
-    public function test_related_details_include_all_years_and_correct_totals(): void
+    public function test_related_history_includes_all_years_but_keeps_annual_totals(): void
     {
         $project = $this->tenant->projects()->create(['name' => 'All years', 'status' => 'attivo']);
         foreach ([2025, 2026] as $year) {
             $this->tenant->expenses()->create(['title' => 'Year '.$year, 'year' => $year, 'project_id' => $project->id, 'allocated_amount' => '10', 'actual_amount' => '9']);
         }
-        $this->get('/t/alfa/projects/'.$project->id)->assertInertia(fn (Assert $page) => $page->has('expenses.data', 2)->where('totals.allocated', '20.00')->where('totals.actual', '18.00')->where('totals.variance', '-2.00'));
+        $this->get('/t/alfa/projects/'.$project->id.'?year=2026&history=1')->assertInertia(fn (Assert $page) => $page->has('expenses.data', 2)->where('totals.allocated', '10.00')->where('totals.actual', '9.00')->where('totals.variance', '-1.00'));
     }
 
     public function test_project_year_filter_updates_expenses_and_totals_across_pages(): void
@@ -467,11 +467,11 @@ class ManagementTest extends TestCase
         $this->other->expenses()->create(['title' => 'Altro ambiente', 'year' => 2024, 'project_id' => $otherProject->id, 'allocated_amount' => '999']);
         $path = '/t/alfa/projects/'.$project->id;
 
-        $this->get($path)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('year', null)->where('years', [2026, 2025])->where('expenses.total', 28)
-            ->where('totals.allocated', '282.60')->where('totals.actual', '264.00')->where('totals.variance', '-18.60')->where('totals.incomplete', 1));
+        $this->get($path.'?year=2026&history=1')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('year', 2026)->where('economicContext.years', [2026, 2025, 2024])->where('expenses.total', 28)
+            ->where('totals.allocated', '262.60')->where('totals.actual', '234.00')->where('totals.variance', '-28.60')->where('totals.incomplete', 0));
         $response = $this->get($path.'?year=2026')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('year', 2026)->where('years', [2026, 2025])->has('expenses.data', 25)->where('expenses.total', 26)
+            ->where('year', 2026)->where('economicContext.years', [2026, 2025, 2024])->has('expenses.data', 25)->where('expenses.total', 26)
             ->where('totals.count', 26)->where('totals.allocated', '262.60')->where('totals.actual', '234.00')->where('totals.variance', '-28.60')->where('totals.incomplete', 0));
         $this->get($response->inertiaProps('expenses.next_page_url'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('year', 2026)->has('expenses.data', 1)->where('expenses.data.0.year', 2026)->where('expenses.current_page', 2)
@@ -480,7 +480,7 @@ class ManagementTest extends TestCase
             ->where('year', 2025)->has('expenses.data', 2)->where('expenses.data.0.year', 2025)->where('expenses.data.1.year', 2025)
             ->where('totals.count', 2)->where('totals.allocated', '20.00')->where('totals.actual', '30.00')->where('totals.variance', '10.00')->where('totals.incomplete', 1));
         $this->get($path.'?year=2024')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('years', [2026, 2025])->has('expenses.data', 0)->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00'));
+            ->where('economicContext.years', [2026, 2025, 2024])->has('expenses.data', 0)->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00'));
         foreach (['invalid', '1999', '2101', '2026.5'] as $year) {
             $this->getJson($path.'?year='.$year)->assertUnprocessable()->assertJsonValidationErrors('year');
         }

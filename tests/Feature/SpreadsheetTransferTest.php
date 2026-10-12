@@ -84,7 +84,8 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertSame(123.45, $next->getSheet(0)->getCell('I2')->getValue());
         $contracts = $this->workbook('/t/ambiente/contracts/export.xlsx?record='.$contract->id);
         $this->assertSame(900.0, $contracts->getSheet(0)->getCell('E2')->getValue());
-        $this->assertSame(3, $contracts->getSheet(1)->getHighestDataRow());
+        $this->assertSame(2, $contracts->getSheet(1)->getHighestDataRow());
+        $this->assertEquals(2027, $contracts->getSheet(1)->getCell('B2')->getValue());
         $this->assertSame(2, $expense->lines()->count());
     }
 
@@ -145,7 +146,7 @@ class SpreadsheetTransferTest extends TestCase
             $this->postJson('/t/ambiente/'.$resource.'/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
         }
         $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
-        $this->assertSame(2, $book->getSheetCount());
+        $this->assertSame(3, $book->getSheetCount());
         $original = $this->file('vendors', [['Nuovo', null, null, null, null]]);
         $preview = $this->postJson('/t/ambiente/vendors/import/preview', ['file' => $original])->assertOk();
         $changed = $this->file('vendors', [['Cambiato', null, null, null, null]]);

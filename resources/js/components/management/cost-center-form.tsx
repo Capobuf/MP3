@@ -61,7 +61,7 @@ export function CostCenterForm({
     const dirty =
         name !== (record?.name ?? initialName) ||
         parent !== String(record?.parent_id ?? parentId ?? 'none');
-    const navigation = useUnsavedNavigation(dirty && !busy);
+    const navigation = useUnsavedNavigation(dirty && !busy, busy);
     useEffect(() => {
         if (!dirty && !busy) return;
         const listener = (event: BeforeUnloadEvent) => event.preventDefault();
