@@ -72,7 +72,7 @@ function BudgetHeader({
         <header className="flex flex-wrap items-center justify-between gap-4">
             <div>
                 <p className="text-sm text-muted-foreground">
-                    {props.tenant.name} · {props.selectedYear}
+                    {props.tenant.name}
                 </p>
                 <h1 className="page-title">Budget</h1>
             </div>

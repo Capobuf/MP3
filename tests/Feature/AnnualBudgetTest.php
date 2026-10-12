@@ -253,6 +253,38 @@ class AnnualBudgetTest extends TestCase
         $this->patchJson($this->url(), ['action' => 'reorder', 'ids' => [$ids[0]]])->assertUnprocessable();
     }
 
+    public function test_reordering_preserves_amounts_attribution_and_excluded_entries(): void
+    {
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $expense = $this->tenant->expenses()->create(['title' => 'Condivisa', 'year' => 2026, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
+        $this->add('contract', $contract->id);
+        $this->add('manual', null, ['description' => 'Esclusa', 'manual_allocated' => '999']);
+        $this->add('project', $project->id);
+        $this->add('expense', $expense->id);
+        $before = $this->add('manual', null, ['description' => 'Rettifica', 'manual_allocated' => '-20.12', 'manual_actual' => '0']);
+        $this->patchJson($this->url(), ['action' => 'exclude', 'ids' => [$before['entries'][1]['id']]])->assertOk();
+        $before = $this->state();
+        $ids = array_reverse(array_column($before['entries'], 'id'));
+        $after = $this->patchJson($this->url(), ['action' => 'reorder', 'ids' => $ids])->assertOk()->json('budget');
+
+        $this->assertSame($ids, array_column($after['entries'], 'id'));
+        $this->assertSame($ids, array_column($this->state()['entries'], 'id'));
+        $this->assertSame($before['totals'], $after['totals']);
+        $this->assertSame($before['groups'], $after['groups']);
+        $this->assertSame($before['owners'], $after['owners']);
+        $this->assertEquals($before['cost_center_groups'], $after['cost_center_groups']);
+        $byId = array_column($after['entries'], null, 'id');
+        foreach ($before['entries'] as $entry) {
+            $reordered = $byId[$entry['id']];
+            unset($entry['position'], $reordered['position']);
+            $this->assertSame($entry, $reordered);
+        }
+        $this->assertDatabaseHas('expenses', ['id' => $expense->id, 'allocated_amount' => '100.00', 'actual_amount' => '80.00']);
+        $this->patchJson($this->url(), ['action' => 'reorder', 'ids' => [$ids[0], $ids[0], ...array_slice($ids, 2)]])->assertUnprocessable();
+        $this->assertSame($ids, array_column($this->state()['entries'], 'id'));
+    }
+
     public function test_assisted_insertion_preserves_intentionally_excluded_expenses(): void
     {
         $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);

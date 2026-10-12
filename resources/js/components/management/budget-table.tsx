@@ -9,6 +9,24 @@ import {
 } from 'react';
 import { Link } from '@inertiajs/react';
 import {
+    closestCenter,
+    pointerWithin,
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
     flexRender,
     getCoreRowModel,
     getFilteredRowModel,
@@ -24,6 +42,7 @@ import type {
     SortingState,
     VisibilityState,
     RowSelectionState,
+    Row,
 } from '@tanstack/react-table';
 import {
     ArrowDown,
@@ -31,10 +50,10 @@ import {
     ArrowUp,
     ChevronDown,
     ChevronRight,
-    CircleMinus,
+    GripVertical,
+    Info,
     Ellipsis,
     ListFilter,
-    Pencil,
     Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -136,12 +155,19 @@ function missingAmounts(allocated: string | null, actual: string | null) {
 
 function focusCompletion(id: number) {
     const detail = document.getElementById(`budget-detail-${id}`);
+    const detailRows = Array.from(
+        document.querySelectorAll<HTMLElement>(
+            `[data-budget-detail-owner="${id}"]`,
+        ),
+    );
     const target =
-        detail?.querySelector<HTMLElement>(
-            '[data-budget-incomplete="true"] input, button[data-budget-incomplete="true"]',
-        ) ??
-        detail?.querySelector<HTMLElement>('[data-budget-incomplete="true"]') ??
-        detail;
+        detailRows.flatMap((row) =>
+            Array.from(
+                row.querySelectorAll<HTMLElement>(
+                    '[data-budget-incomplete="true"] input, button[data-budget-incomplete="true"]',
+                ),
+            ),
+        )[0] ?? detail;
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({
         block: 'center',
@@ -158,7 +184,7 @@ type Preferences = {
 };
 function readPreferences(key: string): Preferences {
     const defaults: Preferences = {
-        visibility: {},
+        visibility: { type: false },
         order: defaultOrder,
         group: 'type',
     };
@@ -262,6 +288,281 @@ function InlineAmount({
     );
 }
 
+function periodLabel(
+    start: string | null | undefined,
+    end: string | null | undefined,
+) {
+    if (start && end) return `${dateLabel(start)} – ${dateLabel(end)}`;
+    if (start) return `Dal ${dateLabel(start)}`;
+    if (end) return `Fino al ${dateLabel(end)}`;
+    return null;
+}
+
+function Attribution({
+    expense,
+}: {
+    expense: BudgetEntry['expenses'][number];
+}) {
+    if (expense.contributes) return null;
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <span
+                    tabIndex={0}
+                    className="block rounded-sm text-xs text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                >
+                    {expense.counted_in
+                        ? `Conteggiata in: ${expense.counted_in}`
+                        : 'Non conteggiata'}
+                </span>
+            </TooltipTrigger>
+            <TooltipContent>
+                {expense.counted_in
+                    ? 'Gli importi contribuiscono soltanto alla voce indicata, senza duplicare i totali.'
+                    : 'Gli importi di questa spesa non contribuiscono ai totali del Budget.'}
+            </TooltipContent>
+        </Tooltip>
+    );
+}
+
+function ExpenseAmount({
+    value,
+    label,
+    busy,
+    highlightIncomplete,
+    onEdit,
+}: {
+    value: string | null | undefined;
+    label: string;
+    busy: boolean;
+    highlightIncomplete?: boolean;
+    onEdit: () => void;
+}) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    variant={value == null ? 'outline' : 'ghost'}
+                    size="sm"
+                    className="h-auto min-h-8 w-full justify-end financial-value tabular-nums hover:bg-accent focus-visible:ring-ring"
+                    aria-label={label}
+                    disabled={busy}
+                    data-budget-incomplete={
+                        highlightIncomplete && value == null
+                    }
+                    onClick={onEdit}
+                >
+                    {value == null ? 'Da inserire' : money(value)}
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+    );
+}
+
+function ExpenseRows({
+    entry,
+    columnIds,
+    slug,
+    busy,
+    highlightIncomplete,
+    onExpenseEdit,
+}: {
+    entry: BudgetEntry;
+    columnIds: string[];
+    slug: string;
+    busy: boolean;
+    highlightIncomplete: boolean;
+    onExpenseEdit: (id: number) => void;
+}) {
+    return entry.expenses.map((expense) => (
+        <TableRow
+            key={expense.id}
+            data-budget-detail-owner={entry.id}
+            className={cn(
+                'bg-muted/20 hover:bg-muted/40',
+                !expense.contributes && 'text-muted-foreground',
+            )}
+        >
+            {columnIds.map((id) => (
+                <TableCell
+                    key={id}
+                    className={cn(
+                        'py-1.5',
+                        ['allocated', 'actual'].includes(id) &&
+                            'text-right financial-value tabular-nums',
+                        id === 'description' && 'whitespace-normal',
+                        highlightIncomplete &&
+                            expense.contributes &&
+                            ((id === 'allocated' &&
+                                expense.allocated_amount == null) ||
+                                (id === 'actual' &&
+                                    expense.actual_amount == null)) &&
+                            'bg-accent ring-1 ring-primary/40 ring-inset',
+                    )}
+                >
+                    {id === 'description' ? (
+                        <div className="ml-4 flex min-w-48 flex-col gap-1 border-l-2 border-border py-1 pl-4">
+                            <Link
+                                className="rounded-sm font-medium break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                href={`/t/${slug}/expenses/${expense.id}`}
+                            >
+                                {expense.title}
+                            </Link>
+                            {periodLabel(
+                                expense.period_starts_on,
+                                expense.period_ends_on,
+                            ) && (
+                                <span className="text-xs text-muted-foreground">
+                                    Periodo coperto:{' '}
+                                    {periodLabel(
+                                        expense.period_starts_on,
+                                        expense.period_ends_on,
+                                    )}
+                                </span>
+                            )}
+                            <Attribution expense={expense} />
+                        </div>
+                    ) : id === 'allocated' || id === 'actual' ? (
+                        <ExpenseAmount
+                            value={
+                                expense[
+                                    id === 'allocated'
+                                        ? 'allocated_amount'
+                                        : 'actual_amount'
+                                ]
+                            }
+                            label={`Modifica ${columnNames[id]} della spesa ${expense.title}`}
+                            busy={busy}
+                            highlightIncomplete={
+                                highlightIncomplete && expense.contributes
+                            }
+                            onEdit={() => onExpenseEdit(expense.id)}
+                        />
+                    ) : id === 'actions' ? (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={busy}
+                                    aria-label={`Azioni per la spesa ${expense.title}`}
+                                >
+                                    <Ellipsis />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuGroup>
+                                    <DropdownMenuItem
+                                        onSelect={() =>
+                                            onExpenseEdit(expense.id)
+                                        }
+                                    >
+                                        Modifica
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem asChild>
+                                        <Link
+                                            href={`/t/${slug}/expenses/${expense.id}`}
+                                        >
+                                            Apri nell’archivio
+                                        </Link>
+                                    </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    ) : null}
+                </TableCell>
+            ))}
+        </TableRow>
+    ));
+}
+
+function SortableBudgetRow({
+    row,
+    disabled,
+    disabledReason,
+}: {
+    row: Row<BudgetEntry>;
+    disabled: boolean;
+    disabledReason: string;
+}) {
+    'use no memo'; // TanStack row selection is read through a mutable row instance.
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        setActivatorNodeRef,
+        transform,
+        isDragging,
+    } = useSortable({ id: row.id, disabled });
+    return (
+        <TableRow
+            ref={setNodeRef}
+            style={{
+                transform: CSS.Translate.toString(transform),
+                position: 'relative',
+                zIndex: isDragging ? 1 : undefined,
+            }}
+            data-state={row.getIsSelected() ? 'selected' : undefined}
+            className={cn(
+                (!row.original.included ||
+                    (row.original.type === 'expense' &&
+                        row.original.expenses[0] &&
+                        !row.original.expenses[0].contributes)) &&
+                    'text-muted-foreground',
+                isDragging && 'bg-accent opacity-80',
+            )}
+        >
+            {row.getVisibleCells().map((cell) => (
+                <TableCell
+                    key={cell.id}
+                    className={cn(
+                        'py-1.5',
+                        ['allocated', 'actual', 'variance'].includes(
+                            cell.column.id,
+                        ) && 'text-right financial-value tabular-nums',
+                    )}
+                >
+                    {cell.column.id === 'expand' ? (
+                        <div className="flex items-center">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        ref={setActivatorNodeRef}
+                                        size="icon"
+                                        variant="ghost"
+                                        className="cursor-grab touch-none active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-40"
+                                        {...attributes}
+                                        {...listeners}
+                                        aria-disabled={disabled}
+                                        aria-label={`Riordina ${row.original.description}${disabled ? `: ${disabledReason}` : ''}`}
+                                    >
+                                        <GripVertical />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    {disabled
+                                        ? disabledReason
+                                        : 'Trascina nel gruppo. Da tastiera: Spazio, frecce, Spazio per confermare, Esc per annullare.'}
+                                </TooltipContent>
+                            </Tooltip>
+                            {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext(),
+                            )}
+                        </div>
+                    ) : (
+                        flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                        )
+                    )}
+                </TableCell>
+            ))}
+        </TableRow>
+    );
+}
+
 function FilterSelect({
     value,
     onChange,
@@ -281,7 +582,7 @@ function FilterSelect({
                 <SelectTrigger id={id} aria-label={label} className="w-full">
                     <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent avoidCollisions>
                     <SelectGroup>
                         {options.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
@@ -334,47 +635,20 @@ function EntryDetail({
     return (
         <div className="flex min-w-0 flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h3 className="font-medium">
-                        {entry.description} · {year}
-                    </h3>
+                {periodLabel(entry.starts_on, entry.ends_on) && (
                     <p className="text-sm text-muted-foreground">
-                        {entry.vendor ? (
-                            <Link
-                                className="text-foreground"
-                                href={`/t/${slug}/vendors/${entry.vendor.id}`}
-                            >
-                                {entry.vendor.name}
-                            </Link>
-                        ) : (
-                            'Senza fornitore'
-                        )}{' '}
-                        · {entry.cost_center?.name ?? 'Senza centro di costo'}
-                        {entry.starts_on &&
-                            ` · ${dateLabel(entry.starts_on)} – ${dateLabel(entry.ends_on)}`}
+                        Periodo{' '}
+                        {entry.type === 'contract'
+                            ? 'contrattuale'
+                            : 'del progetto'}
+                        : {periodLabel(entry.starts_on, entry.ends_on)}
                     </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    {entry.type === 'expense' && entry.source_id && (
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            aria-label={`Modifica spesa ${entry.description}`}
-                            title="Modifica spesa"
-                            disabled={busy}
-                            onClick={() => onExpenseEdit(entry.source_id!)}
-                        >
-                            <Pencil />
-                        </Button>
-                    )}
-                    <Button variant="outline" size="sm" asChild>
-                        <Link
-                            href={`/t/${slug}/${entry.type}s/${entry.source_id}`}
-                        >
-                            Apri nell’archivio
-                        </Link>
-                    </Button>
-                </div>
+                )}
+                <Button variant="outline" size="sm" asChild>
+                    <Link href={`/t/${slug}/${entry.type}s/${entry.source_id}`}>
+                        Apri nell’archivio
+                    </Link>
+                </Button>
             </div>
             {entry.notes && (
                 <p className="text-sm whitespace-pre-wrap text-muted-foreground">
@@ -389,7 +663,9 @@ function EntryDetail({
                         highlightIncomplete && 'ring-1 ring-primary/40',
                     )}
                 >
-                    <AlertTitle>Nessun importo per il {year}</AlertTitle>
+                    <AlertTitle>
+                        Nessun importo nell’anno selezionato
+                    </AlertTitle>
                     <AlertDescription>
                         <p>
                             {entry.type === 'expense'
@@ -432,9 +708,7 @@ function EntryDetail({
                                 highlightIncomplete && 'ring-1 ring-primary/40',
                             )}
                         >
-                            <AlertTitle>
-                                Importi da completare · {year}
-                            </AlertTitle>
+                            <AlertTitle>Importi da completare</AlertTitle>
                             <AlertDescription>
                                 <p>
                                     Inserisci l’importo{' '}
@@ -458,142 +732,17 @@ function EntryDetail({
                             </AlertDescription>
                         </Alert>
                     )}
-                    <ExpenseLines
-                        readOnly
-                        showSummary={false}
-                        showHeading={false}
-                        contractMode={!!entry.expenses[0].contract_id}
-                        lines={draftLines(entry.expenses[0])}
-                    />
+                    {!!entry.expenses[0].lines?.length && (
+                        <ExpenseLines
+                            readOnly
+                            showSummary={false}
+                            showHeading={false}
+                            contractMode={!!entry.expenses[0].contract_id}
+                            lines={draftLines(entry.expenses[0])}
+                        />
+                    )}
                 </>
-            ) : (
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Spesa</TableHead>
-                            <TableHead>Periodo coperto</TableHead>
-                            <TableHead>Attribuzione</TableHead>
-                            <TableHead className="text-right">
-                                Previsto
-                            </TableHead>
-                            <TableHead className="text-right">
-                                Effettivo
-                            </TableHead>
-                            <TableHead>Azioni</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {entry.expenses.map((expense) => (
-                            <TableRow
-                                key={expense.id}
-                                className={cn(
-                                    !expense.contributes &&
-                                        'text-muted-foreground',
-                                )}
-                            >
-                                <TableCell className="min-w-56 whitespace-normal">
-                                    <Link
-                                        className="font-medium text-foreground"
-                                        href={`/t/${slug}/expenses/${expense.id}`}
-                                    >
-                                        {expense.title}
-                                    </Link>
-                                </TableCell>
-                                <TableCell>
-                                    {dateLabel(expense.period_starts_on)} –{' '}
-                                    {dateLabel(expense.period_ends_on)}
-                                </TableCell>
-                                <TableCell className="max-w-60 whitespace-normal">
-                                    <Badge
-                                        variant={
-                                            expense.contributes
-                                                ? 'secondary'
-                                                : 'outline'
-                                        }
-                                    >
-                                        {expense.contributes
-                                            ? 'Nel subtotale'
-                                            : expense.counted_in
-                                              ? `Già in ${expense.counted_in}`
-                                              : 'Fuori dal totale'}
-                                    </Badge>
-                                </TableCell>
-                                {(
-                                    [
-                                        'allocated_amount',
-                                        'actual_amount',
-                                    ] as const
-                                ).map((field) => {
-                                    const missing =
-                                        expense.contributes &&
-                                        expense[field] == null;
-                                    return (
-                                        <TableCell
-                                            key={field}
-                                            className={cn(
-                                                'text-right financial-value',
-                                                highlightIncomplete &&
-                                                    missing &&
-                                                    'bg-accent ring-1 ring-primary/40 ring-inset',
-                                            )}
-                                        >
-                                            {missing ? (
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    disabled={busy}
-                                                    data-budget-incomplete={
-                                                        highlightIncomplete
-                                                    }
-                                                    aria-label={`Completa ${field === 'allocated_amount' ? 'previsto' : 'effettivo'} di ${expense.title}`}
-                                                    onClick={() =>
-                                                        onExpenseEdit(
-                                                            expense.id,
-                                                        )
-                                                    }
-                                                >
-                                                    Da inserire
-                                                </Button>
-                                            ) : (
-                                                money(expense[field])
-                                            )}
-                                        </TableCell>
-                                    );
-                                })}
-                                <TableCell>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label={`Modifica spesa ${expense.title}`}
-                                        title="Modifica spesa"
-                                        disabled={busy}
-                                        onClick={() =>
-                                            onExpenseEdit(expense.id)
-                                        }
-                                    >
-                                        <Pencil />
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                    <TableFooter>
-                        <TableRow>
-                            <TableCell colSpan={3}>
-                                Subtotale attribuito
-                                {!entry.included && ' · voce esclusa'}
-                            </TableCell>
-                            <TableCell className="text-right financial-value">
-                                {money(entry.allocated)}
-                            </TableCell>
-                            <TableCell className="text-right financial-value">
-                                {money(entry.actual)}
-                            </TableCell>
-                            <TableCell />
-                        </TableRow>
-                    </TableFooter>
-                </Table>
-            )}
+            ) : null}
         </div>
     );
 }
@@ -640,10 +789,19 @@ export function BudgetTable({
     const [center, setCenter] = useState('all');
     const [status, setStatus] = useState('included');
     const [removing, setRemoving] = useState<number[]>([]);
-    const [excluding, setExcluding] = useState<{
-        ids: number[];
-        step: 1 | 2;
-    } | null>(null);
+    const [excluding, setExcluding] = useState<{ ids: number[] } | null>(null);
+    const [dragging, setDragging] = useState(false);
+    const [detailHeights, setDetailHeights] = useState<Record<number, number>>(
+        {},
+    );
+    const dndId = useId();
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+            scrollBehavior: 'auto',
+        }),
+    );
     useEffect(() => () => clearLocalUndo(`/t/${slug}`), [slug]);
     function changePreferences(next: Preferences) {
         if (JSON.stringify(next) === JSON.stringify(preferences)) return;
@@ -727,6 +885,7 @@ export function BudgetTable({
                         size="icon"
                         variant="ghost"
                         aria-label={`Dettaglio ${row.original.description}`}
+                        aria-controls={`budget-detail-${row.original.id}`}
                         aria-expanded={details.includes(row.original.id)}
                         onClick={() => toggleDetail(row.original.id)}
                     >
@@ -748,10 +907,24 @@ export function BudgetTable({
                             variant="ghost"
                             size="sm"
                             className="h-auto min-h-8 max-w-full justify-start text-left whitespace-normal"
+                            aria-expanded={details.includes(row.original.id)}
+                            aria-controls={`budget-detail-${row.original.id}`}
                             onClick={() => toggleDetail(row.original.id)}
                         >
                             {row.original.description}
                         </Button>
+                        {preferences.group === 'center' &&
+                            preferences.visibility.type === false && (
+                                <Badge variant="secondary" className="text-xs">
+                                    {budgetLabels[row.original.type]}
+                                </Badge>
+                            )}
+                        {row.original.type === 'expense' &&
+                            row.original.expenses[0] && (
+                                <Attribution
+                                    expense={row.original.expenses[0]}
+                                />
+                            )}
                         {!row.original.included && (
                             <Badge variant="outline">Esclusa</Badge>
                         )}
@@ -868,24 +1041,56 @@ export function BudgetTable({
                                     })
                                 }
                             />
+                        ) : row.original.type === 'expense' &&
+                          row.original.source_id ? (
+                            <ExpenseAmount
+                                value={
+                                    row.original.expenses[0] &&
+                                    !row.original.expenses[0].contributes
+                                        ? row.original.expenses[0][
+                                              field === 'allocated'
+                                                  ? 'allocated_amount'
+                                                  : 'actual_amount'
+                                          ]
+                                        : row.original[field]
+                                }
+                                busy={busy}
+                                label={`Modifica ${columnNames[field]} della spesa ${row.original.description}`}
+                                onEdit={() =>
+                                    onExpenseEdit(row.original.source_id!)
+                                }
+                            />
                         ) : (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-auto min-h-8 w-full justify-end financial-value"
-                                disabled={busy}
-                                aria-label={`Dettaglio ${columnNames[field]} di ${row.original.description}`}
-                                onClick={() => {
-                                    if (
-                                        row.original.type === 'expense' &&
-                                        row.original.source_id
-                                    )
-                                        onExpenseEdit(row.original.source_id);
-                                    else toggleDetail(row.original.id);
-                                }}
-                            >
-                                {money(row.original[field])}
-                            </Button>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-auto min-h-8 w-full justify-end financial-value tabular-nums"
+                                        aria-label={`Mostra le spese del ${row.original.type === 'contract' ? 'contratto' : 'progetto'} ${row.original.description}: ${columnNames[field]}`}
+                                        aria-expanded={details.includes(
+                                            row.original.id,
+                                        )}
+                                        onClick={() =>
+                                            setDetails((current) =>
+                                                current.includes(
+                                                    row.original.id,
+                                                )
+                                                    ? current
+                                                    : [
+                                                          ...current,
+                                                          row.original.id,
+                                                      ],
+                                            )
+                                        }
+                                    >
+                                        {money(row.original[field])}
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    Mostra le spese che compongono il totale
+                                </TooltipContent>
+                            </Tooltip>
                         ),
                 }),
             ),
@@ -918,138 +1123,78 @@ export function BudgetTable({
                 enableHiding: false,
                 cell: ({ row }) => {
                     const entry = row.original;
-                    const ordered = [...budget.entries].sort(
-                        (a, b) => a.position - b.position || a.id - b.id,
-                    );
-                    const index = ordered.findIndex(
-                        (value) => value.id === entry.id,
-                    );
-                    const sameGroup = (value: BudgetEntry) =>
-                        preferences.group === 'type'
-                            ? value.type === entry.type
-                            : value.cost_center_id === entry.cost_center_id;
-                    const previous = ordered
-                        .slice(0, index)
-                        .findLastIndex(sameGroup);
-                    const nextOffset = ordered
-                        .slice(index + 1)
-                        .findIndex(sameGroup);
-                    const next = nextOffset < 0 ? -1 : index + 1 + nextOffset;
-                    const move = (target: number) => {
-                        const ids = ordered.map((value) => value.id);
-                        [ids[index], ids[target]] = [ids[target], ids[index]];
-                        void batch('reorder', ids);
-                    };
                     return (
-                        <div className="flex items-center gap-1">
-                            {(entry.type === 'manual' ||
-                                entry.type === 'expense') && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     size="icon"
                                     disabled={busy}
-                                    aria-label={`Modifica ${entry.description}`}
-                                    title="Modifica"
-                                    onClick={() => {
-                                        if (entry.type === 'expense') {
-                                            onExpenseEdit(entry.source_id!);
-                                        } else if (
-                                            !details.includes(entry.id)
-                                        ) {
-                                            toggleDetail(entry.id);
-                                        }
-                                    }}
+                                    aria-label={`Azioni per ${entry.description}`}
                                 >
-                                    <Pencil />
+                                    <Ellipsis />
                                 </Button>
-                            )}
-                            {entry.included && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                    disabled={busy}
-                                    aria-label={`Escludi dal Budget ${entry.description}`}
-                                    title="Escludi dal Budget"
-                                    onClick={() =>
-                                        setExcluding({
-                                            ids: [entry.id],
-                                            step: 1,
-                                        })
-                                    }
-                                >
-                                    <CircleMinus />
-                                </Button>
-                            )}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        disabled={busy}
-                                        aria-label={`Azioni per ${entry.description}`}
-                                    >
-                                        <Ellipsis />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuGroup>
-                                        <DropdownMenuItem
-                                            onSelect={() =>
-                                                toggleDetail(entry.id)
-                                            }
-                                        >
-                                            Apri dettaglio
-                                        </DropdownMenuItem>
-                                        {entry.type !== 'manual' && (
-                                            <DropdownMenuItem asChild>
-                                                <Link
-                                                    href={`/t/${slug}/${entry.type}s/${entry.source_id}`}
-                                                >
-                                                    Apri sorgente
-                                                </Link>
-                                            </DropdownMenuItem>
-                                        )}
-                                        {!entry.included && (
-                                            <DropdownMenuItem
-                                                onSelect={() => {
-                                                    void batch('reactivate', [
-                                                        entry.id,
-                                                    ]);
-                                                }}
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuGroup>
+                                    {entry.type !== 'manual' && (
+                                        <DropdownMenuItem asChild>
+                                            <Link
+                                                href={`/t/${slug}/${entry.type}s/${entry.source_id}`}
                                             >
-                                                Riattiva
-                                            </DropdownMenuItem>
-                                        )}
-                                        <DropdownMenuItem
-                                            disabled={
-                                                previous < 0 ||
-                                                sorting.length > 0
-                                            }
-                                            onSelect={() => move(previous)}
-                                        >
-                                            Sposta voce in alto
+                                                Apri nell’archivio
+                                            </Link>
                                         </DropdownMenuItem>
+                                    )}
+                                    {(entry.type === 'manual' ||
+                                        entry.type === 'expense') && (
                                         <DropdownMenuItem
-                                            disabled={
-                                                next < 0 || sorting.length > 0
-                                            }
-                                            onSelect={() => move(next)}
+                                            onSelect={() => {
+                                                if (entry.type === 'expense')
+                                                    onExpenseEdit(
+                                                        entry.source_id!,
+                                                    );
+                                                else
+                                                    setDetails((current) =>
+                                                        current.includes(
+                                                            entry.id,
+                                                        )
+                                                            ? current
+                                                            : [
+                                                                  ...current,
+                                                                  entry.id,
+                                                              ],
+                                                    );
+                                            }}
                                         >
-                                            Sposta voce in basso
+                                            Modifica
                                         </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            variant="destructive"
-                                            onSelect={() =>
-                                                setRemoving([entry.id])
-                                            }
-                                        >
-                                            Rimuovi dal Budget
-                                        </DropdownMenuItem>
-                                    </DropdownMenuGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
+                                    )}
+                                    <DropdownMenuItem
+                                        onSelect={() => {
+                                            if (entry.included)
+                                                setExcluding({
+                                                    ids: [entry.id],
+                                                });
+                                            else
+                                                void batch('reactivate', [
+                                                    entry.id,
+                                                ]);
+                                        }}
+                                    >
+                                        {entry.included
+                                            ? 'Escludi dai totali'
+                                            : 'Riattiva nei totali'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onSelect={() => setRemoving([entry.id])}
+                                    >
+                                        Rimuovi dal Budget
+                                    </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     );
                 },
             },
@@ -1062,8 +1207,8 @@ export function BudgetTable({
             mutate,
             onExpenseEdit,
             slug,
-            sorting.length,
             preferences.group,
+            preferences.visibility.type,
             batch,
             toggleDetail,
             openCompletion,
@@ -1157,6 +1302,108 @@ export function BudgetTable({
         getSortedRowModel: getSortedRowModel(),
         getExpandedRowModel: getExpandedRowModel(),
     });
+    const dragDisabled = busy || loading || sorting.length > 0;
+    const dragDisabledReason =
+        sorting.length > 0
+            ? 'Ripristina ordine manuale per trascinare le voci'
+            : 'Attendi il completamento del salvataggio o aggiornamento';
+    const dragLabel = (id: string | number) =>
+        budget.entries.find((entry) => String(entry.id) === String(id))
+            ?.description ?? String(id);
+    function finishDrag({ active, over }: DragEndEvent) {
+        setDragging(false);
+        if (dragDisabled || !over || active.id === over.id) return;
+        const rows = table
+            .getRowModel()
+            .rows.filter((row) => !row.getIsGrouped());
+        const source = rows.find((row) => row.id === active.id);
+        const destination = rows.find((row) => row.id === over.id);
+        if (!source || !destination || source.parentId !== destination.parentId)
+            return;
+        const visibleIds = rows
+            .filter((row) => row.parentId === source.parentId)
+            .map((row) => row.original.id);
+        const moved = arrayMove(
+            visibleIds,
+            visibleIds.indexOf(source.original.id),
+            visibleIds.indexOf(destination.original.id),
+        );
+        const visible = new Set(visibleIds);
+        let index = 0;
+        // Replace only the slots of visible group members; hidden entries and other groups keep their slots.
+        const ids = [...budget.entries]
+            .sort((a, b) => a.position - b.position || a.id - b.id)
+            .map((entry) =>
+                visible.has(entry.id) ? moved[index++] : entry.id,
+            );
+        void batch('reorder', ids);
+    }
+    function renderEntry(row: Row<BudgetEntry>) {
+        const entry = row.original;
+        const highlightIncomplete =
+            completionTarget?.id === entry.id && entry.incomplete > 0;
+        return (
+            <Fragment key={row.id}>
+                <SortableBudgetRow
+                    row={row}
+                    disabled={dragDisabled}
+                    disabledReason={dragDisabledReason}
+                />
+                {details.includes(entry.id) &&
+                    (dragging ? (
+                        // Retain the detail height while suspending its contents so drag targets do not jump.
+                        <TableRow aria-hidden="true">
+                            <TableCell
+                                colSpan={visibleColumns.length}
+                                className="p-0"
+                                style={{ height: detailHeights[entry.id] ?? 0 }}
+                            />
+                        </TableRow>
+                    ) : (
+                        <>
+                            <TableRow data-budget-detail-owner={entry.id}>
+                                <TableCell
+                                    colSpan={visibleColumns.length}
+                                    className="bg-muted/20 p-3 whitespace-normal"
+                                >
+                                    <div
+                                        id={`budget-detail-${entry.id}`}
+                                        tabIndex={-1}
+                                        className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                    >
+                                        <EntryDetail
+                                            entry={entry}
+                                            slug={slug}
+                                            year={year}
+                                            centers={centers}
+                                            busy={busy}
+                                            mutate={mutate}
+                                            highlightIncomplete={
+                                                highlightIncomplete
+                                            }
+                                            onExpenseEdit={onExpenseEdit}
+                                        />
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                            {(entry.type === 'contract' ||
+                                entry.type === 'project') && (
+                                <ExpenseRows
+                                    entry={entry}
+                                    columnIds={visibleColumns.map(
+                                        (column) => column.id,
+                                    )}
+                                    slug={slug}
+                                    busy={busy}
+                                    highlightIncomplete={highlightIncomplete}
+                                    onExpenseEdit={onExpenseEdit}
+                                />
+                            )}
+                        </>
+                    ))}
+            </Fragment>
+        );
+    }
     const selected = budget.entries
         .filter((entry) => selection[String(entry.id)])
         .map((entry) => entry.id);
@@ -1198,6 +1445,8 @@ export function BudgetTable({
                                 {label}
                                 <span className="block text-xs text-muted-foreground">
                                     {totals.count} voci incluse
+                                    {totals.incomplete > 0 &&
+                                        ` · ${totals.incomplete} ${totals.incomplete === 1 ? 'voce con dati incompleti' : 'voci con dati incompleti'}`}
                                     {(!table
                                         .getColumn('allocated')
                                         ?.getIsVisible() ||
@@ -1210,13 +1459,18 @@ export function BudgetTable({
                         ) : ['allocated', 'actual', 'variance'].includes(
                               column.id,
                           ) ? (
-                            money(
-                                totals[
-                                    column.id as
-                                        | 'allocated'
-                                        | 'actual'
-                                        | 'variance'
-                                ],
+                            column.id === 'variance' &&
+                            totals.comparable_count === 0 ? (
+                                'Non confrontabile'
+                            ) : (
+                                money(
+                                    totals[
+                                        column.id as
+                                            | 'allocated'
+                                            | 'actual'
+                                            | 'variance'
+                                    ],
+                                )
                             )
                         ) : null}
                     </TableCell>
@@ -1227,13 +1481,8 @@ export function BudgetTable({
     const columnSettings = (
         <Popover>
             <PopoverTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Colonne"
-                    title="Colonne"
-                >
-                    <Settings2 />
+                <Button variant="outline" aria-label="Colonne" title="Colonne">
+                    <Settings2 data-icon="inline-start" /> Colonne
                 </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -1284,7 +1533,7 @@ export function BudgetTable({
                         onClick={() => {
                             changePreferences({
                                 order: defaultOrder,
-                                visibility: {},
+                                visibility: { type: false },
                                 group: 'type',
                             });
                             setSorting([]);
@@ -1424,6 +1673,7 @@ export function BudgetTable({
                         </FieldGroup>
                     </PopoverContent>
                 </Popover>
+                {columnSettings}
                 <Button onClick={onAdd} disabled={busy}>
                     Aggiungi voce
                 </Button>
@@ -1446,15 +1696,12 @@ export function BudgetTable({
                         {selected.length} voci selezionate
                     </span>
                     <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        size="sm"
+                        variant="outline"
                         disabled={busy}
-                        aria-label="Escludi dal Budget le voci selezionate"
-                        title="Escludi dal Budget le voci selezionate"
-                        onClick={() => setExcluding({ ids: selected, step: 1 })}
+                        onClick={() => setExcluding({ ids: selected })}
                     >
-                        <CircleMinus />
+                        Escludi dai totali
                     </Button>
                     <Button
                         size="sm"
@@ -1466,7 +1713,7 @@ export function BudgetTable({
                             });
                         }}
                     >
-                        Riattiva
+                        Riattiva nei totali
                     </Button>
                     <Button
                         size="sm"
@@ -1474,7 +1721,7 @@ export function BudgetTable({
                         disabled={busy}
                         onClick={() => setRemoving(selected)}
                     >
-                        Rimuovi
+                        Rimuovi dal Budget
                     </Button>
                     <Button
                         size="sm"
@@ -1490,282 +1737,374 @@ export function BudgetTable({
                     {loading ? 'Aggiornamento…' : 'Salvataggio…'}
                 </p>
             )}
-            <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
-                <Table>
-                    <TableHeader>
-                        {table.getHeaderGroups().map((group) => (
-                            <TableRow key={group.id}>
-                                {group.headers.map((header) => (
-                                    <TableHead
-                                        key={header.id}
-                                        aria-sort={
-                                            header.column.getIsSorted() ===
-                                            'asc'
-                                                ? 'ascending'
-                                                : header.column.getIsSorted() ===
-                                                    'desc'
-                                                  ? 'descending'
-                                                  : undefined
-                                        }
-                                        className={cn(
-                                            [
-                                                'allocated',
-                                                'actual',
-                                                'variance',
-                                            ].includes(header.column.id) &&
-                                                'text-right',
-                                        )}
-                                    >
-                                        {header.column.id === 'expand' ? (
-                                            columnSettings
-                                        ) : header.column.getCanSort() ? (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={header.column.getToggleSortingHandler()}
-                                            >
-                                                {flexRender(
-                                                    header.column.columnDef
-                                                        .header,
-                                                    header.getContext(),
-                                                )}
-                                                {header.column.getIsSorted() ===
-                                                'asc' ? (
-                                                    <ArrowUp data-icon="inline-end" />
-                                                ) : header.column.getIsSorted() ===
-                                                  'desc' ? (
-                                                    <ArrowDown data-icon="inline-end" />
-                                                ) : null}
-                                            </Button>
-                                        ) : (
-                                            flexRender(
-                                                header.column.columnDef.header,
-                                                header.getContext(),
-                                            )
-                                        )}
-                                    </TableHead>
-                                ))}
-                            </TableRow>
-                        ))}
-                    </TableHeader>
-                    <TableBody>
-                        {loading && !budget.entries.length ? (
-                            <TableRow>
-                                <TableCell colSpan={visibleColumns.length}>
-                                    <Skeleton className="h-24" />
-                                </TableCell>
-                            </TableRow>
-                        ) : !table.getRowModel().rows.length ? (
-                            <TableRow>
-                                <TableCell colSpan={visibleColumns.length}>
-                                    <Empty>
-                                        <EmptyHeader>
-                                            <EmptyTitle>
-                                                {budget.entries.length
-                                                    ? 'Nessuna voce corrisponde ai filtri'
-                                                    : 'Un anno da costruire'}
-                                            </EmptyTitle>
-                                            <EmptyDescription>
-                                                Aggiungi contratti, progetti,
-                                                spese o voci libere al Budget.
-                                            </EmptyDescription>
-                                        </EmptyHeader>
-                                    </Empty>
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            table.getRowModel().rows.map((row) => {
-                                if (row.getIsGrouped()) {
-                                    const value = String(
-                                        row.getGroupingValue(preferences.group),
-                                    );
-                                    const title =
-                                        preferences.group === 'type'
-                                            ? budgetLabels[value as BudgetType]
-                                            : (centers.find(
-                                                  (c) => String(c.id) === value,
-                                              )?.name ??
-                                              'Senza centro di costo');
-                                    const totals = budgetTotals(
-                                        row
-                                            .getLeafRows()
-                                            .map((leaf) => leaf.original),
-                                    );
-                                    return (
-                                        <TableRow
-                                            key={row.id}
-                                            className="bg-muted/50"
-                                        >
-                                            <TableCell
-                                                colSpan={visibleColumns.length}
-                                                className="whitespace-normal"
-                                            >
-                                                <div className="flex flex-wrap items-center justify-between gap-3">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-auto min-h-9 max-w-full text-left whitespace-normal"
-                                                        aria-label={`${row.getIsExpanded() ? 'Comprimi' : 'Espandi'} ${title}`}
-                                                        aria-expanded={row.getIsExpanded()}
-                                                        onClick={row.getToggleExpandedHandler()}
-                                                    >
-                                                        {row.getIsExpanded() ? (
-                                                            <ChevronDown />
-                                                        ) : (
-                                                            <ChevronRight />
-                                                        )}
-                                                        <span className="font-medium">
-                                                            {title} ·{' '}
-                                                            {row.subRows.length}
-                                                        </span>
-                                                    </Button>
-                                                    <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-                                                        {(
-                                                            [
-                                                                'allocated',
-                                                                'actual',
-                                                                'variance',
-                                                            ] as const
-                                                        )
-                                                            .filter((id) =>
-                                                                table
-                                                                    .getColumn(
-                                                                        id,
-                                                                    )
-                                                                    ?.getIsVisible(),
-                                                            )
-                                                            .map((id) => (
-                                                                <div
-                                                                    key={id}
-                                                                    className="flex items-baseline gap-2"
-                                                                >
-                                                                    <dt className="text-xs text-muted-foreground">
-                                                                        {
-                                                                            columnNames[
-                                                                                id
-                                                                            ]
-                                                                        }
-                                                                    </dt>
-                                                                    <dd className="financial-value">
-                                                                        {money(
-                                                                            totals[
-                                                                                id
-                                                                            ],
-                                                                        )}
-                                                                    </dd>
-                                                                </div>
-                                                            ))}
-                                                    </dl>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                }
-                                return (
-                                    <Fragment key={row.id}>
-                                        <TableRow
-                                            data-state={
-                                                row.getIsSelected()
-                                                    ? 'selected'
-                                                    : undefined
+            <DndContext
+                id={dndId}
+                sensors={sensors}
+                collisionDetection={(args) =>
+                    args.pointerCoordinates
+                        ? pointerWithin(args)
+                        : closestCenter(args)
+                }
+                accessibility={{
+                    screenReaderInstructions: {
+                        draggable:
+                            'Premi Spazio o Invio per iniziare il riordino. Usa le frecce su e giù nel gruppo. Premi Spazio o Invio per confermare, Esc per annullare.',
+                    },
+                    announcements: {
+                        onDragStart: ({ active }) =>
+                            `Voce ${dragLabel(active.id)} selezionata.`,
+                        onDragOver: ({ active, over }) => {
+                            const source = table
+                                .getRowModel()
+                                .rows.find((row) => row.id === active.id);
+                            const target = table
+                                .getRowModel()
+                                .rows.find((row) => row.id === over?.id);
+                            return source &&
+                                target &&
+                                source.parentId === target.parentId
+                                ? `${dragLabel(active.id)} sulla voce ${dragLabel(target.id)}.`
+                                : 'Destinazione fuori dal gruppo: nessun riordino.';
+                        },
+                        onDragEnd: ({ active, over }) => {
+                            const source = table
+                                .getRowModel()
+                                .rows.find((row) => row.id === active.id);
+                            const target = table
+                                .getRowModel()
+                                .rows.find((row) => row.id === over?.id);
+                            return source &&
+                                target &&
+                                source.id !== target.id &&
+                                source.parentId === target.parentId
+                                ? `Riordino di ${dragLabel(active.id)} inviato per il salvataggio.`
+                                : 'Nessuna modifica all’ordine.';
+                        },
+                        onDragCancel: () => 'Riordino annullato.',
+                    },
+                }}
+                onDragStart={() => {
+                    const heights: Record<number, number> = {};
+                    document
+                        .querySelectorAll<HTMLElement>(
+                            '[data-budget-detail-owner]',
+                        )
+                        .forEach((element) => {
+                            const id = Number(
+                                element.dataset.budgetDetailOwner,
+                            );
+                            heights[id] =
+                                (heights[id] ?? 0) +
+                                element.getBoundingClientRect().height;
+                        });
+                    setDetailHeights(heights);
+                    setDragging(true);
+                }}
+                onDragCancel={() => setDragging(false)}
+                onDragEnd={finishDrag}
+            >
+                <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
+                    <Table>
+                        <TableHeader className="bg-muted [&_th]:font-semibold">
+                            {table.getHeaderGroups().map((group) => (
+                                <TableRow key={group.id}>
+                                    {group.headers.map((header) => (
+                                        <TableHead
+                                            key={header.id}
+                                            aria-sort={
+                                                header.column.getIsSorted() ===
+                                                'asc'
+                                                    ? 'ascending'
+                                                    : header.column.getIsSorted() ===
+                                                        'desc'
+                                                      ? 'descending'
+                                                      : undefined
                                             }
                                             className={cn(
-                                                !row.original.included &&
-                                                    'text-muted-foreground',
+                                                [
+                                                    'allocated',
+                                                    'actual',
+                                                    'variance',
+                                                ].includes(header.column.id) &&
+                                                    'text-right',
                                             )}
                                         >
-                                            {row
-                                                .getVisibleCells()
-                                                .map((cell) => (
-                                                    <TableCell
-                                                        key={cell.id}
-                                                        className={cn(
-                                                            [
-                                                                'allocated',
-                                                                'actual',
-                                                                'variance',
-                                                            ].includes(
-                                                                cell.column.id,
-                                                            ) &&
-                                                                'text-right financial-value',
-                                                        )}
+                                            <div
+                                                className={cn(
+                                                    'flex items-center gap-1',
+                                                    [
+                                                        'allocated',
+                                                        'actual',
+                                                        'variance',
+                                                    ].includes(
+                                                        header.column.id,
+                                                    ) && 'justify-end',
+                                                )}
+                                            >
+                                                {header.column.getCanSort() ? (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={header.column.getToggleSortingHandler()}
                                                     >
                                                         {flexRender(
-                                                            cell.column
-                                                                .columnDef.cell,
-                                                            cell.getContext(),
+                                                            header.column
+                                                                .columnDef
+                                                                .header,
+                                                            header.getContext(),
                                                         )}
-                                                    </TableCell>
-                                                ))}
-                                        </TableRow>
-                                        {details.includes(row.original.id) && (
-                                            <TableRow>
-                                                <TableCell
-                                                    colSpan={
-                                                        visibleColumns.length
-                                                    }
-                                                    className="bg-muted/20 p-4 whitespace-normal"
-                                                >
-                                                    <div
-                                                        id={`budget-detail-${row.original.id}`}
-                                                        tabIndex={-1}
-                                                        className="dashboard-enter focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                                        {header.column.getIsSorted() ===
+                                                        'asc' ? (
+                                                            <ArrowUp data-icon="inline-end" />
+                                                        ) : header.column.getIsSorted() ===
+                                                          'desc' ? (
+                                                            <ArrowDown data-icon="inline-end" />
+                                                        ) : null}
+                                                    </Button>
+                                                ) : (
+                                                    flexRender(
+                                                        header.column.columnDef
+                                                            .header,
+                                                        header.getContext(),
+                                                    )
+                                                )}
+                                                {header.column.id ===
+                                                    'variance' && (
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                aria-label="Come viene calcolato lo scostamento"
+                                                            >
+                                                                <Info />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent className="max-w-72">
+                                                            Differenza fra
+                                                            Effettivo e Previsto
+                                                            sulle sole
+                                                            componenti con
+                                                            entrambi gli
+                                                            importi. I dati
+                                                            senza uno dei due
+                                                            importi sono esclusi
+                                                            dal confronto.
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                )}
+                                            </div>
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            ))}
+                        </TableHeader>
+                        <TableBody>
+                            {loading && !budget.entries.length ? (
+                                <TableRow>
+                                    <TableCell colSpan={visibleColumns.length}>
+                                        <Skeleton className="h-24" />
+                                    </TableCell>
+                                </TableRow>
+                            ) : !table.getRowModel().rows.length ? (
+                                <TableRow>
+                                    <TableCell colSpan={visibleColumns.length}>
+                                        <Empty>
+                                            <EmptyHeader>
+                                                <EmptyTitle>
+                                                    {budget.entries.length
+                                                        ? 'Nessuna voce corrisponde ai filtri'
+                                                        : 'Un anno da costruire'}
+                                                </EmptyTitle>
+                                                <EmptyDescription>
+                                                    Aggiungi contratti,
+                                                    progetti, spese o voci
+                                                    libere al Budget.
+                                                </EmptyDescription>
+                                            </EmptyHeader>
+                                        </Empty>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                table.getSortedRowModel().rows.map((row) => {
+                                    if (row.getIsGrouped()) {
+                                        const value = String(
+                                            row.getGroupingValue(
+                                                preferences.group,
+                                            ),
+                                        );
+                                        const title =
+                                            preferences.group === 'type'
+                                                ? budgetLabels[
+                                                      value as BudgetType
+                                                  ]
+                                                : (centers.find(
+                                                      (c) =>
+                                                          String(c.id) ===
+                                                          value,
+                                                  )?.name ??
+                                                  'Senza centro di costo');
+                                        const totals = budgetTotals(
+                                            row
+                                                .getLeafRows()
+                                                .map((leaf) => leaf.original),
+                                        );
+                                        return (
+                                            <Fragment key={row.id}>
+                                                <TableRow className="border-y bg-muted/60">
+                                                    <TableCell
+                                                        colSpan={
+                                                            visibleColumns.length
+                                                        }
+                                                        className="whitespace-normal"
                                                     >
-                                                        <EntryDetail
-                                                            entry={row.original}
-                                                            slug={slug}
-                                                            year={year}
-                                                            centers={centers}
-                                                            busy={busy}
-                                                            mutate={mutate}
-                                                            highlightIncomplete={
-                                                                completionTarget?.id ===
-                                                                    row.original
-                                                                        .id &&
-                                                                row.original
-                                                                    .incomplete >
-                                                                    0
-                                                            }
-                                                            onExpenseEdit={
-                                                                onExpenseEdit
-                                                            }
-                                                        />
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
-                                    </Fragment>
-                                );
-                            })
-                        )}
-                    </TableBody>
-                    <TableFooter>
-                        {hasFilters &&
-                            footer(
-                                'Totale filtrato · voci incluse visibili',
-                                filteredTotals,
+                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-auto min-h-9 max-w-full text-left whitespace-normal"
+                                                                aria-label={`${row.getIsExpanded() ? 'Comprimi' : 'Espandi'} ${title}`}
+                                                                aria-expanded={row.getIsExpanded()}
+                                                                onClick={row.getToggleExpandedHandler()}
+                                                            >
+                                                                {row.getIsExpanded() ? (
+                                                                    <ChevronDown />
+                                                                ) : (
+                                                                    <ChevronRight />
+                                                                )}
+                                                                <span className="font-semibold">
+                                                                    {title} ·{' '}
+                                                                    {
+                                                                        row
+                                                                            .subRows
+                                                                            .length
+                                                                    }
+                                                                </span>
+                                                            </Button>
+                                                            <div className="flex flex-wrap items-center gap-3">
+                                                                {totals.incomplete >
+                                                                    0 && (
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        {
+                                                                            totals.incomplete
+                                                                        }{' '}
+                                                                        {totals.incomplete ===
+                                                                        1
+                                                                            ? 'voce con dati incompleti'
+                                                                            : 'voci con dati incompleti'}
+                                                                    </span>
+                                                                )}
+                                                                <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+                                                                    {(
+                                                                        [
+                                                                            'allocated',
+                                                                            'actual',
+                                                                            'variance',
+                                                                        ] as const
+                                                                    )
+                                                                        .filter(
+                                                                            (
+                                                                                id,
+                                                                            ) =>
+                                                                                table
+                                                                                    .getColumn(
+                                                                                        id,
+                                                                                    )
+                                                                                    ?.getIsVisible(),
+                                                                        )
+                                                                        .map(
+                                                                            (
+                                                                                id,
+                                                                            ) => (
+                                                                                <div
+                                                                                    key={
+                                                                                        id
+                                                                                    }
+                                                                                    className="flex items-baseline gap-2"
+                                                                                >
+                                                                                    <dt className="text-xs text-muted-foreground">
+                                                                                        {
+                                                                                            columnNames[
+                                                                                                id
+                                                                                            ]
+                                                                                        }
+                                                                                    </dt>
+                                                                                    <dd
+                                                                                        className={cn(
+                                                                                            'financial-value tabular-nums',
+                                                                                            id ===
+                                                                                                'variance' &&
+                                                                                                varianceTextClass(
+                                                                                                    totals.variance,
+                                                                                                ),
+                                                                                        )}
+                                                                                    >
+                                                                                        {id ===
+                                                                                            'variance' &&
+                                                                                        totals.comparable_count ===
+                                                                                            0
+                                                                                            ? 'Non confrontabile'
+                                                                                            : money(
+                                                                                                  totals[
+                                                                                                      id
+                                                                                                  ],
+                                                                                              )}
+                                                                                    </dd>
+                                                                                </div>
+                                                                            ),
+                                                                        )}
+                                                                </dl>
+                                                            </div>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                                {row.getIsExpanded() && (
+                                                    <SortableContext
+                                                        items={row.subRows.map(
+                                                            (leaf) => leaf.id,
+                                                        )}
+                                                        strategy={
+                                                            verticalListSortingStrategy
+                                                        }
+                                                    >
+                                                        {row.subRows.map(
+                                                            renderEntry,
+                                                        )}
+                                                    </SortableContext>
+                                                )}
+                                            </Fragment>
+                                        );
+                                    }
+                                    return renderEntry(row);
+                                })
                             )}
-                        {footer('Totale generale annuale', budget.totals)}
-                    </TableFooter>
-                </Table>
-            </div>
+                        </TableBody>
+                        <TableFooter>
+                            {hasFilters &&
+                                footer(
+                                    'Totale filtrato · voci incluse visibili',
+                                    filteredTotals,
+                                )}
+                            {footer('Totale generale annuale', budget.totals)}
+                        </TableFooter>
+                    </Table>
+                </div>
+            </DndContext>
             <AlertDialog
                 open={excluding !== null}
                 onOpenChange={(open) => {
                     if (!open && !busy) setExcluding(null);
                 }}
             >
-                <AlertDialogContent key={excluding?.step}>
+                <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {excluding?.step === 2
-                                ? 'Conferma finale dell’esclusione'
-                                : 'Escludere le voci dal Budget?'}
+                            Escludere le voci dai totali?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            {excluding?.step === 2
-                                ? 'Confermando, le voci selezionate saranno escluse dai totali annuali. Potrai riattivarle dal filtro «Voci escluse».'
-                                : 'Verifica le voci da escludere. Proseguendo verrà richiesta una seconda conferma.'}
+                            Le voci resteranno nel Budget senza contribuire ai
+                            totali. Potrai riattivarle dal filtro «Voci
+                            escluse».
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <ul className="max-h-48 list-disc overflow-y-auto pl-5 text-sm">
@@ -1787,10 +2126,6 @@ export function BudgetTable({
                             onClick={(event) => {
                                 event.preventDefault();
                                 if (!excluding) return;
-                                if (excluding.step === 1) {
-                                    setExcluding({ ...excluding, step: 2 });
-                                    return;
-                                }
                                 void batch('exclude', excluding.ids).then(
                                     (ok) => {
                                         if (ok) {
@@ -1801,9 +2136,7 @@ export function BudgetTable({
                                 );
                             }}
                         >
-                            {excluding?.step === 2
-                                ? 'Escludi dal Budget'
-                                : 'Conferma esclusione'}
+                            Escludi dai totali
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
