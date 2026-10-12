@@ -72,12 +72,14 @@ export default function TenantDashboard(
                         )}
                     </div>
                 </header>
-                <DashboardFilters
-                    key={JSON.stringify([tenant.slug, filters])}
-                    {...props}
-                    path={path}
-                    busy={tableBusy}
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                    <DashboardFilters
+                        key={JSON.stringify([tenant.slug, filters])}
+                        {...props}
+                        path={path}
+                        busy={tableBusy}
+                    />
+                </div>
                 <AnalyticsLoadingContext value={refresh.visible}>
                     <DashboardSummary
                         analytics={analytics}

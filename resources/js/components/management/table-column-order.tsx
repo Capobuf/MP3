@@ -30,8 +30,10 @@ type Column = {
 function SortableColumn({
     column,
     onVisibilityChange,
+    disabled,
 }: {
     column: Column;
+    disabled: boolean;
     onVisibilityChange: (id: string, visible: boolean) => void;
 }) {
     const {
@@ -42,7 +44,7 @@ function SortableColumn({
         transform,
         transition,
         isDragging,
-    } = useSortable({ id: column.id });
+    } = useSortable({ id: column.id, disabled });
     return (
         <li
             ref={setNodeRef}
@@ -55,13 +57,14 @@ function SortableColumn({
             <Checkbox
                 aria-label={`Mostra ${column.label}`}
                 checked={column.visible}
-                disabled={!column.canHide}
+                disabled={disabled || !column.canHide}
                 onCheckedChange={(value) =>
                     onVisibilityChange(column.id, value === true)
                 }
             />
             <span className="flex-1 text-sm">{column.label}</span>
             <Button
+                disabled={disabled}
                 ref={setActivatorNodeRef}
                 type="button"
                 variant="ghost"
@@ -78,12 +81,14 @@ function SortableColumn({
     );
 }
 
-export function BudgetColumnOrder({
+export function TableColumnOrder({
     columns,
     onVisibilityChange,
     onOrderChange,
+    disabled = false,
 }: {
     columns: Column[];
+    disabled?: boolean;
     onVisibilityChange: (id: string, visible: boolean) => void;
     onOrderChange: (ids: string[]) => void;
 }) {
@@ -138,6 +143,7 @@ export function BudgetColumnOrder({
                         <SortableColumn
                             key={column.id}
                             column={column}
+                            disabled={disabled}
                             onVisibilityChange={onVisibilityChange}
                         />
                     ))}

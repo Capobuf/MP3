@@ -55,8 +55,6 @@ import {
     GripVertical,
     Info,
     Ellipsis,
-    ListFilter,
-    Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -81,13 +79,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-    PopoverHeader,
-    PopoverTitle,
-} from '@/components/ui/popover';
 import {
     Select,
     SelectContent,
@@ -121,7 +112,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { clearLocalUndo, recordLocalUndo } from '@/lib/undo-state';
 import { BudgetCenterSelect, BudgetManualForm } from './budget-entry-sheet';
-import { BudgetColumnOrder } from './budget-column-order';
+import { TableColumnOrder } from './table-column-order';
+import { TableColumnSettings, TableFilters } from './table-view';
 import { draftLines, ExpenseLines } from './expense-lines';
 import { decimalInput, dateLabel, money, varianceTextClass } from './helpers';
 import { budgetLabels, budgetTypes, budgetTotals } from './budget-types';
@@ -1579,72 +1571,57 @@ export function BudgetTable({
         );
     }
     const columnSettings = (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button variant="outline" aria-label="Colonne" title="Colonne">
-                    <Settings2 data-icon="inline-start" /> Colonne
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                align="end"
-                className="max-h-[var(--radix-popover-content-available-height)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto"
+        <TableColumnSettings disabled={busy}>
+            <TableColumnOrder
+                disabled={busy}
+                columns={preferences.order.map((id) => ({
+                    id,
+                    label: columnNames[id],
+                    visible: table.getColumn(id)?.getIsVisible() ?? false,
+                    canHide: table.getColumn(id)?.getCanHide() ?? false,
+                }))}
+                onVisibilityChange={(id, visible) =>
+                    table.getColumn(id)?.toggleVisibility(visible)
+                }
+                onOrderChange={(ids) => table.setColumnOrder(ids)}
+            />
+            <FilterSelect
+                label="Raggruppamento"
+                value={preferences.group}
+                onChange={(group) => {
+                    changePreferences({
+                        ...preferences,
+                        group: group as Preferences['group'],
+                    });
+                    setExpanded(true);
+                }}
+                options={[
+                    {
+                        value: 'type',
+                        label: 'Gruppi per tipologia',
+                    },
+                    {
+                        value: 'center',
+                        label: 'Gruppi per centro',
+                    },
+                ]}
+            />
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                    changePreferences({
+                        order: defaultOrder,
+                        visibility: { type: false },
+                        group: 'type',
+                    });
+                    setSorting([]);
+                    setExpanded(true);
+                }}
             >
-                <div className="flex flex-col gap-2">
-                    <PopoverHeader>
-                        <PopoverTitle>Configurazione colonne</PopoverTitle>
-                    </PopoverHeader>
-                    <BudgetColumnOrder
-                        columns={preferences.order.map((id) => ({
-                            id,
-                            label: columnNames[id],
-                            visible:
-                                table.getColumn(id)?.getIsVisible() ?? false,
-                            canHide: table.getColumn(id)?.getCanHide() ?? false,
-                        }))}
-                        onVisibilityChange={(id, visible) =>
-                            table.getColumn(id)?.toggleVisibility(visible)
-                        }
-                        onOrderChange={(ids) => table.setColumnOrder(ids)}
-                    />
-                    <FilterSelect
-                        label="Raggruppamento"
-                        value={preferences.group}
-                        onChange={(group) => {
-                            changePreferences({
-                                ...preferences,
-                                group: group as Preferences['group'],
-                            });
-                            setExpanded(true);
-                        }}
-                        options={[
-                            {
-                                value: 'type',
-                                label: 'Gruppi per tipologia',
-                            },
-                            {
-                                value: 'center',
-                                label: 'Gruppi per centro',
-                            },
-                        ]}
-                    />
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                            changePreferences({
-                                order: defaultOrder,
-                                visibility: { type: false },
-                                group: 'type',
-                            });
-                            setSorting([]);
-                            setExpanded(true);
-                        }}
-                    >
-                        Ripristina configurazione
-                    </Button>
-                </div>
-            </PopoverContent>
-        </Popover>
+                Ripristina configurazione
+            </Button>
+        </TableColumnSettings>
     );
     return (
         <section
@@ -1653,126 +1630,111 @@ export function BudgetTable({
             aria-busy={busy || loading}
         >
             <div className="flex flex-wrap items-center gap-2">
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="outline">
-                            <ListFilter data-icon="inline-start" />
-                            Filtri
-                            {hasFilters && (
-                                <Badge variant="secondary">
-                                    {activeFilterCount}
-                                </Badge>
-                            )}
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                        align="start"
-                        className="max-h-[var(--radix-popover-content-available-height)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto"
-                    >
-                        <FieldGroup className="gap-4">
-                            <PopoverHeader>
-                                <PopoverTitle>Filtri del Budget</PopoverTitle>
-                            </PopoverHeader>
-                            <Field>
-                                <FieldLabel htmlFor="budget-search">
-                                    Ricerca
-                                </FieldLabel>
-                                <InputGroup>
-                                    <InputGroupInput
-                                        id="budget-search"
-                                        aria-label="Cerca nelle voci del Budget"
-                                        placeholder="Cerca nelle voci…"
-                                        value={search}
-                                        onChange={(event) =>
-                                            setSearch(event.target.value)
-                                        }
-                                    />
-                                </InputGroup>
-                            </Field>
-                            <FilterSelect
-                                label="Filtra per tipo"
-                                value={typeFilter}
-                                onChange={setTypeFilter}
-                                options={[
-                                    {
-                                        value: 'all',
-                                        label: 'Tutte le tipologie',
-                                    },
-                                    ...budgetTypes.map((type) => ({
-                                        value: type,
-                                        label: budgetLabels[type],
-                                    })),
-                                ]}
-                            />
-                            <FilterSelect
-                                label="Filtra per fornitore"
-                                value={vendor}
-                                onChange={setVendor}
-                                options={[
-                                    {
-                                        value: 'all',
-                                        label: 'Tutti i fornitori',
-                                    },
-                                    { value: 'none', label: 'Senza fornitore' },
-                                    ...vendors.map((v) => ({
-                                        value: String(v.id),
-                                        label: v.name,
-                                    })),
-                                ]}
-                            />
-                            <FilterSelect
-                                label="Filtra per centro di costo"
-                                value={center}
-                                onChange={setCenter}
-                                options={[
-                                    { value: 'all', label: 'Tutti i centri' },
-                                    {
-                                        value: 'none',
-                                        label: 'Senza centro di costo',
-                                    },
-                                    ...centers.map((c) => ({
-                                        value: String(c.id),
-                                        label: c.name,
-                                    })),
-                                ]}
-                            />
-                            <FilterSelect
-                                label="Inclusione nel Budget"
-                                value={status}
-                                onChange={setStatus}
-                                options={[
-                                    {
-                                        value: 'included',
-                                        label: 'Voci incluse',
-                                    },
-                                    {
-                                        value: 'excluded',
-                                        label: 'Voci escluse',
-                                    },
-                                    {
-                                        value: 'all',
-                                        label: 'Incluse ed escluse',
-                                    },
-                                ]}
-                            />
-                            {hasFilters && (
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => {
-                                        setSearch('');
-                                        setTypeFilter('all');
-                                        setVendor('all');
-                                        setCenter('all');
-                                        setStatus('included');
-                                    }}
-                                >
-                                    Azzera filtri
-                                </Button>
-                            )}
-                        </FieldGroup>
-                    </PopoverContent>
-                </Popover>
+                <TableFilters
+                    title="Filtri del Budget"
+                    count={activeFilterCount}
+                    disabled={busy}
+                >
+                    <FieldGroup className="gap-4">
+                        <Field>
+                            <FieldLabel htmlFor="budget-search">
+                                Ricerca
+                            </FieldLabel>
+                            <InputGroup>
+                                <InputGroupInput
+                                    id="budget-search"
+                                    aria-label="Cerca nelle voci del Budget"
+                                    placeholder="Cerca nelle voci…"
+                                    value={search}
+                                    onChange={(event) =>
+                                        setSearch(event.target.value)
+                                    }
+                                />
+                            </InputGroup>
+                        </Field>
+                        <FilterSelect
+                            label="Filtra per tipo"
+                            value={typeFilter}
+                            onChange={setTypeFilter}
+                            options={[
+                                {
+                                    value: 'all',
+                                    label: 'Tutte le tipologie',
+                                },
+                                ...budgetTypes.map((type) => ({
+                                    value: type,
+                                    label: budgetLabels[type],
+                                })),
+                            ]}
+                        />
+                        <FilterSelect
+                            label="Filtra per fornitore"
+                            value={vendor}
+                            onChange={setVendor}
+                            options={[
+                                {
+                                    value: 'all',
+                                    label: 'Tutti i fornitori',
+                                },
+                                { value: 'none', label: 'Senza fornitore' },
+                                ...vendors.map((v) => ({
+                                    value: String(v.id),
+                                    label: v.name,
+                                })),
+                            ]}
+                        />
+                        <FilterSelect
+                            label="Filtra per centro di costo"
+                            value={center}
+                            onChange={setCenter}
+                            options={[
+                                { value: 'all', label: 'Tutti i centri' },
+                                {
+                                    value: 'none',
+                                    label: 'Senza centro di costo',
+                                },
+                                ...centers.map((c) => ({
+                                    value: String(c.id),
+                                    label: c.name,
+                                })),
+                            ]}
+                        />
+                        <FilterSelect
+                            label="Inclusione nel Budget"
+                            value={status}
+                            onChange={setStatus}
+                            options={[
+                                {
+                                    value: 'included',
+                                    label: 'Voci incluse',
+                                },
+                                {
+                                    value: 'excluded',
+                                    label: 'Voci escluse',
+                                },
+                                {
+                                    value: 'all',
+                                    label: 'Incluse ed escluse',
+                                },
+                            ]}
+                        />
+                        {hasFilters && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                    setSearch('');
+                                    setTypeFilter('all');
+                                    setVendor('all');
+                                    setCenter('all');
+                                    setStatus('included');
+                                }}
+                            >
+                                Azzera filtri
+                            </Button>
+                        )}
+                    </FieldGroup>
+                </TableFilters>
                 {columnSettings}
                 <Button onClick={onAdd} disabled={busy}>
                     Aggiungi voce

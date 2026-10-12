@@ -269,8 +269,10 @@ export function InlineEdit({
 export async function saveInlineRecord(
     url: string,
     data: Record<string, unknown>,
+    beforeReload?: () => void,
 ) {
     await api(url, 'PATCH', data);
+    beforeReload?.();
     await new Promise<void>((resolve, reject) => {
         let refreshed = false;
         router.reload({

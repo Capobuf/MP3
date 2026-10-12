@@ -84,6 +84,7 @@ export type BreakdownMetric = {
 };
 export type DetailBreakdown = Record<'allocated' | 'actual', BreakdownMetric>;
 export type Filters = {
+    history?: string;
     year?: number;
     search?: string;
     vendor_id?: string;

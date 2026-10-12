@@ -9,14 +9,7 @@ import {
     NativeSelectOption,
 } from '@/components/ui/native-select';
 import { Input } from '@/components/ui/input';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { dateLabel, decimalInput, money, varianceTextClass } from './helpers';
@@ -28,6 +21,13 @@ import {
     periodYear,
 } from './expense-period-fields';
 import type { ExpenseLine, RecordData } from './types';
+import {
+    useTableView,
+    TableFilters,
+    TableViewHeader,
+    TableViewCells,
+    TableViewSettings,
+} from './table-view';
 
 export type DraftLine = ExpenseLine & { key: string };
 
@@ -109,6 +109,7 @@ export function ExpenseLines({
     contractMode = false,
     defaultDescription = '',
     defaultPeriod,
+    initialFocusKey,
     errors = {},
 }: {
     lines: DraftLine[];
@@ -125,13 +126,16 @@ export function ExpenseLines({
     contractMode?: boolean;
     defaultDescription?: string;
     defaultPeriod?: Record<string, string>;
+    initialFocusKey?: string;
     errors?: Record<string, string[]>;
 }) {
-    const { economicContext } = usePage().props;
+    'use no memo'; // TanStack v8 exposes mutable table and column instances.
+
+    const { economicContext, currentTenant } = usePage().props;
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState<string[]>([]);
-    const pendingFocus = useRef<string | null>(null);
+    const pendingFocus = useRef<string | null>(initialFocusKey ?? null);
     const visible = lines.filter(
         (line) =>
             (filter === 'all' || line.type === filter) &&
@@ -165,6 +169,130 @@ export function ExpenseLines({
             ? null
             : totals.actual - totals.allocated;
     const allocatedLabel = contractMode ? 'Previsto' : 'Allocato';
+    const view = useTableView<DraftLine>({
+        rows: visible,
+        storageKey: `mp3:table:v1:${currentTenant?.slug}:expense-lines:${contractMode ? 'contract' : 'ordinary'}:${readOnly ? 'read' : 'edit'}`,
+        columns: [
+            ...(!readOnly
+                ? [
+                      {
+                          id: 'select',
+                          label: 'Selezione',
+                          canHide: false,
+                          className: 'w-10',
+                          header: (
+                              <Checkbox
+                                  aria-label={
+                                      contractMode
+                                          ? 'Seleziona tutte le condizioni visibili'
+                                          : 'Seleziona tutte le righe visibili'
+                                  }
+                                  disabled={disabled || !visible.length}
+                                  checked={
+                                      visibleSelected === visible.length &&
+                                      visible.length > 0
+                                          ? true
+                                          : visibleSelected > 0
+                                            ? 'indeterminate'
+                                            : false
+                                  }
+                                  onCheckedChange={(checked) =>
+                                      setSelected((previous) =>
+                                          checked === true
+                                              ? [
+                                                    ...new Set([
+                                                        ...previous,
+                                                        ...visible.map(
+                                                            (line) => line.key,
+                                                        ),
+                                                    ]),
+                                                ]
+                                              : previous.filter(
+                                                    (key) =>
+                                                        !visible.some(
+                                                            (line) =>
+                                                                line.key ===
+                                                                key,
+                                                        ),
+                                                ),
+                                      )
+                                  }
+                              />
+                          ),
+                      },
+                      { id: 'order', label: 'Ordine' },
+                  ]
+                : []),
+            { id: 'type', label: 'Tipo', value: (line) => line.type },
+            {
+                id: 'description',
+                label: 'Descrizione',
+                value: (line) => line.description,
+                canHide: false,
+            },
+            {
+                id: 'unit_price',
+                label: 'Prezzo unitario',
+                value: (line) => Number(decimalInput(line.unit_price)),
+                className: 'w-32 text-right',
+            },
+            {
+                id: 'quantity',
+                label: 'Quantità',
+                value: (line) => Number(decimalInput(line.quantity)),
+                className: 'w-24 text-right',
+            },
+            {
+                id: 'total',
+                label: 'Totale',
+                value: (line) => lineCents(line) ?? undefined,
+                className: 'text-right',
+            },
+            ...(contractMode
+                ? [
+                      {
+                          id: 'period_starts_on',
+                          label: 'Inizio',
+                          value: (line: DraftLine) => line.period_starts_on,
+                      },
+                      {
+                          id: 'period_ends_on',
+                          label: 'Fine',
+                          value: (line: DraftLine) => line.period_ends_on,
+                      },
+                  ]
+                : []),
+            ...(showYearColumn
+                ? [
+                      {
+                          id: 'year',
+                          label: 'Anno di imputazione',
+                          value: (line: DraftLine) => Number(line.year),
+                      },
+                  ]
+                : []),
+            ...(!readOnly
+                ? [
+                      {
+                          id: 'actions',
+                          label: 'Azioni',
+                          canHide: false,
+                          header: <span className="sr-only">Azioni</span>,
+                      },
+                  ]
+                : []),
+        ],
+    });
+    const sorted = view.table.getState().sorting.length > 0;
+    const hiddenErrors = Object.keys(errors).some((key) => {
+        const field = key.startsWith('lines.')
+            ? key.split('.').at(-1)
+            : undefined;
+        const column = view.table
+            .getAllLeafColumns()
+            .find((column) => column.id === field);
+        return column && !column.getIsVisible();
+    });
     function change(key: string, patch: Partial<ExpenseLine>) {
         onChange?.(
             lines.map((line) => {
@@ -276,16 +404,18 @@ export function ExpenseLines({
                       : 'Righe economiche della spesa'
             }
         >
-            {showHeading && (
+            {(showHeading || !readOnly) && (
                 <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="mr-auto font-semibold">
-                        {readOnly
-                            ? 'Righe economiche'
-                            : contractMode
-                              ? 'Condizioni economiche'
-                              : 'Righe economiche'}
-                    </h2>
-                    {readOnly && (
+                    {showHeading && (
+                        <h2 className="mr-auto font-semibold">
+                            {readOnly
+                                ? 'Righe economiche'
+                                : contractMode
+                                  ? 'Condizioni economiche'
+                                  : 'Righe economiche'}
+                        </h2>
+                    )}
+                    {showHeading && readOnly && (
                         <Badge variant="secondary">
                             {visible.length} di {lines.length}
                         </Badge>
@@ -295,10 +425,11 @@ export function ExpenseLines({
                             type="button"
                             variant="outline"
                             size="sm"
+                            className="ml-auto"
                             disabled={disabled || lines.length >= 500}
                             onClick={add}
                         >
-                            <Plus className="size-4" />{' '}
+                            <Plus data-icon="inline-start" />{' '}
                             {contractMode
                                 ? 'Aggiungi condizione economica'
                                 : 'Aggiungi riga'}
@@ -306,67 +437,97 @@ export function ExpenseLines({
                     )}
                 </div>
             )}
-            {(!readOnly || lines.length > 5) && (
-                <div className="flex flex-wrap gap-2">
-                    <Input
-                        aria-label={
-                            contractMode
-                                ? 'Cerca nelle condizioni economiche'
-                                : 'Cerca nelle descrizioni delle righe'
-                        }
-                        placeholder={
-                            contractMode
-                                ? 'Cerca nelle condizioni…'
-                                : 'Cerca nelle righe…'
-                        }
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                        disabled={disabled}
-                        className="min-w-40 flex-1"
-                    />
-                    <NativeSelect
-                        aria-label={
-                            contractMode
-                                ? 'Filtra condizioni per tipo'
-                                : 'Filtra righe per tipo'
-                        }
-                        value={filter}
-                        disabled={disabled}
-                        onChange={(event) => setFilter(event.target.value)}
-                    >
-                        <NativeSelectOption value="all">
-                            Tutti i tipi
-                        </NativeSelectOption>
-                        <NativeSelectOption value="allocated">
-                            {contractMode ? 'Previste' : 'Allocati'}
-                        </NativeSelectOption>
-                        <NativeSelectOption value="actual">
-                            Effettivi
-                        </NativeSelectOption>
-                    </NativeSelect>
-                    {filtered && (
-                        <Button
-                            type="button"
-                            variant="ghost"
+            <div className="flex flex-wrap items-center gap-2">
+                <TableFilters
+                    title={
+                        contractMode
+                            ? 'Filtri condizioni economiche'
+                            : 'Filtri righe economiche'
+                    }
+                    count={(search ? 1 : 0) + (filter !== 'all' ? 1 : 0)}
+                    disabled={disabled}
+                >
+                    <div className="flex flex-col gap-3">
+                        <Input
+                            aria-label={
+                                contractMode
+                                    ? 'Cerca nelle condizioni economiche'
+                                    : 'Cerca nelle descrizioni delle righe'
+                            }
+                            placeholder={
+                                contractMode
+                                    ? 'Cerca nelle condizioni…'
+                                    : 'Cerca nelle righe…'
+                            }
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
                             disabled={disabled}
-                            onClick={resetFilters}
+                            className="min-w-40 flex-1"
+                        />
+                        <NativeSelect
+                            aria-label={
+                                contractMode
+                                    ? 'Filtra condizioni per tipo'
+                                    : 'Filtra righe per tipo'
+                            }
+                            value={filter}
+                            disabled={disabled}
+                            onChange={(event) => setFilter(event.target.value)}
                         >
-                            Azzera filtri
-                        </Button>
-                    )}
-                </div>
-            )}
-            {readOnly && (
+                            <NativeSelectOption value="all">
+                                Tutti i tipi
+                            </NativeSelectOption>
+                            <NativeSelectOption value="allocated">
+                                {contractMode ? 'Previste' : 'Allocati'}
+                            </NativeSelectOption>
+                            <NativeSelectOption value="actual">
+                                Effettivi
+                            </NativeSelectOption>
+                        </NativeSelect>
+                        {filtered && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                disabled={disabled}
+                                onClick={resetFilters}
+                            >
+                                Azzera filtri
+                            </Button>
+                        )}
+                    </div>
+                </TableFilters>
+                <TableViewSettings view={view} disabled={disabled} />
+                {sorted && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => view.table.setSorting([])}
+                    >
+                        Ripristina ordine manuale
+                    </Button>
+                )}
+            </div>
+            {readOnly && filtered && (
                 <p className="text-xs text-muted-foreground">
                     {visible.length} di {lines.length} righe visibili
                 </p>
             )}
-            {!readOnly && (
+            {!readOnly && showHeading && (
                 <p className="text-sm text-muted-foreground">
                     {visible.length} di {lines.length}{' '}
                     {contractMode ? 'condizioni economiche' : 'righe'}. Modifica
                     i campi direttamente nella tabella e usa le frecce per
                     riordinare. Le modifiche saranno salvate con la spesa.
+                </p>
+            )}
+            {hiddenErrors && (
+                <p role="alert" className="text-sm text-destructive">
+                    Ci sono campi da correggere nelle colonne nascoste.{' '}
+                    <Button type="button" variant="link" onClick={view.reset}>
+                        Mostra tutte le colonne
+                    </Button>
                 </p>
             )}
             {errors.lines && (
@@ -482,105 +643,14 @@ export function ExpenseLines({
                 )}
             >
                 <Table>
-                    <TableHeader>
-                        <TableRow>
-                            {!readOnly && (
-                                <TableHead className="w-10">
-                                    <Checkbox
-                                        aria-label={
-                                            contractMode
-                                                ? 'Seleziona tutte le condizioni visibili'
-                                                : 'Seleziona tutte le righe visibili'
-                                        }
-                                        disabled={disabled || !visible.length}
-                                        checked={
-                                            visibleSelected ===
-                                                visible.length &&
-                                            visible.length > 0
-                                                ? true
-                                                : visibleSelected > 0
-                                                  ? 'indeterminate'
-                                                  : false
-                                        }
-                                        onCheckedChange={(checked) =>
-                                            setSelected((previous) =>
-                                                checked === true
-                                                    ? [
-                                                          ...new Set([
-                                                              ...previous,
-                                                              ...visible.map(
-                                                                  (line) =>
-                                                                      line.key,
-                                                              ),
-                                                          ]),
-                                                      ]
-                                                    : previous.filter(
-                                                          (key) =>
-                                                              !visible.some(
-                                                                  (line) =>
-                                                                      line.key ===
-                                                                      key,
-                                                              ),
-                                                      ),
-                                            )
-                                        }
-                                    />
-                                </TableHead>
-                            )}
-                            {!readOnly && <TableHead>Ordine</TableHead>}
-                            <TableHead
-                                className={
-                                    readOnly
-                                        ? 'hidden sm:table-cell'
-                                        : undefined
-                                }
-                            >
-                                Tipo
-                            </TableHead>
-                            <TableHead>Descrizione</TableHead>
-                            <TableHead
-                                className={cn(
-                                    'w-32 text-right whitespace-normal',
-                                    readOnly && 'hidden md:table-cell',
-                                )}
-                            >
-                                Prezzo unitario
-                            </TableHead>
-                            <TableHead
-                                className={cn(
-                                    'w-24 text-right',
-                                    readOnly && 'hidden md:table-cell',
-                                )}
-                            >
-                                Quantità
-                            </TableHead>
-                            <TableHead className="text-right">Totale</TableHead>
-                            {contractMode && (
-                                <>
-                                    <TableHead>Inizio</TableHead>
-                                    <TableHead>Fine</TableHead>
-                                    {showYearColumn && (
-                                        <TableHead className="w-px whitespace-normal">
-                                            Anno di imputazione
-                                        </TableHead>
-                                    )}
-                                </>
-                            )}
-                            {!readOnly && (
-                                <TableHead>
-                                    <span className="sr-only">Azioni</span>
-                                </TableHead>
-                            )}
-                        </TableRow>
-                    </TableHeader>
+                    <TableViewHeader view={view} disabled={disabled} />
                     <TableBody>
                         {!visible.length && (
                             <TableRow>
                                 <TableCell
                                     colSpan={
-                                        (readOnly ? 5 : 8) +
-                                        (contractMode ? 2 : 0) +
-                                        (showYearColumn ? 1 : 0)
+                                        view.table.getVisibleLeafColumns()
+                                            .length
                                     }
                                     className="py-6 text-center text-muted-foreground"
                                 >
@@ -598,169 +668,281 @@ export function ExpenseLines({
                                 </TableCell>
                             </TableRow>
                         )}
-                        {visible.map((line) => {
-                            const index = lines.indexOf(line);
-                            const cents = lineCents(line);
-                            const fieldError = (field: string) =>
-                                errors[`lines.${index}.${field}`]?.[0];
-                            const label = `${contractMode ? 'condizione economica' : 'riga'} ${index + 1}`;
-                            return (
-                                <TableRow
-                                    key={line.key}
-                                    className={cn(
-                                        readOnly
-                                            ? 'transition-colors hover:bg-muted/40 [&>td]:align-middle'
-                                            : '[&>td]:align-top',
-                                    )}
-                                    data-state={
-                                        selected.includes(line.key)
-                                            ? 'selected'
-                                            : undefined
-                                    }
-                                >
-                                    {!readOnly && (
-                                        <TableCell>
-                                            <Checkbox
-                                                aria-label={`Seleziona ${label}`}
-                                                className="mt-2"
-                                                checked={selected.includes(
-                                                    line.key,
-                                                )}
-                                                disabled={disabled}
-                                                onCheckedChange={(checked) =>
-                                                    setSelected((previous) =>
-                                                        checked === true
-                                                            ? [
-                                                                  ...previous,
-                                                                  line.key,
-                                                              ]
-                                                            : previous.filter(
-                                                                  (key) =>
-                                                                      key !==
-                                                                      line.key,
-                                                              ),
+                        {view.table
+                            .getRowModel()
+                            .rows.map(({ original: line }) => {
+                                const index = lines.indexOf(line);
+                                const cents = lineCents(line);
+                                const fieldError = (field: string) =>
+                                    errors[`lines.${index}.${field}`]?.[0];
+                                const label = `${contractMode ? 'condizione economica' : 'riga'} ${index + 1}`;
+                                return (
+                                    <TableRow
+                                        key={line.key}
+                                        className={cn(
+                                            readOnly
+                                                ? 'transition-colors hover:bg-muted/40 [&>td]:align-middle'
+                                                : '[&>td]:align-top',
+                                        )}
+                                        data-state={
+                                            selected.includes(line.key)
+                                                ? 'selected'
+                                                : undefined
+                                        }
+                                    >
+                                        <TableViewCells table={view.table}>
+                                            {!readOnly && (
+                                                <TableCell key="select">
+                                                    <Checkbox
+                                                        aria-label={`Seleziona ${label}`}
+                                                        className="mt-2"
+                                                        checked={selected.includes(
+                                                            line.key,
+                                                        )}
+                                                        disabled={disabled}
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            setSelected(
+                                                                (previous) =>
+                                                                    checked ===
+                                                                    true
+                                                                        ? [
+                                                                              ...previous,
+                                                                              line.key,
+                                                                          ]
+                                                                        : previous.filter(
+                                                                              (
+                                                                                  key,
+                                                                              ) =>
+                                                                                  key !==
+                                                                                  line.key,
+                                                                          ),
+                                                            )
+                                                        }
+                                                    />
+                                                </TableCell>
+                                            )}
+                                            {!readOnly && (
+                                                <TableCell key="order">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="w-5 text-xs tabular-nums">
+                                                            {index + 1}
+                                                        </span>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            aria-label={`Sposta su ${label}`}
+                                                            disabled={
+                                                                disabled ||
+                                                                filtered ||
+                                                                sorted ||
+                                                                index === 0
+                                                            }
+                                                            onClick={() =>
+                                                                move(index, -1)
+                                                            }
+                                                        >
+                                                            <ArrowUp />
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            aria-label={`Sposta giù ${label}`}
+                                                            disabled={
+                                                                disabled ||
+                                                                filtered ||
+                                                                sorted ||
+                                                                index ===
+                                                                    lines.length -
+                                                                        1
+                                                            }
+                                                            onClick={() =>
+                                                                move(index, 1)
+                                                            }
+                                                        >
+                                                            <ArrowDown />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            )}
+                                            <TableCell
+                                                key="type"
+                                                className={cn('min-w-32')}
+                                            >
+                                                {readOnly ? (
+                                                    editable(
+                                                        line,
+                                                        'type',
+                                                        `Tipo ${label}`,
+                                                        <Badge
+                                                            variant={
+                                                                line.type ===
+                                                                'allocated'
+                                                                    ? 'outline'
+                                                                    : 'secondary'
+                                                            }
+                                                        >
+                                                            {line.type ===
+                                                            'allocated'
+                                                                ? allocatedLabel
+                                                                : 'Effettivo'}
+                                                        </Badge>,
                                                     )
-                                                }
-                                            />
-                                        </TableCell>
-                                    )}
-                                    {!readOnly && (
-                                        <TableCell>
-                                            <div className="flex items-center gap-1">
-                                                <span className="w-5 text-xs tabular-nums">
-                                                    {index + 1}
-                                                </span>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    aria-label={`Sposta su ${label}`}
-                                                    disabled={
-                                                        disabled ||
-                                                        filtered ||
-                                                        index === 0
-                                                    }
-                                                    onClick={() =>
-                                                        move(index, -1)
-                                                    }
-                                                >
-                                                    <ArrowUp />
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    aria-label={`Sposta giù ${label}`}
-                                                    disabled={
-                                                        disabled ||
-                                                        filtered ||
-                                                        index ===
-                                                            lines.length - 1
-                                                    }
-                                                    onClick={() =>
-                                                        move(index, 1)
-                                                    }
-                                                >
-                                                    <ArrowDown />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    )}
-                                    <TableCell
-                                        className={cn(
-                                            readOnly
-                                                ? 'hidden sm:table-cell'
-                                                : 'min-w-32',
-                                        )}
-                                    >
-                                        {readOnly ? (
-                                            editable(
-                                                line,
-                                                'type',
-                                                `Tipo ${label}`,
-                                                <Badge
-                                                    variant={
-                                                        line.type ===
-                                                        'allocated'
-                                                            ? 'outline'
-                                                            : 'secondary'
-                                                    }
-                                                >
-                                                    {line.type === 'allocated'
-                                                        ? allocatedLabel
-                                                        : 'Effettivo'}
-                                                </Badge>,
-                                            )
-                                        ) : (
-                                            <NativeSelect
-                                                aria-label={`Tipo ${label}`}
-                                                aria-invalid={
-                                                    !!fieldError('type')
-                                                }
-                                                value={line.type}
-                                                disabled={disabled}
-                                                onChange={(event) =>
-                                                    change(line.key, {
-                                                        type: event.target
-                                                            .value as ExpenseLine['type'],
-                                                    })
-                                                }
-                                            >
-                                                <NativeSelectOption value="allocated">
-                                                    {allocatedLabel}
-                                                </NativeSelectOption>
-                                                <NativeSelectOption value="actual">
-                                                    Effettivo
-                                                </NativeSelectOption>
-                                            </NativeSelect>
-                                        )}
-                                        {fieldError('type') && (
-                                            <p
-                                                role="alert"
-                                                className="text-sm text-destructive"
-                                            >
-                                                {fieldError('type')}
-                                            </p>
-                                        )}
-                                    </TableCell>
-                                    <TableCell
-                                        className={cn(
-                                            'w-full whitespace-normal',
-                                            readOnly
-                                                ? 'min-w-32 font-medium [overflow-wrap:anywhere] sm:min-w-48'
-                                                : 'min-w-80',
-                                        )}
-                                    >
-                                        {readOnly ? (
-                                            <div className="flex flex-col gap-1.5">
-                                                {editable(
-                                                    line,
-                                                    'description',
-                                                    `Descrizione ${label}`,
-                                                    line.description,
+                                                ) : (
+                                                    <NativeSelect
+                                                        aria-label={`Tipo ${label}`}
+                                                        aria-invalid={
+                                                            !!fieldError('type')
+                                                        }
+                                                        value={line.type}
+                                                        disabled={disabled}
+                                                        onChange={(event) =>
+                                                            change(line.key, {
+                                                                type: event
+                                                                    .target
+                                                                    .value as ExpenseLine['type'],
+                                                            })
+                                                        }
+                                                    >
+                                                        <NativeSelectOption value="allocated">
+                                                            {allocatedLabel}
+                                                        </NativeSelectOption>
+                                                        <NativeSelectOption value="actual">
+                                                            Effettivo
+                                                        </NativeSelectOption>
+                                                    </NativeSelect>
                                                 )}
-                                                <div className="flex items-center gap-1 financial-value text-xs text-muted-foreground md:hidden">
-                                                    {editable(
+                                                {fieldError('type') && (
+                                                    <p
+                                                        role="alert"
+                                                        className="text-sm text-destructive"
+                                                    >
+                                                        {fieldError('type')}
+                                                    </p>
+                                                )}
+                                            </TableCell>
+                                            <TableCell
+                                                key="description"
+                                                className={cn(
+                                                    'w-full whitespace-normal',
+                                                    readOnly
+                                                        ? 'min-w-32 font-medium [overflow-wrap:anywhere] sm:min-w-48'
+                                                        : 'min-w-80',
+                                                )}
+                                            >
+                                                {readOnly ? (
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {editable(
+                                                            line,
+                                                            'description',
+                                                            `Descrizione ${label}`,
+                                                            line.description,
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <Input
+                                                        ref={(input) => {
+                                                            if (
+                                                                input &&
+                                                                pendingFocus.current ===
+                                                                    line.key
+                                                            ) {
+                                                                pendingFocus.current =
+                                                                    null;
+                                                                input.focus();
+                                                                input.scrollIntoView(
+                                                                    {
+                                                                        block: 'nearest',
+                                                                        inline: 'nearest',
+                                                                    },
+                                                                );
+                                                            }
+                                                        }}
+                                                        aria-label={`Descrizione ${label}`}
+                                                        aria-invalid={
+                                                            !!fieldError(
+                                                                'description',
+                                                            )
+                                                        }
+                                                        value={line.description}
+                                                        disabled={disabled}
+                                                        maxLength={255}
+                                                        onChange={(event) =>
+                                                            change(line.key, {
+                                                                description:
+                                                                    event.target
+                                                                        .value,
+                                                            })
+                                                        }
+                                                    />
+                                                )}
+                                                {fieldError('description') && (
+                                                    <p
+                                                        role="alert"
+                                                        className="mt-1 text-sm text-destructive"
+                                                    >
+                                                        {fieldError(
+                                                            'description',
+                                                        )}
+                                                    </p>
+                                                )}
+                                            </TableCell>
+                                            <TableCell
+                                                key="unit_price"
+                                                className={cn(
+                                                    'w-32 min-w-32 text-right financial-value',
+                                                )}
+                                            >
+                                                {readOnly ? (
+                                                    editable(
+                                                        line,
+                                                        'unit_price',
+                                                        `Prezzo unitario ${label}`,
+                                                        money(line.unit_price),
+                                                    )
+                                                ) : (
+                                                    <MoneyField
+                                                        aria-label={`Prezzo unitario ${label}`}
+                                                        aria-invalid={
+                                                            !!fieldError(
+                                                                'unit_price',
+                                                            )
+                                                        }
+                                                        inputMode="decimal"
+                                                        className="text-right font-medium tracking-normal tabular-nums"
+                                                        value={line.unit_price}
+                                                        disabled={disabled}
+                                                        placeholder="0,00"
+                                                        onChange={(value) =>
+                                                            change(line.key, {
+                                                                unit_price:
+                                                                    value,
+                                                            })
+                                                        }
+                                                    />
+                                                )}
+                                                {fieldError('unit_price') && (
+                                                    <p
+                                                        role="alert"
+                                                        className="mt-1 text-sm text-destructive"
+                                                    >
+                                                        {fieldError(
+                                                            'unit_price',
+                                                        )}
+                                                    </p>
+                                                )}
+                                            </TableCell>
+                                            <TableCell
+                                                key="quantity"
+                                                className={cn(
+                                                    'w-24 min-w-24 text-right financial-value',
+                                                )}
+                                            >
+                                                {readOnly ? (
+                                                    editable(
                                                         line,
                                                         'quantity',
                                                         `Quantità ${label}`,
@@ -772,311 +954,242 @@ export function ExpenseLines({
                                                                 maximumFractionDigits: 4,
                                                             },
                                                         ),
-                                                    )}
-                                                    <span>×</span>
-                                                    {editable(
-                                                        line,
-                                                        'unit_price',
-                                                        `Prezzo unitario ${label}`,
-                                                        money(line.unit_price),
-                                                    )}
-                                                </div>
-                                                <Badge
-                                                    className="self-start sm:hidden"
-                                                    variant="outline"
-                                                >
-                                                    {line.type === 'allocated'
-                                                        ? allocatedLabel
-                                                        : 'Effettivo'}
-                                                </Badge>
-                                            </div>
-                                        ) : (
-                                            <Input
-                                                ref={(input) => {
-                                                    if (
-                                                        input &&
-                                                        pendingFocus.current ===
-                                                            line.key
-                                                    ) {
-                                                        pendingFocus.current =
-                                                            null;
-                                                        input.focus();
-                                                        input.scrollIntoView({
-                                                            block: 'nearest',
-                                                            inline: 'nearest',
-                                                        });
-                                                    }
-                                                }}
-                                                aria-label={`Descrizione ${label}`}
-                                                aria-invalid={
-                                                    !!fieldError('description')
-                                                }
-                                                value={line.description}
-                                                disabled={disabled}
-                                                maxLength={255}
-                                                onChange={(event) =>
-                                                    change(line.key, {
-                                                        description:
-                                                            event.target.value,
-                                                    })
-                                                }
-                                            />
-                                        )}
-                                        {fieldError('description') && (
-                                            <p
-                                                role="alert"
-                                                className="mt-1 text-sm text-destructive"
-                                            >
-                                                {fieldError('description')}
-                                            </p>
-                                        )}
-                                    </TableCell>
-                                    <TableCell
-                                        className={cn(
-                                            'w-32 min-w-32 text-right financial-value',
-                                            readOnly && 'hidden md:table-cell',
-                                        )}
-                                    >
-                                        {readOnly ? (
-                                            editable(
-                                                line,
-                                                'unit_price',
-                                                `Prezzo unitario ${label}`,
-                                                money(line.unit_price),
-                                            )
-                                        ) : (
-                                            <MoneyField
-                                                aria-label={`Prezzo unitario ${label}`}
-                                                aria-invalid={
-                                                    !!fieldError('unit_price')
-                                                }
-                                                inputMode="decimal"
-                                                className="text-right font-medium tracking-normal tabular-nums"
-                                                value={line.unit_price}
-                                                disabled={disabled}
-                                                placeholder="0,00"
-                                                onChange={(value) =>
-                                                    change(line.key, {
-                                                        unit_price: value,
-                                                    })
-                                                }
-                                            />
-                                        )}
-                                        {fieldError('unit_price') && (
-                                            <p
-                                                role="alert"
-                                                className="mt-1 text-sm text-destructive"
-                                            >
-                                                {fieldError('unit_price')}
-                                            </p>
-                                        )}
-                                    </TableCell>
-                                    <TableCell
-                                        className={cn(
-                                            'w-24 min-w-24 text-right financial-value',
-                                            readOnly && 'hidden md:table-cell',
-                                        )}
-                                    >
-                                        {readOnly ? (
-                                            editable(
-                                                line,
-                                                'quantity',
-                                                `Quantità ${label}`,
-                                                Number(
-                                                    line.quantity,
-                                                ).toLocaleString('it-IT', {
-                                                    maximumFractionDigits: 4,
-                                                }),
-                                            )
-                                        ) : (
-                                            <Input
-                                                aria-label={`Quantità ${label}`}
-                                                aria-invalid={
-                                                    !!fieldError('quantity')
-                                                }
-                                                inputMode="decimal"
-                                                className="text-right font-medium tracking-normal tabular-nums"
-                                                value={line.quantity}
-                                                disabled={disabled}
-                                                onChange={(event) =>
-                                                    change(line.key, {
-                                                        quantity:
-                                                            event.target.value,
-                                                    })
-                                                }
-                                            />
-                                        )}
-                                        {fieldError('quantity') && (
-                                            <p
-                                                role="alert"
-                                                className="mt-1 text-sm text-destructive"
-                                            >
-                                                {fieldError('quantity')}
-                                            </p>
-                                        )}
-                                    </TableCell>
-                                    <TableCell
-                                        className={cn(
-                                            'text-right financial-value',
-                                            readOnly ? 'min-w-28' : 'min-w-36',
-                                        )}
-                                    >
-                                        {readOnly ? (
-                                            money(line.total)
-                                        ) : (
-                                            <MoneyOutput
-                                                label={`Totale ${label}`}
-                                                value={
-                                                    cents !== null
-                                                        ? Number(cents) / 100
-                                                        : decimalInput(
-                                                                line.unit_price,
-                                                            ) === null
-                                                          ? 0
-                                                          : null
-                                                }
-                                            />
-                                        )}
-                                    </TableCell>
-                                    {contractMode &&
-                                        (
-                                            [
-                                                'period_starts_on',
-                                                'period_ends_on',
-                                            ] as const
-                                        ).map((field) => (
-                                            <TableCell
-                                                key={field}
-                                                className="min-w-44"
-                                            >
-                                                {readOnly ? (
-                                                    editable(
-                                                        line,
-                                                        field,
-                                                        `${field === 'period_starts_on' ? 'Dal' : 'Al'} ${label}`,
-                                                        dateLabel(line[field]),
                                                     )
                                                 ) : (
-                                                    <DateField
-                                                        id={`${line.key}-${field}`}
-                                                        aria-label={`${field === 'period_starts_on' ? 'Inizio' : 'Fine'} ${label}`}
-                                                        value={
-                                                            line[field] ?? ''
-                                                        }
-                                                        onChange={(value) =>
-                                                            change(line.key, {
-                                                                [field]: value,
-                                                            })
-                                                        }
-                                                        disabled={disabled}
+                                                    <Input
+                                                        aria-label={`Quantità ${label}`}
                                                         aria-invalid={
-                                                            !!fieldError(field)
+                                                            !!fieldError(
+                                                                'quantity',
+                                                            )
                                                         }
-                                                        aria-describedby={
-                                                            fieldError(field)
-                                                                ? `${line.key}-${field}-error`
-                                                                : undefined
+                                                        inputMode="decimal"
+                                                        className="text-right font-medium tracking-normal tabular-nums"
+                                                        value={line.quantity}
+                                                        disabled={disabled}
+                                                        onChange={(event) =>
+                                                            change(line.key, {
+                                                                quantity:
+                                                                    event.target
+                                                                        .value,
+                                                            })
                                                         }
                                                     />
                                                 )}
-                                                {fieldError(field) && (
+                                                {fieldError('quantity') && (
                                                     <p
-                                                        id={`${line.key}-${field}-error`}
                                                         role="alert"
-                                                        className="text-sm text-destructive"
+                                                        className="mt-1 text-sm text-destructive"
                                                     >
-                                                        {fieldError(field)}
+                                                        {fieldError('quantity')}
                                                     </p>
                                                 )}
                                             </TableCell>
-                                        ))}
-                                    {showYearColumn && (
-                                        <TableCell className="w-px">
-                                            {readOnly ? (
-                                                onSaveLine ? (
-                                                    editable(
-                                                        line,
-                                                        'year',
-                                                        `Anno ${label}`,
-                                                        line.year,
-                                                    )
-                                                ) : periodCrossesYears(line) ? (
-                                                    line.year
-                                                ) : null
-                                            ) : (
-                                                <ExpensePeriodFields
-                                                    compact
-                                                    values={{
-                                                        period_starts_on:
-                                                            line.period_starts_on ??
-                                                            '',
-                                                        period_ends_on:
-                                                            line.period_ends_on ??
-                                                            '',
-                                                        year: String(
-                                                            line.year ?? '',
-                                                        ),
-                                                    }}
-                                                    onChange={(_, value) =>
-                                                        change(line.key, {
-                                                            year: value,
-                                                        })
-                                                    }
-                                                    disabled={disabled}
-                                                    errors={
-                                                        fieldError('year')
-                                                            ? {
-                                                                  year: [
-                                                                      fieldError(
-                                                                          'year',
-                                                                      )!,
-                                                                  ],
-                                                              }
-                                                            : {}
-                                                    }
-                                                    showPeriod={false}
-                                                    idPrefix={line.key}
-                                                    yearLabel={`Anno ${label}`}
-                                                />
+                                            <TableCell
+                                                key="total"
+                                                className={cn(
+                                                    'text-right financial-value',
+                                                    readOnly
+                                                        ? 'min-w-28'
+                                                        : 'min-w-36',
+                                                )}
+                                            >
+                                                {readOnly ? (
+                                                    money(line.total)
+                                                ) : (
+                                                    <MoneyOutput
+                                                        label={`Totale ${label}`}
+                                                        value={
+                                                            cents !== null
+                                                                ? Number(
+                                                                      cents,
+                                                                  ) / 100
+                                                                : decimalInput(
+                                                                        line.unit_price,
+                                                                    ) === null
+                                                                  ? 0
+                                                                  : null
+                                                        }
+                                                    />
+                                                )}
+                                            </TableCell>
+                                            {contractMode &&
+                                                (
+                                                    [
+                                                        'period_starts_on',
+                                                        'period_ends_on',
+                                                    ] as const
+                                                ).map((field) => (
+                                                    <TableCell
+                                                        key={field}
+                                                        className="min-w-44"
+                                                    >
+                                                        {readOnly ? (
+                                                            editable(
+                                                                line,
+                                                                field,
+                                                                `${field === 'period_starts_on' ? 'Dal' : 'Al'} ${label}`,
+                                                                dateLabel(
+                                                                    line[field],
+                                                                ),
+                                                            )
+                                                        ) : (
+                                                            <DateField
+                                                                id={`${line.key}-${field}`}
+                                                                aria-label={`${field === 'period_starts_on' ? 'Inizio' : 'Fine'} ${label}`}
+                                                                value={
+                                                                    line[
+                                                                        field
+                                                                    ] ?? ''
+                                                                }
+                                                                onChange={(
+                                                                    value,
+                                                                ) =>
+                                                                    change(
+                                                                        line.key,
+                                                                        {
+                                                                            [field]:
+                                                                                value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    disabled
+                                                                }
+                                                                aria-invalid={
+                                                                    !!fieldError(
+                                                                        field,
+                                                                    )
+                                                                }
+                                                                aria-describedby={
+                                                                    fieldError(
+                                                                        field,
+                                                                    )
+                                                                        ? `${line.key}-${field}-error`
+                                                                        : undefined
+                                                                }
+                                                            />
+                                                        )}
+                                                        {fieldError(field) && (
+                                                            <p
+                                                                id={`${line.key}-${field}-error`}
+                                                                role="alert"
+                                                                className="text-sm text-destructive"
+                                                            >
+                                                                {fieldError(
+                                                                    field,
+                                                                )}
+                                                            </p>
+                                                        )}
+                                                    </TableCell>
+                                                ))}
+                                            {showYearColumn && (
+                                                <TableCell
+                                                    key="year"
+                                                    className="w-px"
+                                                >
+                                                    {readOnly ? (
+                                                        onSaveLine ? (
+                                                            editable(
+                                                                line,
+                                                                'year',
+                                                                `Anno ${label}`,
+                                                                line.year,
+                                                            )
+                                                        ) : periodCrossesYears(
+                                                              line,
+                                                          ) ? (
+                                                            line.year
+                                                        ) : null
+                                                    ) : (
+                                                        <ExpensePeriodFields
+                                                            compact
+                                                            values={{
+                                                                period_starts_on:
+                                                                    line.period_starts_on ??
+                                                                    '',
+                                                                period_ends_on:
+                                                                    line.period_ends_on ??
+                                                                    '',
+                                                                year: String(
+                                                                    line.year ??
+                                                                        '',
+                                                                ),
+                                                            }}
+                                                            onChange={(
+                                                                _,
+                                                                value,
+                                                            ) =>
+                                                                change(
+                                                                    line.key,
+                                                                    {
+                                                                        year: value,
+                                                                    },
+                                                                )
+                                                            }
+                                                            disabled={disabled}
+                                                            errors={
+                                                                fieldError(
+                                                                    'year',
+                                                                )
+                                                                    ? {
+                                                                          year: [
+                                                                              fieldError(
+                                                                                  'year',
+                                                                              )!,
+                                                                          ],
+                                                                      }
+                                                                    : {}
+                                                            }
+                                                            showPeriod={false}
+                                                            idPrefix={line.key}
+                                                            yearLabel={`Anno ${label}`}
+                                                        />
+                                                    )}
+                                                </TableCell>
                                             )}
-                                        </TableCell>
-                                    )}
-                                    {!readOnly && (
-                                        <TableCell>
-                                            <div className="flex gap-1">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    aria-label={`Duplica ${label}`}
-                                                    disabled={
-                                                        disabled ||
-                                                        lines.length >= 500
-                                                    }
-                                                    onClick={() =>
-                                                        duplicate([line.key])
-                                                    }
-                                                >
-                                                    <Copy />
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    aria-label={`Elimina ${label}`}
-                                                    disabled={disabled}
-                                                    onClick={() =>
-                                                        remove([line.key])
-                                                    }
-                                                >
-                                                    <Trash2 />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
-                                    )}
-                                </TableRow>
-                            );
-                        })}
+                                            {!readOnly && (
+                                                <TableCell key="actions">
+                                                    <div className="flex gap-1">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            aria-label={`Duplica ${label}`}
+                                                            disabled={
+                                                                disabled ||
+                                                                lines.length >=
+                                                                    500
+                                                            }
+                                                            onClick={() =>
+                                                                duplicate([
+                                                                    line.key,
+                                                                ])
+                                                            }
+                                                        >
+                                                            <Copy />
+                                                        </Button>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            aria-label={`Elimina ${label}`}
+                                                            disabled={disabled}
+                                                            onClick={() =>
+                                                                remove([
+                                                                    line.key,
+                                                                ])
+                                                            }
+                                                        >
+                                                            <Trash2 />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            )}
+                                        </TableViewCells>
+                                    </TableRow>
+                                );
+                            })}
                     </TableBody>
                 </Table>
             </div>

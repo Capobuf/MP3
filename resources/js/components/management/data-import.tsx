@@ -11,13 +11,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import {
-    Table,
-    TableHeader,
-    TableHead,
-    TableBody,
-    TableRow,
-    TableCell,
-} from '@/components/ui/table';
+    NativeSelect,
+    NativeSelectOption,
+} from '@/components/ui/native-select';
+import {
+    TableFilters,
+    TableViewCells,
+    TableViewHeader,
+    TableViewSettings,
+    useTableView,
+} from './table-view';
+import { Table, TableBody, TableRow, TableCell } from '@/components/ui/table';
 
 type Preview = {
     token: string;
@@ -49,6 +53,264 @@ const typeLabels: Record<string, string> = {
     'budget-year': 'Anni Budget',
     'budget-entry': 'Voci Budget',
 };
+
+function ImportCountsTable({
+    counts,
+    path,
+    disabled,
+}: {
+    counts: Record<string, number>;
+    path: string;
+    disabled: boolean;
+}) {
+    'use no memo'; // TanStack v8 exposes mutable table and column instances.
+
+    const [search, setSearch] = useState('');
+    const rows = Object.entries(counts)
+        .map(([type, count]) => ({
+            type,
+            count,
+            label: typeLabels[type] ?? type,
+        }))
+        .filter((row) =>
+            row.label
+                .toLocaleLowerCase('it')
+                .includes(search.toLocaleLowerCase('it')),
+        );
+    const view = useTableView({
+        rows,
+        storageKey: `mp3:table:v1:${path}:import-counts`,
+        columns: [
+            {
+                id: 'type',
+                label: 'Tipo',
+                value: (row) => row.label,
+                canHide: false,
+            },
+            {
+                id: 'count',
+                label: 'Record',
+                value: (row) => row.count,
+                className: 'text-right',
+            },
+        ],
+    });
+    return (
+        <section
+            aria-label="Riepilogo importazione"
+            className="flex min-w-0 flex-col gap-3"
+        >
+            <div className="flex flex-wrap items-center gap-2">
+                <TableFilters
+                    title="Filtri riepilogo"
+                    count={search ? 1 : 0}
+                    disabled={disabled}
+                >
+                    <Input
+                        disabled={disabled}
+                        aria-label="Cerca tipo di record"
+                        value={search}
+                        placeholder="Cerca tipo…"
+                        onChange={(event) => setSearch(event.target.value)}
+                    />
+                </TableFilters>
+                <TableViewSettings view={view} disabled={disabled} />
+            </div>
+            <div className="min-w-0 overflow-hidden rounded-lg border">
+                <Table>
+                    <TableViewHeader view={view} disabled={disabled} />
+                    <TableBody>
+                        {!rows.length && (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={
+                                        view.table.getVisibleLeafColumns()
+                                            .length
+                                    }
+                                >
+                                    Nessun tipo corrisponde alla ricerca.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        {view.table
+                            .getRowModel()
+                            .rows.map(({ original: row }) => (
+                                <TableRow key={row.type}>
+                                    <TableViewCells table={view.table}>
+                                        <TableCell key="type">
+                                            {row.label}
+                                        </TableCell>
+                                        <TableCell
+                                            key="count"
+                                            className="text-right tabular-nums"
+                                        >
+                                            {row.count}
+                                        </TableCell>
+                                    </TableViewCells>
+                                </TableRow>
+                            ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </section>
+    );
+}
+function ImportRecordsTable({
+    rows,
+    path,
+    disabled,
+}: {
+    rows: NonNullable<Preview['preview']>;
+    path: string;
+    disabled: boolean;
+}) {
+    'use no memo'; // TanStack v8 exposes mutable table and column instances.
+
+    const [search, setSearch] = useState('');
+    const [status, setStatus] = useState('all');
+    const visible = rows.filter(
+        (row) =>
+            (status === 'all' || row.status === status) &&
+            [row.label, ...Object.values(row.values).map(String)]
+                .join(' ')
+                .toLocaleLowerCase('it')
+                .includes(search.toLocaleLowerCase('it')),
+    );
+    const view = useTableView({
+        rows: visible,
+        storageKey: `mp3:table:v1:${path}:import-preview`,
+        columns: [
+            { id: 'row', label: 'Riga', value: (row) => row.row },
+            {
+                id: 'label',
+                label: 'Record e valori',
+                value: (row) => row.label,
+                canHide: false,
+            },
+            {
+                id: 'status',
+                label: 'Esito',
+                value: (row) => statusLabels[row.status],
+            },
+        ],
+    });
+    return (
+        <section
+            aria-label="Anteprima record importati"
+            className="flex min-w-0 flex-col gap-3"
+        >
+            <div className="flex flex-wrap items-center gap-2">
+                <TableFilters
+                    title="Filtri anteprima"
+                    count={(search ? 1 : 0) + (status !== 'all' ? 1 : 0)}
+                    disabled={disabled}
+                >
+                    <div className="flex flex-col gap-3">
+                        <Input
+                            disabled={disabled}
+                            aria-label="Cerca nei record da importare"
+                            value={search}
+                            placeholder="Cerca record…"
+                            onChange={(event) => setSearch(event.target.value)}
+                        />
+                        <NativeSelect
+                            disabled={disabled}
+                            aria-label="Filtra esito importazione"
+                            value={status}
+                            onChange={(event) => setStatus(event.target.value)}
+                        >
+                            <NativeSelectOption value="all">
+                                Tutti gli esiti
+                            </NativeSelectOption>
+                            {Object.entries(statusLabels).map(
+                                ([value, label]) => (
+                                    <NativeSelectOption
+                                        key={value}
+                                        value={value}
+                                    >
+                                        {label}
+                                    </NativeSelectOption>
+                                ),
+                            )}
+                        </NativeSelect>
+                        {(search || status !== 'all') && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => {
+                                    setSearch('');
+                                    setStatus('all');
+                                }}
+                            >
+                                Azzera filtri
+                            </Button>
+                        )}
+                    </div>
+                </TableFilters>
+                <TableViewSettings view={view} disabled={disabled} />
+            </div>
+            <div className="min-w-0 overflow-hidden rounded-lg border">
+                <Table>
+                    <TableViewHeader view={view} disabled={disabled} />
+                    <TableBody>
+                        {!visible.length && (
+                            <TableRow>
+                                <TableCell
+                                    colSpan={
+                                        view.table.getVisibleLeafColumns()
+                                            .length
+                                    }
+                                >
+                                    Nessun record corrisponde ai filtri.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                        {view.table
+                            .getRowModel()
+                            .rows.map(({ original: row }) => (
+                                <TableRow key={row.row}>
+                                    <TableViewCells table={view.table}>
+                                        <TableCell key="row">
+                                            {row.row}
+                                        </TableCell>
+                                        <TableCell
+                                            key="label"
+                                            className="min-w-48 whitespace-normal"
+                                        >
+                                            <p className="font-medium break-words">
+                                                {row.label}
+                                            </p>
+                                            <p className="text-xs break-words text-muted-foreground">
+                                                {Object.values(row.values)
+                                                    .filter(
+                                                        (value) =>
+                                                            value !== null &&
+                                                            value !== row.label,
+                                                    )
+                                                    .map(String)
+                                                    .join(' · ')}
+                                            </p>
+                                        </TableCell>
+                                        <TableCell key="status">
+                                            <Badge
+                                                variant={
+                                                    row.status === 'error'
+                                                        ? 'destructive'
+                                                        : 'secondary'
+                                                }
+                                            >
+                                                {statusLabels[row.status]}
+                                            </Badge>
+                                        </TableCell>
+                                    </TableViewCells>
+                                </TableRow>
+                            ))}
+                    </TableBody>
+                </Table>
+            </div>
+        </section>
+    );
+}
 
 export function DataImport({
     path,
@@ -234,81 +496,24 @@ export function DataImport({
                         </Badge>
                     </div>
                     {preview.counts && (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Tipo</TableHead>
-                                    <TableHead className="text-right">
-                                        Record
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {Object.entries(preview.counts).map(
-                                    ([type, count]) => (
-                                        <TableRow key={type}>
-                                            <TableCell>
-                                                {typeLabels[type] ?? type}
-                                            </TableCell>
-                                            <TableCell className="text-right tabular-nums">
-                                                {count}
-                                            </TableCell>
-                                        </TableRow>
-                                    ),
-                                )}
-                            </TableBody>
-                        </Table>
+                        <ImportCountsTable
+                            key={preview.token}
+                            counts={preview.counts}
+                            path={path}
+                            disabled={disabled || busy !== null}
+                        />
                     )}
                     {preview.preview && (
                         <>
-                            <p className="text-sm text-muted-foreground">
-                                Anteprima delle prime {preview.preview.length}{' '}
-                                righe. La validazione riguarda tutto il file.
+                            <p className="text-sm font-medium">
+                                Anteprima ({preview.preview.length} righe)
                             </p>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Riga</TableHead>
-                                        <TableHead>Record e valori</TableHead>
-                                        <TableHead>Esito</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {preview.preview.map((row) => (
-                                        <TableRow key={row.row}>
-                                            <TableCell>{row.row}</TableCell>
-                                            <TableCell className="min-w-48 whitespace-normal">
-                                                <p className="font-medium break-words">
-                                                    {row.label}
-                                                </p>
-                                                <p className="text-xs break-words text-muted-foreground">
-                                                    {Object.values(row.values)
-                                                        .filter(
-                                                            (value) =>
-                                                                value !==
-                                                                    null &&
-                                                                value !==
-                                                                    row.label,
-                                                        )
-                                                        .map(String)
-                                                        .join(' · ')}
-                                                </p>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    variant={
-                                                        row.status === 'error'
-                                                            ? 'destructive'
-                                                            : 'secondary'
-                                                    }
-                                                >
-                                                    {statusLabels[row.status]}
-                                                </Badge>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                            <ImportRecordsTable
+                                key={preview.token}
+                                rows={preview.preview}
+                                path={path}
+                                disabled={disabled || busy !== null}
+                            />
                         </>
                     )}
                     {preview.errors.length > 0 && (

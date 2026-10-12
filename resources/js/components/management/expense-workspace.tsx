@@ -36,25 +36,28 @@ export function ExpenseWorkspace({
                     Dettaglio delle spese · {year}
                 </h2>
             )}
-            {showFilters && (
-                <DashboardFilters
-                    tenant={tenant}
-                    expenses={expenses}
-                    filters={filters}
-                    options={options}
-                    path={path}
-                    busy={busy}
-                    onCreate={
-                        dashboard
-                            ? undefined
-                            : () =>
-                                  router.visit(
-                                      `/t/${tenant.slug}/expenses/create${year ? `?year=${year}` : ''}`,
-                                  )
-                    }
-                />
-            )}
             <ExpenseTable
+                toolbar={
+                    showFilters ? (
+                        <DashboardFilters
+                            key={JSON.stringify(filters)}
+                            tenant={tenant}
+                            expenses={expenses}
+                            filters={filters}
+                            options={options}
+                            path={path}
+                            busy={busy}
+                            onCreate={
+                                dashboard
+                                    ? undefined
+                                    : () =>
+                                          router.visit(
+                                              `/t/${tenant.slug}/expenses/create${year ? `?year=${year}` : ''}`,
+                                          )
+                            }
+                        />
+                    ) : undefined
+                }
                 loading={refresh.visible}
                 rows={expenses.data}
                 slug={tenant.slug}

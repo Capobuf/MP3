@@ -71,6 +71,8 @@ const fields: Record<Kind, FormField[]> = {
     contracts: [
         { key: 'name', label: 'Nome', required: true },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
+        { key: 'starts_on', label: 'Inizio contratto', type: 'date' },
+        { key: 'ends_on', label: 'Fine contratto', type: 'date' },
         { key: 'notes', label: 'Note', type: 'textarea' },
     ],
     projects: [

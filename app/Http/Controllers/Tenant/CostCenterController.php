@@ -20,12 +20,13 @@ class CostCenterController extends Controller
     public function index(Request $request, Tenant $tenant): Response
     {
         $query = CostCenterQuery::filtered($tenant, $request);
+        $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
 
         return Inertia::render('tenants/cost-centers', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
-            'records' => $query->orderBy('name')->paginate(25)->withQueryString(),
+            'records' => $query->orderBy('name', $direction)->orderBy('id')->paginate(25)->withQueryString(),
             'parents' => $tenant->costCenters()->whereNull('parent_id')->orderBy('name')->get(['id', 'name']),
-            'filters' => $request->only('search'),
+            'filters' => [...$request->only('search'), 'sort' => 'name', 'direction' => $direction],
         ]);
     }
 

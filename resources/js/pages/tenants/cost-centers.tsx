@@ -7,6 +7,13 @@ import { SpreadsheetActions } from '@/components/management/spreadsheet-actions'
 import { Head, router } from '@inertiajs/react';
 import { CornerDownRight, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import {
+    useTableView,
+    TableFilters,
+    TableViewCells,
+    TableViewHeader,
+    TableViewSettings,
+} from '@/components/management/table-view';
 import { toast } from 'sonner';
 import { api } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
@@ -30,14 +37,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Field, FieldLabel, FieldDescription } from '@/components/ui/field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import {
     Empty,
     EmptyHeader,
@@ -54,8 +54,10 @@ export default function CostCenters({
     tenant: Tenant;
     records: Page<CostCenter>;
     parents: Option[];
-    filters: { search?: string };
+    filters: { search?: string; sort?: string; direction?: string };
 }) {
+    'use no memo'; // TanStack v8 exposes mutable table and column instances.
+
     const [search, setSearch] = useState(filters.search ?? '');
     const [deleting, setDeleting] = useState<CostCenter | null>(null);
     const [deleteChildren, setDeleteChildren] = useState(false);
@@ -87,71 +89,113 @@ export default function CostCenters({
             setBusy(false);
         }
     }
+    const view = useTableView<CostCenter>({
+        rows: records.data,
+        storageKey: `mp3:table:v1:${tenant.slug}:cost-centers`,
+        sorting: [
+            { id: filters.sort ?? 'name', desc: filters.direction === 'desc' },
+        ],
+        onSortingChange: (sorting) => {
+            if (sorting[0])
+                router.get(
+                    path,
+                    {
+                        ...filters,
+                        sort: sorting[0].id,
+                        direction: sorting[0].desc ? 'desc' : 'asc',
+                    },
+                    { preserveState: true, preserveScroll: true },
+                );
+        },
+        columns: [
+            {
+                id: 'name',
+                label: 'Nome',
+                value: (center) => center.name,
+                canHide: false,
+            },
+            { id: 'associations', label: 'Associazioni' },
+            {
+                id: 'actions',
+                label: 'Azioni',
+                canHide: false,
+                className: 'text-right',
+            },
+        ],
+    });
     function row(center: CostCenter, child = false) {
         return (
             <TableRow key={center.id}>
-                <TableCell className="min-w-48 whitespace-normal">
-                    <div className="flex items-center gap-2">
-                        {child && (
-                            <CornerDownRight
-                                aria-hidden="true"
-                                className="size-4 shrink-0 text-muted-foreground"
+                <TableViewCells table={view.table}>
+                    <TableCell
+                        key="name"
+                        className="min-w-48 whitespace-normal"
+                    >
+                        <div className="flex items-center gap-2">
+                            {child && (
+                                <CornerDownRight
+                                    aria-hidden="true"
+                                    className="size-4 shrink-0 text-muted-foreground"
+                                />
+                            )}
+                            <InlineEdit
+                                value={center.name}
+                                label={`Nome di ${center.name}`}
+                                disabled={busy}
+                                className="font-medium break-words"
+                                onSave={(value) =>
+                                    saveInlineRecord(`${path}/${center.id}`, {
+                                        name: value,
+                                    })
+                                }
                             />
-                        )}
-                        <InlineEdit
-                            value={center.name}
-                            label={`Nome di ${center.name}`}
-                            disabled={busy}
-                            className="font-medium break-words"
-                            onSave={(value) =>
-                                saveInlineRecord(`${path}/${center.id}`, {
-                                    name: value,
-                                })
-                            }
-                        />
-                    </div>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                    {center.expenses_count ?? 0} spese ·{' '}
-                    {center.projects_count ?? 0} progetti ·{' '}
-                    {center.contracts_count ?? 0} contratti
-                </TableCell>
-                <TableCell>
-                    <div className="flex justify-end gap-1">
-                        {!child && (
+                        </div>
+                    </TableCell>
+                    <TableCell
+                        key="associations"
+                        className="text-sm text-muted-foreground"
+                    >
+                        {center.expenses_count ?? 0} spese ·{' '}
+                        {center.projects_count ?? 0} progetti ·{' '}
+                        {center.contracts_count ?? 0} contratti
+                    </TableCell>
+                    <TableCell key="actions">
+                        <div className="flex justify-end gap-1">
+                            {!child && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={`Aggiungi un figlio a ${center.name}`}
+                                    onClick={() =>
+                                        router.visit(
+                                            `${path}/create?parent_id=${center.id}`,
+                                        )
+                                    }
+                                >
+                                    <Plus />
+                                </Button>
+                            )}
+                            <RecordMoreActions
+                                href={`${path}/${center.id}/edit`}
+                                disabled={busy}
+                            />
                             <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                aria-label={`Aggiungi un figlio a ${center.name}`}
-                                onClick={() =>
-                                    router.visit(
-                                        `${path}/create?parent_id=${center.id}`,
-                                    )
-                                }
+                                aria-label={`Elimina ${center.name}`}
+                                onClick={() => {
+                                    setDeleting(center);
+                                    setDeleteChildren(false);
+                                    setConfirmCascade(false);
+                                }}
                             >
-                                <Plus />
+                                <Trash2 />
                             </Button>
-                        )}
-                        <RecordMoreActions
-                            href={`${path}/${center.id}/edit`}
-                            disabled={busy}
-                        />
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Elimina ${center.name}`}
-                            onClick={() => {
-                                setDeleting(center);
-                                setDeleteChildren(false);
-                                setConfirmCascade(false);
-                            }}
-                        >
-                            <Trash2 />
-                        </Button>
-                    </div>
-                </TableCell>
+                        </div>
+                    </TableCell>
+                </TableViewCells>
             </TableRow>
         );
     }
@@ -183,49 +227,102 @@ export default function CostCenters({
                         />
                     </div>
                 </header>
-                <form
-                    className="flex gap-2"
-                    onSubmit={(event) => {
-                        event.preventDefault();
-                        router.get(
-                            path,
-                            { search },
-                            { preserveState: true, preserveScroll: true },
-                        );
-                    }}
-                >
-                    <Input
-                        aria-label="Cerca Centri di Costo"
-                        placeholder="Cerca per nome…"
-                        value={search}
-                        onChange={(event) => setSearch(event.target.value)}
-                    />
-                    <Button type="submit" variant="outline">
-                        Cerca
-                    </Button>
-                </form>
                 <Card>
-                    <CardContent>
+                    <CardContent className="flex min-w-0 flex-col gap-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <TableFilters
+                                title="Filtri centri di costo"
+                                count={filters.search ? 1 : 0}
+                                disabled={busy}
+                            >
+                                <form
+                                    className="flex flex-col gap-3"
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        router.get(
+                                            path,
+                                            { ...filters, search },
+                                            {
+                                                preserveState: true,
+                                                preserveScroll: true,
+                                            },
+                                        );
+                                    }}
+                                >
+                                    <Input
+                                        aria-label="Cerca Centri di Costo"
+                                        placeholder="Cerca per nome…"
+                                        value={search}
+                                        onChange={(event) =>
+                                            setSearch(event.target.value)
+                                        }
+                                    />
+                                    <Button type="submit" variant="outline">
+                                        Cerca
+                                    </Button>
+                                </form>
+                                {filters.search && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            setSearch('');
+                                            router.get(
+                                                path,
+                                                {
+                                                    sort: filters.sort,
+                                                    direction:
+                                                        filters.direction,
+                                                },
+                                                {
+                                                    preserveState: true,
+                                                    preserveScroll: true,
+                                                },
+                                            );
+                                        }}
+                                    >
+                                        Azzera filtri
+                                    </Button>
+                                )}
+                            </TableFilters>
+                            <TableViewSettings view={view} disabled={busy} />
+                        </div>
                         {records.data.length ? (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Nome</TableHead>
-                                        <TableHead>Associazioni</TableHead>
-                                        <TableHead className="text-right">
-                                            Azioni
-                                        </TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {records.data.flatMap((center) => [
-                                        row(center),
-                                        ...(center.children ?? []).map(
-                                            (child) => row(child, true),
-                                        ),
-                                    ])}
-                                </TableBody>
-                            </Table>
+                            <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
+                                <Table>
+                                    <TableViewHeader
+                                        view={view}
+                                        disabled={busy}
+                                    />
+                                    <TableBody>
+                                        {view.table
+                                            .getRowModel()
+                                            .rows.flatMap(
+                                                ({ original: center }) => [
+                                                    row(center),
+                                                    ...[
+                                                        ...(center.children ??
+                                                            []),
+                                                    ]
+                                                        .sort(
+                                                            (a, b) =>
+                                                                (filters.direction ===
+                                                                'desc'
+                                                                    ? -1
+                                                                    : 1) *
+                                                                a.name.localeCompare(
+                                                                    b.name,
+                                                                    'it',
+                                                                ),
+                                                        )
+                                                        .map((child) =>
+                                                            row(child, true),
+                                                        ),
+                                                ],
+                                            )}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         ) : (
                             <Empty>
                                 <EmptyHeader>

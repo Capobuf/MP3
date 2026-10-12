@@ -1,8 +1,15 @@
 import { InlineEdit, saveInlineRecord } from './inline-edit';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, router, usePage } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, ArrowUpRight, Ellipsis } from 'lucide-react';
+import { ArrowUpRight, Ellipsis } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import {
+    useTableView,
+    TableViewHeader,
+    TableViewCells,
+    TableViewSettings,
+} from './table-view';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -24,14 +31,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { CostCenterTags } from './cost-center-tags';
 import {
@@ -58,6 +58,7 @@ export function ExpenseTable({
     filters,
     onSort,
     onBusyChange,
+    toolbar,
 }: {
     rows: Expense[];
     loading?: boolean;
@@ -67,7 +68,10 @@ export function ExpenseTable({
     filters?: Filters;
     onSort?: (field: string) => void;
     onBusyChange?: (busy: boolean) => void;
+    toolbar?: ReactNode;
 }) {
+    'use no memo'; // TanStack v8 exposes mutable table and column instances.
+
     const { url } = usePage();
     const scope = JSON.stringify([slug, url, rows.map((row) => row.id)]);
     const [previousScope, setPreviousScope] = useState(scope);
@@ -195,45 +199,124 @@ export function ExpenseTable({
         );
     }
 
-    function heading(label: string, field: string) {
-        if (!onSort) return label;
-        const sorted = filters?.sort === field;
-        const Icon = filters?.direction === 'desc' ? ArrowDown : ArrowUp;
-        return (
-            <button
-                type="button"
-                disabled={busy}
-                onClick={() => onSort(field)}
-                className="inline-flex min-h-9 items-center gap-1 rounded text-xs hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            >
-                {label}
-                {sorted && <Icon aria-hidden="true" className="size-3" />}
-                <span className="sr-only">
-                    {' '}
-                    · Ordina{' '}
-                    {sorted && filters?.direction === 'asc'
-                        ? 'decrescente'
-                        : 'crescente'}
-                </span>
-            </button>
-        );
-    }
-    function sortDirection(field: string) {
-        return filters?.sort === field
-            ? filters.direction === 'desc'
-                ? 'descending'
-                : 'ascending'
-            : 'none';
-    }
-    const allSelected = rows.length > 0 && selected.length === rows.length;
-    const amountCell =
-        'col-span-2 col-start-2 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 py-0.5 pl-0 whitespace-normal @5xl/expense-table:table-cell @5xl/expense-table:w-44 @5xl/expense-table:px-3 @5xl/expense-table:py-3 @5xl/expense-table:text-right';
+    const allSelected =
+        rows.length > 0 && rows.every((row) => selected.includes(row.id));
+    const view = useTableView<Expense>({
+        rows,
+        storageKey: `mp3:table:v1:${slug}:${contractMode ? 'contract-expenses' : 'expenses'}`,
+        ...(onSort
+            ? {
+                  sorting: [
+                      {
+                          id: filters?.sort ?? 'title',
+                          desc: filters?.direction === 'desc',
+                      },
+                  ],
+                  onSortingChange: (sorting) => {
+                      if (sorting[0]) onSort(sorting[0].id);
+                  },
+              }
+            : {}),
+        columns: [
+            {
+                id: 'select',
+                label: 'Selezione',
+                canHide: false,
+                className: 'w-10',
+                header: (
+                    <Checkbox
+                        aria-label="Seleziona tutte le spese della pagina"
+                        disabled={busy || !rows.length}
+                        checked={
+                            allSelected
+                                ? true
+                                : selected.length
+                                  ? 'indeterminate'
+                                  : false
+                        }
+                        onCheckedChange={(checked) =>
+                            setSelected(
+                                checked === true
+                                    ? [...new Set(rows.map((row) => row.id))]
+                                    : [],
+                            )
+                        }
+                    />
+                ),
+            },
+            {
+                id: 'title',
+                label: 'Descrizione',
+                canHide: false,
+                value: (row) => row.title,
+            },
+            ...(contractMode
+                ? [
+                      {
+                          id: 'period_starts_on',
+                          label: 'Periodo coperto',
+                          value: (row: Expense) => row.period_starts_on,
+                      },
+                      {
+                          id: 'year',
+                          label: 'Anno di imputazione',
+                          value: (row: Expense) => row.year,
+                      },
+                  ]
+                : []),
+            {
+                id: 'allocated_amount',
+                label: contractMode ? 'Previsto' : 'Allocato',
+                value: (row) =>
+                    row.allocated_amount == null
+                        ? undefined
+                        : Number(row.allocated_amount),
+                className: 'text-right',
+            },
+            {
+                id: 'actual_amount',
+                label: 'Effettivo',
+                value: (row) =>
+                    row.actual_amount == null
+                        ? undefined
+                        : Number(row.actual_amount),
+                className: 'text-right',
+            },
+            ...(!contractMode
+                ? [
+                      {
+                          id: 'variance',
+                          label: 'Scostamento',
+                          value: onSort
+                              ? undefined
+                              : (row: Expense) =>
+                                    row.variance == null
+                                        ? undefined
+                                        : Number(row.variance),
+                          className: 'text-right',
+                      },
+                  ]
+                : []),
+            {
+                id: 'actions',
+                label: 'Azioni',
+                className: 'w-10 text-right',
+                canHide: false,
+                header: <span className="sr-only">Azioni</span>,
+            },
+        ],
+    });
+    const amountCell = 'text-right tabular-nums';
 
     return (
         <div
             className="@container/expense-table flex min-w-0 flex-col gap-3"
             aria-busy={busy || loading}
         >
+            <div className="flex flex-wrap items-center gap-2">
+                {toolbar}
+                <TableViewSettings view={view} disabled={busy || loading} />
+            </div>
             {selected.length > 0 && (
                 <div
                     className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-accent px-4 py-3 text-sm"
@@ -264,103 +347,30 @@ export function ExpenseTable({
                     </Button>
                 </div>
             )}
-            <p
-                id="expense-edit-help"
-                className="text-sm text-muted-foreground"
-                aria-live="polite"
-            >
-                {busy
-                    ? 'Operazione in corso…'
-                    : loading
-                      ? 'Aggiornamento delle spese…'
-                      : 'Clic sugli importi per modificare la spesa.'}
-            </p>
+            {(busy || loading) && (
+                <p role="status" className="text-sm text-muted-foreground">
+                    {busy
+                        ? 'Operazione in corso…'
+                        : 'Aggiornamento delle spese…'}
+                </p>
+            )}
             {error && (
                 <p role="alert" className="text-sm text-destructive">
                     {error}
                 </p>
             )}
-            <div className="min-w-0 overflow-hidden rounded-xl border bg-card px-3 shadow-xs sm:px-4">
-                <Table className="block table-fixed @5xl/expense-table:table">
-                    <TableHeader className="block @5xl/expense-table:table-header-group">
-                        <TableRow className="grid grid-cols-[2rem_minmax(0,1fr)_2.5rem] items-center border-border/60 hover:bg-transparent @5xl/expense-table:table-row">
-                            <TableHead className="flex items-center pl-0 @5xl/expense-table:table-cell @5xl/expense-table:w-10 @5xl/expense-table:pl-2">
-                                <Checkbox
-                                    aria-label="Seleziona tutte le spese della pagina"
-                                    disabled={busy || !rows.length}
-                                    checked={
-                                        allSelected
-                                            ? true
-                                            : selected.length
-                                              ? 'indeterminate'
-                                              : false
-                                    }
-                                    onCheckedChange={(checked) =>
-                                        setSelected(
-                                            checked === true
-                                                ? rows.map((row) => row.id)
-                                                : [],
-                                        )
-                                    }
-                                />
-                            </TableHead>
-                            <TableHead
-                                aria-sort={
-                                    onSort ? sortDirection('title') : undefined
-                                }
-                                className="flex items-center px-0 text-sm text-muted-foreground @5xl/expense-table:table-cell @5xl/expense-table:px-2"
-                            >
-                                {heading('Descrizione', 'title')}
-                            </TableHead>
-                            {contractMode && (
-                                <>
-                                    <TableHead className="hidden w-52 @5xl/expense-table:table-cell">
-                                        Periodo coperto
-                                    </TableHead>
-                                    <TableHead className="hidden w-24 @5xl/expense-table:table-cell">
-                                        Anno di imputazione
-                                    </TableHead>
-                                </>
-                            )}
-                            <TableHead
-                                aria-sort={
-                                    onSort
-                                        ? sortDirection('allocated_amount')
-                                        : undefined
-                                }
-                                className="hidden w-44 text-right text-sm text-muted-foreground @5xl/expense-table:table-cell"
-                            >
-                                {heading(
-                                    contractMode ? 'Previsto' : 'Allocato',
-                                    'allocated_amount',
-                                )}
-                            </TableHead>
-                            <TableHead
-                                aria-sort={
-                                    onSort
-                                        ? sortDirection('actual_amount')
-                                        : undefined
-                                }
-                                className="hidden w-44 text-right text-sm text-muted-foreground @5xl/expense-table:table-cell"
-                            >
-                                {heading('Effettivo', 'actual_amount')}
-                            </TableHead>
-                            {!contractMode && (
-                                <TableHead className="hidden w-44 text-right text-sm text-muted-foreground @5xl/expense-table:table-cell">
-                                    Scostamento
-                                </TableHead>
-                            )}
-                            <TableHead className="w-10">
-                                <span className="sr-only">Azioni</span>
-                            </TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody className="block @5xl/expense-table:table-row-group">
+            <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
+                <Table>
+                    <TableViewHeader view={view} disabled={busy || loading} />
+                    <TableBody>
                         {!rows.length && (
-                            <TableRow className="block @5xl/expense-table:table-row">
+                            <TableRow>
                                 <TableCell
-                                    colSpan={contractMode ? 7 : 6}
-                                    className="block py-10 text-center whitespace-normal text-muted-foreground @5xl/expense-table:table-cell"
+                                    colSpan={
+                                        view.table.getVisibleLeafColumns()
+                                            .length
+                                    }
+                                    className="py-10 text-center whitespace-normal text-muted-foreground"
                                 >
                                     {loading ? (
                                         <Skeleton className="mx-auto h-10 w-3/4" />
@@ -370,192 +380,218 @@ export function ExpenseTable({
                                 </TableCell>
                             </TableRow>
                         )}
-                        {rows.map((expense) => (
-                            <TableRow
-                                key={expense.id}
-                                data-state={
-                                    selected.includes(expense.id)
-                                        ? 'selected'
-                                        : undefined
-                                }
-                                className="grid grid-cols-[2rem_minmax(0,1fr)_2.5rem] gap-y-0 border-border/50 py-3 hover:bg-muted/50 data-[state=selected]:bg-accent @5xl/expense-table:table-row @5xl/expense-table:h-14 @5xl/expense-table:py-0"
-                            >
-                                <TableCell className="col-start-1 row-start-1 pl-0 @5xl/expense-table:pl-2">
-                                    <Checkbox
-                                        aria-label={`Seleziona ${expense.title}`}
-                                        checked={selected.includes(expense.id)}
-                                        disabled={busy}
-                                        onCheckedChange={(checked) =>
-                                            setSelected((previous) =>
-                                                checked === true
-                                                    ? [...previous, expense.id]
-                                                    : previous.filter(
-                                                          (id) =>
-                                                              id !== expense.id,
-                                                      ),
-                                            )
-                                        }
-                                    />
-                                </TableCell>
-                                <TableCell className="col-start-2 row-start-1 min-w-0 px-0 whitespace-normal @5xl/expense-table:px-2">
-                                    <div className="flex items-start gap-2">
-                                        <InlineEdit
-                                            value={expense.title}
-                                            label={`Titolo di ${expense.title}`}
-                                            disabled={busy}
-                                            className="flex-1 font-medium break-words"
-                                            onSave={(value) =>
-                                                saveInlineRecord(
-                                                    `/t/${slug}/expenses/${expense.id}`,
-                                                    { title: value },
-                                                )
-                                            }
-                                        />
-                                        <Button
-                                            asChild
-                                            variant="ghost"
-                                            size="icon"
-                                            disabled={busy}
-                                        >
-                                            <Link
-                                                href={`/t/${slug}/expenses/${expense.id}`}
-                                                aria-label={`Apri ${expense.title}`}
-                                            >
-                                                <ArrowUpRight />
-                                            </Link>
-                                        </Button>
-                                    </div>
-                                    <p
-                                        className="mt-1 line-clamp-2 text-sm text-muted-foreground"
-                                        title={`${expense.vendor?.name ?? 'Senza fornitore'} · ${expense.project?.name ?? 'Senza progetto'}`}
-                                    >
-                                        {expense.vendor?.name ??
-                                            'Senza fornitore'}{' '}
-                                        ·{' '}
-                                        {expense.project?.name ??
-                                            'Senza progetto'}
-                                        {showYear &&
-                                            !contractMode &&
-                                            ` · ${expense.year}`}
-                                        {contractMode &&
-                                            !!expense.lines?.length &&
-                                            ` · ${expense.lines.length} ${expense.lines.length === 1 ? 'condizione economica' : 'condizioni economiche'}`}
-                                    </p>
-                                    <CostCenterTags
-                                        centers={expense.cost_centers}
-                                    />
-                                </TableCell>
-                                {contractMode && (
-                                    <>
-                                        <TableCell className={amountCell}>
-                                            <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
-                                                Periodo coperto
-                                            </span>
-                                            <span>
-                                                {expense.period_starts_on &&
-                                                expense.period_ends_on
-                                                    ? `${dateLabel(expense.period_starts_on)} – ${dateLabel(expense.period_ends_on)}`
-                                                    : 'Periodo non indicato'}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className={amountCell}>
-                                            <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
-                                                Anno di imputazione
-                                            </span>
-                                            {[
-                                                ...new Set(
-                                                    expense.lines?.map(
-                                                        (line) =>
-                                                            line.year ??
-                                                            expense.year,
-                                                    ) ?? [expense.year],
-                                                ),
-                                            ]
-                                                .sort(
-                                                    (left, right) =>
-                                                        Number(left) -
-                                                        Number(right),
-                                                )
-                                                .join(', ') || expense.year}
-                                        </TableCell>
-                                    </>
-                                )}
-                                <TableCell className={amountCell}>
-                                    <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
-                                        {contractMode ? 'Previsto' : 'Allocato'}
-                                    </span>
-                                    {amount(expense, 'allocated_amount')}
-                                </TableCell>
-                                <TableCell className={amountCell}>
-                                    <span className="text-sm text-muted-foreground @5xl/expense-table:hidden">
-                                        Effettivo
-                                    </span>
-                                    {amount(expense, 'actual_amount')}
-                                </TableCell>
-                                {!contractMode && (
-                                    <TableCell
-                                        className={cn(
-                                            amountCell,
-                                            'text-sm font-medium tabular-nums',
-                                            varianceTextClass(expense.variance),
-                                        )}
-                                    >
-                                        <span className="text-xs font-normal text-muted-foreground @5xl/expense-table:hidden">
-                                            Scostamento
-                                        </span>
-                                        <span className="tracking-normal whitespace-nowrap">
-                                            {expense.variance == null
-                                                ? 'Non determinabile'
-                                                : money(expense.variance)}
-                                        </span>
-                                    </TableCell>
-                                )}
-                                <TableCell className="col-start-3 row-start-1 px-0 text-right @5xl/expense-table:px-2">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                aria-label={`Azioni per ${expense.title}`}
+                        {view.table
+                            .getRowModel()
+                            .rows.map(({ original: expense }) => (
+                                <TableRow
+                                    key={`${expense.id}:${expense.year}`}
+                                    data-state={
+                                        selected.includes(expense.id)
+                                            ? 'selected'
+                                            : undefined
+                                    }
+                                    className="hover:bg-muted/50 data-[state=selected]:bg-accent"
+                                >
+                                    <TableViewCells table={view.table}>
+                                        <TableCell key="select">
+                                            <Checkbox
+                                                aria-label={`Seleziona ${expense.title}`}
+                                                checked={selected.includes(
+                                                    expense.id,
+                                                )}
                                                 disabled={busy}
-                                            >
-                                                <Ellipsis className="size-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuGroup>
-                                                <DropdownMenuItem asChild>
+                                                onCheckedChange={(checked) =>
+                                                    setSelected((previous) =>
+                                                        checked === true
+                                                            ? [
+                                                                  ...previous,
+                                                                  expense.id,
+                                                              ]
+                                                            : previous.filter(
+                                                                  (id) =>
+                                                                      id !==
+                                                                      expense.id,
+                                                              ),
+                                                    )
+                                                }
+                                            />
+                                        </TableCell>
+                                        <TableCell
+                                            key="title"
+                                            className="min-w-56 whitespace-normal"
+                                        >
+                                            <div className="flex items-start gap-2">
+                                                <InlineEdit
+                                                    value={expense.title}
+                                                    label={`Titolo di ${expense.title}`}
+                                                    disabled={busy}
+                                                    className="flex-1 font-medium break-words"
+                                                    onSave={(value) =>
+                                                        saveInlineRecord(
+                                                            `/t/${slug}/expenses/${expense.id}`,
+                                                            { title: value },
+                                                        )
+                                                    }
+                                                />
+                                                <Button
+                                                    asChild
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    disabled={busy}
+                                                >
                                                     <Link
                                                         href={`/t/${slug}/expenses/${expense.id}`}
+                                                        aria-label={`Apri ${expense.title}`}
                                                     >
-                                                        Apri dettaglio
+                                                        <ArrowUpRight />
                                                     </Link>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem asChild>
-                                                    <Link
-                                                        href={`/t/${slug}/expenses/${expense.id}/edit`}
-                                                    >
-                                                        Gestisci righe e
-                                                        collegamenti
-                                                    </Link>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem
-                                                    variant="destructive"
-                                                    onSelect={() =>
-                                                        setDeleting([
-                                                            expense.id,
-                                                        ])
-                                                    }
+                                                </Button>
+                                            </div>
+                                            <p
+                                                className="mt-1 line-clamp-2 text-sm text-muted-foreground"
+                                                title={`${expense.vendor?.name ?? 'Senza fornitore'} · ${expense.project?.name ?? 'Senza progetto'}`}
+                                            >
+                                                {expense.vendor?.name ??
+                                                    'Senza fornitore'}{' '}
+                                                ·{' '}
+                                                {expense.project?.name ??
+                                                    'Senza progetto'}
+                                                {showYear &&
+                                                    !contractMode &&
+                                                    ` · ${expense.year}`}
+                                                {contractMode &&
+                                                    !!expense.lines?.length &&
+                                                    ` · ${expense.lines.length} ${expense.lines.length === 1 ? 'condizione economica' : 'condizioni economiche'}`}
+                                            </p>
+                                            <CostCenterTags
+                                                centers={expense.cost_centers}
+                                            />
+                                        </TableCell>
+                                        {contractMode && (
+                                            <>
+                                                <TableCell
+                                                    key="period_starts_on"
+                                                    className={amountCell}
                                                 >
-                                                    Elimina
-                                                </DropdownMenuItem>
-                                            </DropdownMenuGroup>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                            </TableRow>
-                        ))}
+                                                    <span>
+                                                        {expense.period_starts_on &&
+                                                        expense.period_ends_on
+                                                            ? `${dateLabel(expense.period_starts_on)} – ${dateLabel(expense.period_ends_on)}`
+                                                            : 'Periodo non indicato'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell
+                                                    key="year"
+                                                    className={amountCell}
+                                                >
+                                                    {[
+                                                        ...new Set(
+                                                            expense.lines?.map(
+                                                                (line) =>
+                                                                    line.year ??
+                                                                    expense.year,
+                                                            ) ?? [expense.year],
+                                                        ),
+                                                    ]
+                                                        .sort(
+                                                            (left, right) =>
+                                                                Number(left) -
+                                                                Number(right),
+                                                        )
+                                                        .join(', ') ||
+                                                        expense.year}
+                                                </TableCell>
+                                            </>
+                                        )}
+                                        <TableCell
+                                            key="allocated_amount"
+                                            className={amountCell}
+                                        >
+                                            {amount(
+                                                expense,
+                                                'allocated_amount',
+                                            )}
+                                        </TableCell>
+                                        <TableCell
+                                            key="actual_amount"
+                                            className={amountCell}
+                                        >
+                                            {amount(expense, 'actual_amount')}
+                                        </TableCell>
+                                        {!contractMode && (
+                                            <TableCell
+                                                key="variance"
+                                                className={cn(
+                                                    amountCell,
+                                                    'text-sm font-medium tabular-nums',
+                                                    varianceTextClass(
+                                                        expense.variance,
+                                                    ),
+                                                )}
+                                            >
+                                                <span className="tracking-normal whitespace-nowrap">
+                                                    {expense.variance == null
+                                                        ? 'Non determinabile'
+                                                        : money(
+                                                              expense.variance,
+                                                          )}
+                                                </span>
+                                            </TableCell>
+                                        )}
+                                        <TableCell
+                                            key="actions"
+                                            className="text-right"
+                                        >
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        aria-label={`Azioni per ${expense.title}`}
+                                                        disabled={busy}
+                                                    >
+                                                        <Ellipsis className="size-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuGroup>
+                                                        <DropdownMenuItem
+                                                            asChild
+                                                        >
+                                                            <Link
+                                                                href={`/t/${slug}/expenses/${expense.id}`}
+                                                            >
+                                                                Apri dettaglio
+                                                            </Link>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            asChild
+                                                        >
+                                                            <Link
+                                                                href={`/t/${slug}/expenses/${expense.id}/edit`}
+                                                            >
+                                                                Gestisci righe e
+                                                                collegamenti
+                                                            </Link>
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuSeparator />
+                                                        <DropdownMenuItem
+                                                            variant="destructive"
+                                                            onSelect={() =>
+                                                                setDeleting([
+                                                                    expense.id,
+                                                                ])
+                                                            }
+                                                        >
+                                                            Elimina
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuGroup>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableViewCells>
+                                </TableRow>
+                            ))}
                     </TableBody>
                 </Table>
             </div>

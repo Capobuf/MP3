@@ -161,7 +161,7 @@ export function DetailBreakdownChart({
         />
     );
     return (
-        <Card className="@container/breakdown min-w-0 detail-enter gap-4 self-start">
+        <Card className="@container/breakdown w-full min-w-0 detail-enter gap-4 self-start">
             <CardHeader className="gap-3 px-5">
                 <CardTitle>Ripartizione economica</CardTitle>
                 <div className="flex items-center gap-2">

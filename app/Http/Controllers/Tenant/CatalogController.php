@@ -39,7 +39,7 @@ class CatalogController extends Controller
     public function index(Request $request, Tenant $tenant, string $catalog): Response
     {
         $query = CatalogQuery::filtered($tenant, $catalog, $request);
-        $sort = in_array($request->input('sort'), ['name', 'updated_at'], true) ? $request->string('sort')->toString() : 'name';
+        $sort = in_array($request->input('sort'), ['name', 'updated_at', 'expenses_count'], true) ? $request->string('sort')->toString() : 'name';
         $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
 
         return Inertia::render('tenants/catalog', [
@@ -80,7 +80,23 @@ class CatalogController extends Controller
         if (! $history) {
             $expenses->where('year', $year);
         }
-        if ($item instanceof Contract) {
+        $sort = in_array($request->input('sort'), ['title', 'allocated_amount', 'actual_amount', 'year', 'period_starts_on', 'updated_at'], true)
+            ? $request->string('sort')->toString() : null;
+        $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
+        // Keep KPI and chart totals tied to the selected year, independently of table filters.
+        if ($search = $request->string('search')->trim()->toString()) {
+            $expenses->where('title', 'like', '%'.$search.'%');
+        }
+        foreach (['vendor_id', 'contract_id', 'project_id'] as $relation) {
+            if ($relation !== $field && $request->filled($relation)) {
+                $request->input($relation) === 'none'
+                    ? $expenses->whereNull($relation)
+                    : $expenses->where($relation, $request->integer($relation));
+            }
+        }
+        if ($sort !== null) {
+            $expenses->orderBy($sort, $direction);
+        } elseif ($item instanceof Contract) {
             $expenses->orderByRaw('period_starts_on IS NULL')->orderBy('period_starts_on')->orderBy('period_ends_on');
         }
 
@@ -91,6 +107,7 @@ class CatalogController extends Controller
             'options' => ExpenseOverview::options($tenant),
             'year' => $year,
             'history' => $history,
+            'expenseFilters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $year, 'history' => $history ? '1' : '', 'sort' => $sort ?? ($item instanceof Contract ? 'period_starts_on' : 'year'), 'direction' => $sort !== null ? $direction : ($item instanceof Contract ? 'asc' : 'desc')],
             'totals' => ExpenseOverview::totals($annual),
             'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id])),
             'breakdown' => ExpenseOverview::breakdown($annual),

@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -7,13 +7,9 @@ import {
     InputGroupInput,
     InputGroupAddon,
 } from '@/components/ui/input-group';
-import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
+import { TableFilters } from './table-view';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+
 import {
     Select,
     SelectContent,
@@ -42,13 +38,16 @@ export function DashboardFilters({
     path,
     busy = false,
     onCreate,
+    hideRelations = [],
+    contractMode = false,
 }: Omit<ExpensePageProps, 'totals'> & {
     path: string;
     busy?: boolean;
     onCreate?: () => void;
+    hideRelations?: ('vendors' | 'contracts' | 'projects')[];
+    contractMode?: boolean;
 }) {
     const [draft, setDraft] = useState(filters);
-    const [filtersOpen, setFiltersOpen] = useState(false);
     const year = filters.year;
     const secondaryFilters = [
         {
@@ -73,123 +72,140 @@ export function DashboardFilters({
             relation: 'project',
         },
     ] as const;
-    const activeFilters = secondaryFilters.filter(
+    const relationFilters = secondaryFilters.filter(
+        ({ catalog }) => !hideRelations.includes(catalog),
+    );
+    const activeFilters = relationFilters.filter(
         ({ field }) => filters[field],
     ).length;
 
     return (
-        <form
-            className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-4 shadow-xs"
-            onSubmit={(event) => {
-                event.preventDefault();
-                applyFilters(path, draft);
-            }}
-        >
-            <InputGroup className="min-w-0 flex-1 basis-48">
-                <InputGroupInput
-                    aria-label="Cerca spese per descrizione"
-                    placeholder="Cerca una spesa…"
-                    value={draft.search ?? ''}
-                    disabled={busy}
-                    onChange={(event) =>
-                        setDraft({ ...draft, search: event.target.value })
-                    }
-                />
-                <InputGroupAddon>
-                    <Search aria-hidden="true" />
-                </InputGroupAddon>
-            </InputGroup>
-            <Button type="submit" variant="outline" disabled={busy}>
-                Cerca
-            </Button>
-            <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
-                <PopoverTrigger asChild>
-                    <Button type="button" variant="outline" disabled={busy}>
-                        <SlidersHorizontal className="size-4" />
-                        Filtri
-                        {activeFilters > 0 && (
-                            <Badge variant="secondary" className="tabular-nums">
-                                {activeFilters}
-                            </Badge>
-                        )}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                    align="end"
-                    className="flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-4"
+        <>
+            <TableFilters
+                title="Filtri spese"
+                count={activeFilters + (filters.search ? 1 : 0)}
+                disabled={busy}
+            >
+                <form
+                    className="flex flex-col gap-4"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        applyFilters(path, draft);
+                    }}
                 >
-                    <h3 className="text-sm font-medium">Filtra spese</h3>
-                    {secondaryFilters.map(
-                        ({ catalog, field, label, all, relation }) => (
-                            <div key={field} className="space-y-1.5">
-                                <Label htmlFor={`filter-${field}`}>
-                                    {label}
-                                </Label>
-                                <RecordSelect
-                                    id={`filter-${field}`}
-                                    slug={tenant.slug}
-                                    catalog={catalog}
-                                    value={draft[field] ?? ''}
-                                    onChange={(value) =>
-                                        setDraft({
-                                            ...draft,
-                                            [field]: value,
-                                        })
-                                    }
-                                    options={[
-                                        ...options[catalog],
-                                        ...expenses.data.flatMap((expense) =>
-                                            expense[relation]
-                                                ? [expense[relation]!]
-                                                : [],
-                                        ),
-                                    ]}
-                                    label={all}
-                                    includeNone
-                                    disabled={busy}
-                                />
-                            </div>
-                        ),
-                    )}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">
-                            Ordina per
-                        </Label>
-                        <Select
-                            value={`${draft.sort ?? 'title'}:${draft.direction ?? 'asc'}`}
+                    <InputGroup className="min-w-0">
+                        <InputGroupInput
+                            aria-label="Cerca spese per descrizione"
+                            placeholder="Cerca una spesa…"
+                            value={draft.search ?? ''}
                             disabled={busy}
-                            onValueChange={(value) => {
-                                const [sort, direction] = value.split(':');
-                                setDraft({ ...draft, sort, direction });
-                            }}
-                        >
-                            <SelectTrigger aria-label="Ordinamento spese">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    {[
-                                        ['title', 'Descrizione'],
-                                        ['allocated_amount', 'Allocato'],
-                                        ['actual_amount', 'Effettivo'],
-                                        ['updated_at', 'Ultima modifica'],
-                                    ].flatMap(([field, label]) =>
-                                        ['asc', 'desc'].map((direction) => (
-                                            <SelectItem
-                                                key={`${field}:${direction}`}
-                                                value={`${field}:${direction}`}
-                                            >
-                                                {label} ·{' '}
-                                                {direction === 'asc'
-                                                    ? 'crescente'
-                                                    : 'decrescente'}
-                                            </SelectItem>
-                                        )),
-                                    )}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                            onChange={(event) =>
+                                setDraft({
+                                    ...draft,
+                                    search: event.target.value,
+                                })
+                            }
+                        />
+                        <InputGroupAddon>
+                            <Search aria-hidden="true" />
+                        </InputGroupAddon>
+                    </InputGroup>
+                    <Button type="submit" variant="outline" disabled={busy}>
+                        Cerca
+                    </Button>
+                    <FieldGroup>
+                        {relationFilters.map(
+                            ({ catalog, field, label, all, relation }) => (
+                                <Field key={field}>
+                                    <FieldLabel htmlFor={`filter-${field}`}>
+                                        {label}
+                                    </FieldLabel>
+                                    <RecordSelect
+                                        id={`filter-${field}`}
+                                        slug={tenant.slug}
+                                        catalog={catalog}
+                                        value={draft[field] ?? ''}
+                                        onChange={(value) =>
+                                            setDraft({
+                                                ...draft,
+                                                [field]: value,
+                                            })
+                                        }
+                                        options={[
+                                            ...options[catalog],
+                                            ...expenses.data.flatMap(
+                                                (expense) =>
+                                                    expense[relation]
+                                                        ? [expense[relation]!]
+                                                        : [],
+                                            ),
+                                        ]}
+                                        label={all}
+                                        includeNone
+                                        disabled={busy}
+                                    />
+                                </Field>
+                            ),
+                        )}
+                        <Field>
+                            <FieldLabel>Ordina per</FieldLabel>
+                            <Select
+                                value={`${draft.sort ?? 'title'}:${draft.direction ?? 'asc'}`}
+                                disabled={busy}
+                                onValueChange={(value) => {
+                                    const [sort, direction] = value.split(':');
+                                    setDraft({ ...draft, sort, direction });
+                                }}
+                            >
+                                <SelectTrigger aria-label="Ordinamento spese">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectGroup>
+                                        {[
+                                            ['title', 'Descrizione'],
+                                            [
+                                                'allocated_amount',
+                                                contractMode
+                                                    ? 'Previsto'
+                                                    : 'Allocato',
+                                            ],
+                                            ['actual_amount', 'Effettivo'],
+                                            ['updated_at', 'Ultima modifica'],
+                                            ...(hideRelations.length
+                                                ? [
+                                                      [
+                                                          'year',
+                                                          'Anno di imputazione',
+                                                      ],
+                                                      ...(contractMode
+                                                          ? [
+                                                                [
+                                                                    'period_starts_on',
+                                                                    'Periodo coperto',
+                                                                ],
+                                                            ]
+                                                          : []),
+                                                  ]
+                                                : []),
+                                        ].flatMap(([field, label]) =>
+                                            ['asc', 'desc'].map((direction) => (
+                                                <SelectItem
+                                                    key={`${field}:${direction}`}
+                                                    value={`${field}:${direction}`}
+                                                >
+                                                    {label} ·{' '}
+                                                    {direction === 'asc'
+                                                        ? 'crescente'
+                                                        : 'decrescente'}
+                                                </SelectItem>
+                                            )),
+                                        )}
+                                    </SelectGroup>
+                                </SelectContent>
+                            </Select>
+                        </Field>
+                    </FieldGroup>
                     <Button
                         type="button"
                         variant="ghost"
@@ -197,6 +213,7 @@ export function DashboardFilters({
                         onClick={() =>
                             setDraft({
                                 year,
+                                history: filters.history,
                                 sort: filters.sort,
                                 direction: filters.direction,
                             })
@@ -209,14 +226,13 @@ export function DashboardFilters({
                         className="w-full"
                         disabled={busy}
                         onClick={() => {
-                            setFiltersOpen(false);
                             applyFilters(path, draft);
                         }}
                     >
                         Applica filtri
                     </Button>
-                </PopoverContent>
-            </Popover>
+                </form>
+            </TableFilters>
             {(activeFilters > 0 || filters.search) && (
                 <Button
                     type="button"
@@ -225,6 +241,7 @@ export function DashboardFilters({
                     onClick={() => {
                         const reset = {
                             year,
+                            history: filters.history,
                             sort: filters.sort,
                             direction: filters.direction,
                         };
@@ -242,7 +259,7 @@ export function DashboardFilters({
                     disabled={busy}
                     onClick={onCreate}
                 >
-                    <Plus className="size-4" />
+                    <Plus data-icon="inline-start" />
                     Nuova spesa
                 </Button>
             )}
@@ -251,7 +268,7 @@ export function DashboardFilters({
                     className="flex w-full flex-wrap gap-2 border-t pt-3"
                     aria-label="Filtri applicati"
                 >
-                    {secondaryFilters
+                    {relationFilters
                         .filter(({ field }) => filters[field])
                         .map(({ field, catalog, label, relation }) => {
                             const selected = [
@@ -293,6 +310,6 @@ export function DashboardFilters({
                         })}
                 </div>
             )}
-        </form>
+        </>
     );
 }

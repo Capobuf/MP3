@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, CalendarDays } from 'lucide-react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
 import {
     InlineEdit,
@@ -10,6 +10,10 @@ import { useState } from 'react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
+import {
+    DashboardFilters,
+    applyFilters,
+} from '@/components/management/dashboard-filters';
 import { ExpenseTable } from '@/components/management/expense-table';
 import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
 import { DetailNotes } from '@/components/management/detail-notes';
@@ -26,6 +30,7 @@ import type {
     Catalog,
     DetailBreakdown,
     Expense,
+    Filters,
     Options,
     Pagination as Page,
     RecordData,
@@ -46,6 +51,7 @@ export default function CatalogDetail({
     contracts,
     year,
     history,
+    expenseFilters,
 }: {
     tenant: Tenant;
     catalog: Catalog;
@@ -57,6 +63,7 @@ export default function CatalogDetail({
     contracts: Page<RecordData> | null;
     year: number;
     history: boolean;
+    expenseFilters: Filters;
 }) {
     const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/${catalog}`;
@@ -69,13 +76,13 @@ export default function CatalogDetail({
                   ['Email', 'email', record.email],
                   ['Telefono', 'phone', record.phone],
               ]
-            : [
-                  ['Data iniziale', 'starts_on', record.starts_on],
-                  ['Data finale', 'ends_on', record.ends_on],
-                  ...(catalog === 'projects'
-                      ? [['Stato', 'status', record.status]]
-                      : []),
-              ];
+            : catalog === 'projects'
+              ? [
+                    ['Data iniziale', 'starts_on', record.starts_on],
+                    ['Data finale', 'ends_on', record.ends_on],
+                    ['Stato', 'status', record.status],
+                ]
+              : [];
     const economics = (
         <>
             <div>
@@ -86,81 +93,102 @@ export default function CatalogDetail({
                 </div>
                 <DashboardSummary analytics={analytics} year={year} />
             </div>
-            <div className="grid min-w-0 items-start gap-6 @5xl/detail:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-                <section
-                    aria-label="Spese collegate"
-                    className="order-2 flex min-w-0 flex-col gap-3 @5xl/detail:order-1"
-                >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <h2 className="font-semibold">
-                            Spese collegate ·{' '}
-                            {history ? 'Tutti gli anni' : year}
-                        </h2>
+            {breakdown && (
+                <DetailBreakdownChart
+                    key={`${tenant.slug}:${catalog}:${record.id}:${year}:${history}`}
+                    breakdown={breakdown}
+                    getHref={(id) =>
+                        /^\d+$/.test(id)
+                            ? `/t/${tenant.slug}/expenses/${id}`
+                            : undefined
+                    }
+                />
+            )}
+            <section
+                aria-label="Spese collegate"
+                className="flex min-w-0 flex-col gap-3"
+            >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="font-semibold">
+                        Spese collegate · {history ? 'Tutti gli anni' : year}
+                    </h2>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={tableBusy}
+                        onClick={() =>
+                            router.get(
+                                `${path}/${record.id}`,
+                                {
+                                    ...expenseFilters,
+                                    year,
+                                    history: history ? undefined : 1,
+                                },
+                                { preserveScroll: true },
+                            )
+                        }
+                    >
+                        {history
+                            ? `Mostra solo ${year}`
+                            : 'Mostra storico completo'}
+                    </Button>
+                    {catalog === 'contracts' && (
                         <Button
-                            variant="outline"
-                            size="sm"
                             disabled={tableBusy}
                             onClick={() =>
-                                router.get(
-                                    `${path}/${record.id}`,
-                                    {
-                                        year,
-                                        ...(history ? {} : { history: 1 }),
-                                    },
-                                    { preserveScroll: true },
+                                router.visit(
+                                    `/t/${tenant.slug}/expenses/create?contract_id=${record.id}`,
                                 )
                             }
                         >
-                            {history
-                                ? `Mostra solo ${year}`
-                                : 'Mostra storico completo'}
+                            Aggiungi spesa
                         </Button>
-                        {catalog === 'contracts' && (
-                            <Button
-                                disabled={tableBusy}
-                                onClick={() =>
-                                    router.visit(
-                                        `/t/${tenant.slug}/expenses/create?contract_id=${record.id}`,
-                                    )
-                                }
-                            >
-                                Aggiungi spesa
-                            </Button>
-                        )}
-                    </div>
-                    <ExpenseTable
-                        key={`${tenant.id}:${record.id}:${year}:${history}`}
-                        rows={expenses.data}
-                        slug={tenant.slug}
-                        showYear
-                        contractMode={catalog === 'contracts'}
-                        onBusyChange={setTableBusy}
-                    />
-                    <div
-                        onClickCapture={(event) => {
-                            if (tableBusy) {
-                                event.preventDefault();
-                                event.stopPropagation();
-                            }
-                        }}
-                    >
-                        <Pagination page={expenses} />
-                    </div>
-                </section>
-                {breakdown && (
-                    <div className="order-1 min-w-0 @5xl/detail:order-2">
-                        <DetailBreakdownChart
-                            key={`${tenant.slug}:${catalog}:${record.id}:${year}:${history}`}
-                            breakdown={breakdown}
-                            getHref={(id) =>
-                                /^\d+$/.test(id)
-                                    ? `/t/${tenant.slug}/expenses/${id}`
-                                    : undefined
-                            }
+                    )}
+                </div>
+                <ExpenseTable
+                    key={`${tenant.id}:${catalog}:${record.id}:${year}:${history}`}
+                    toolbar={
+                        <DashboardFilters
+                            key={JSON.stringify(expenseFilters)}
+                            tenant={tenant}
+                            expenses={expenses}
+                            filters={expenseFilters}
+                            options={options}
+                            path={`${path}/${record.id}`}
+                            busy={tableBusy}
+                            hideRelations={[catalog]}
+                            contractMode={catalog === 'contracts'}
                         />
-                    </div>
-                )}
-            </div>
+                    }
+                    filters={expenseFilters}
+                    onSort={(sort) =>
+                        applyFilters(`${path}/${record.id}`, {
+                            ...expenseFilters,
+                            sort,
+                            direction:
+                                expenseFilters.sort === sort &&
+                                expenseFilters.direction === 'asc'
+                                    ? 'desc'
+                                    : 'asc',
+                        })
+                    }
+                    rows={expenses.data}
+                    slug={tenant.slug}
+                    showYear
+                    contractMode={catalog === 'contracts'}
+                    onBusyChange={setTableBusy}
+                />
+                <div
+                    onClickCapture={(event) => {
+                        if (tableBusy) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
+                    }}
+                >
+                    <Pagination page={expenses} />
+                </div>
+            </section>
         </>
     );
     return (
@@ -183,18 +211,12 @@ export default function CatalogDetail({
                             className="mt-2 page-title [overflow-wrap:anywhere]"
                             onSave={(value) => save('name', value)}
                         />
-                        {catalog !== 'vendors' && (
+                        {catalog === 'projects' && (
                             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                {catalog === 'projects' && (
-                                    <Badge variant="secondary">
-                                        {record.status}
-                                    </Badge>
-                                )}
-                                <span>
-                                    {catalog === 'projects'
-                                        ? year
-                                        : `${dateLabel(record.starts_on)} – ${dateLabel(record.ends_on)}`}
-                                </span>
+                                <Badge variant="secondary">
+                                    {record.status}
+                                </Badge>
+                                <span>{year}</span>
                             </div>
                         )}
                     </div>
@@ -222,6 +244,74 @@ export default function CatalogDetail({
                         />
                     </div>
                 </header>
+                {catalog === 'contracts' && (
+                    <Card
+                        role="region"
+                        aria-labelledby="contract-period-title"
+                        className="grid min-w-0 detail-enter gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:items-center"
+                    >
+                        <CardHeader>
+                            <CardTitle>
+                                <h2
+                                    id="contract-period-title"
+                                    className="flex items-center gap-2"
+                                >
+                                    <CalendarDays
+                                        aria-hidden="true"
+                                        className="size-5 shrink-0 text-muted-foreground"
+                                    />
+                                    Periodo del contratto
+                                </h2>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <dl className="grid gap-4 sm:grid-cols-2">
+                                {(['starts_on', 'ends_on'] as const).map(
+                                    (field) => {
+                                        const label =
+                                            field === 'starts_on'
+                                                ? 'Inizio contratto'
+                                                : 'Fine contratto';
+                                        return (
+                                            <div
+                                                key={field}
+                                                className="min-w-0"
+                                            >
+                                                <dt className="mb-2 text-sm text-muted-foreground">
+                                                    {label}
+                                                </dt>
+                                                <dd className="min-w-0 rounded-lg border bg-muted/30 px-3 py-2">
+                                                    <InlineEdit
+                                                        value={record[field]}
+                                                        label={label}
+                                                        type="date"
+                                                        display={
+                                                            record[field]
+                                                                ? dateLabel(
+                                                                      record[
+                                                                          field
+                                                                      ],
+                                                                  )
+                                                                : 'Da impostare'
+                                                        }
+                                                        className="min-h-9 content-center text-lg font-semibold tabular-nums"
+                                                        disabled={tableBusy}
+                                                        onSave={(value) =>
+                                                            save(
+                                                                field,
+                                                                value || null,
+                                                            )
+                                                        }
+                                                    />
+                                                </dd>
+                                            </div>
+                                        );
+                                    },
+                                )}
+                            </dl>
+                        </CardContent>
+                    </Card>
+                )}
                 {catalog !== 'vendors' && economics}
                 <Card className="min-w-0 gap-4">
                     <CardHeader>

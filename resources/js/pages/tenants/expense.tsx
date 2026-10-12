@@ -1,4 +1,5 @@
 import { ArrowUpRight } from 'lucide-react';
+import { useState } from 'react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
 import { Head, Link } from '@inertiajs/react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
@@ -8,22 +9,15 @@ import { expenseBreakdown } from '@/components/management/detail-breakdown';
 import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
 import { DetailKpis } from '@/components/management/detail-kpis';
 import { DetailNotes } from '@/components/management/detail-notes';
-import { ExpenseLines } from '@/components/management/expense-lines';
+import { ExpenseLinesCard } from '@/components/management/expense-lines-card';
 import {
     InlineEdit,
     saveInlineRecord,
 } from '@/components/management/inline-edit';
-import { dateLabel, decimalInput } from '@/components/management/helpers';
+import { dateLabel } from '@/components/management/helpers';
 import type { Expense, Options } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
 import type { Tenant } from '@/types';
 
 export default function ExpenseDetail({
@@ -39,6 +33,7 @@ export default function ExpenseDetail({
     const save = (field: string, value: unknown) =>
         saveInlineRecord(`${path}/${expense.id}`, { [field]: value });
     const lines = expense.lines ?? [];
+    const [editingLines, setEditingLines] = useState(false);
     const years =
         expense.contract_id && lines.length
             ? [...new Set(lines.map((line) => line.year ?? expense.year))]
@@ -60,6 +55,7 @@ export default function ExpenseDetail({
                         <InlineEdit
                             value={expense.title}
                             label="Titolo della spesa"
+                            disabled={editingLines}
                             as="h1"
                             className="mt-2 page-title [overflow-wrap:anywhere]"
                             onSave={(value) => save('title', value)}
@@ -80,11 +76,13 @@ export default function ExpenseDetail({
                     <div className="flex shrink-0 flex-wrap gap-2">
                         <RecordMoreActions
                             href={`${path}/${expense.id}/edit`}
+                            disabled={editingLines}
                         />
                         <DeleteRecord
                             url={`${path}/${expense.id}`}
                             redirect={`${path}?year=${expense.year}`}
                             label={expense.title}
+                            disabled={editingLines}
                         />
                     </div>
                 </header>
@@ -94,71 +92,19 @@ export default function ExpenseDetail({
                     variance={expense.variance}
                     count={lines.length}
                 />
-                <div className="grid min-w-0 items-start gap-6 @5xl/detail:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-                    <Card className="min-w-0 detail-enter gap-4">
-                        <CardHeader className="px-5">
-                            <CardTitle>Righe economiche</CardTitle>
-                            <CardDescription>
-                                Importi previsti ed effettivi della spesa ·{' '}
-                                {lines.length} righe
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="min-w-0 px-5">
-                            <ExpenseLines
-                                readOnly
-                                onSaveLine={(key, field, value) =>
-                                    save(
-                                        'lines',
-                                        lines.map((line, index) => {
-                                            const data = {
-                                                description: line.description,
-                                                type: line.type,
-                                                unit_price: line.unit_price,
-                                                quantity: line.quantity,
-                                                period_starts_on:
-                                                    line.period_starts_on ??
-                                                    null,
-                                                period_ends_on:
-                                                    line.period_ends_on ?? null,
-                                                year: line.year ?? expense.year,
-                                            };
-                                            return String(line.id ?? index) ===
-                                                key
-                                                ? {
-                                                      ...data,
-                                                      [field]: [
-                                                          'unit_price',
-                                                          'quantity',
-                                                      ].includes(field)
-                                                          ? decimalInput(value)
-                                                          : field.endsWith(
-                                                                  '_on',
-                                                              )
-                                                            ? value || null
-                                                            : value,
-                                                  }
-                                                : data;
-                                        }),
-                                    )
-                                }
-                                showSummary={false}
-                                showHeading={false}
-                                contractMode={!!expense.contract_id}
-                                lines={lines.map((line, index) => ({
-                                    ...line,
-                                    key: String(line.id ?? index),
-                                }))}
-                            />
-                        </CardContent>
-                    </Card>
-                    <DetailBreakdownChart
-                        key={JSON.stringify([
-                            expense.id,
-                            lines.map((line) => line.id),
-                        ])}
-                        breakdown={expenseBreakdown(lines)}
-                    />
-                </div>
+                <DetailBreakdownChart
+                    key={JSON.stringify([
+                        expense.id,
+                        lines.map((line) => line.id),
+                    ])}
+                    breakdown={expenseBreakdown(lines)}
+                />
+                <ExpenseLinesCard
+                    key={`lines:${expense.id}`}
+                    expense={expense}
+                    url={`${path}/${expense.id}`}
+                    onEditingChange={setEditingLines}
+                />
                 <section
                     aria-labelledby="expense-info"
                     className="min-w-0 detail-enter rounded-xl border bg-card px-5 py-5"
@@ -178,6 +124,7 @@ export default function ExpenseDetail({
                                     <InlineEdit
                                         value={String(expense.year)}
                                         label="Anno di imputazione"
+                                        disabled={editingLines}
                                         onSave={(value) => save('year', value)}
                                     />
                                 )}
@@ -229,6 +176,7 @@ export default function ExpenseDetail({
                                                           )
                                                 }
                                                 label={label}
+                                                disabled={editingLines}
                                                 display={
                                                     related?.name ?? 'Nessuno'
                                                 }
@@ -285,9 +233,10 @@ export default function ExpenseDetail({
                     </dl>
                 </section>
                 <DetailNotes
-                    key={expense.id}
+                    key={`notes:${expense.id}`}
                     text={expense.notes ?? ''}
                     onSave={(value) => save('notes', value || null)}
+                    disabled={editingLines}
                 />
                 <AttachmentsSection
                     compact
