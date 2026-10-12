@@ -102,10 +102,11 @@ class CatalogController extends Controller
     /** @return array<string, mixed> */
     public function validated(Request $request, Tenant $tenant, string $catalog): array
     {
+        $required = $request->isMethod('patch') ? ['sometimes', 'required'] : ['required'];
         $rules = [
             'tenant_id' => ['prohibited'],
             'initial_expense' => ['prohibited'],
-            'name' => ['required', 'string', 'max:255'],
+            'name' => [...$required, 'string', 'max:255'],
         ];
         $rules += match ($catalog) {
             'vendors' => [
@@ -123,7 +124,7 @@ class CatalogController extends Controller
             ],
             'projects' => [
                 'description' => ['nullable', 'string', 'max:10000'],
-                'status' => ['required', Rule::in(['pianificato', 'attivo', 'completato'])],
+                'status' => [...$required, Rule::in(['pianificato', 'attivo', 'completato'])],
                 'starts_on' => ['nullable', 'date_format:Y-m-d'],
                 'ends_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:starts_on'],
             ],
@@ -203,6 +204,13 @@ class CatalogController extends Controller
     public function update(Request $request, Tenant $tenant, string $catalog, int $record): JsonResponse
     {
         $item = $this->records($tenant, $catalog)->findOrFail($record);
+        if ($request->isMethod('patch') && $catalog !== 'vendors' &&
+            ($request->exists('starts_on') || $request->exists('ends_on'))) {
+            $request->mergeIfMissing([
+                'starts_on' => $item->starts_on?->toDateString(),
+                'ends_on' => $item->ends_on?->toDateString(),
+            ]);
+        }
         $data = $this->validated($request, $tenant, $catalog);
         DB::transaction(function () use ($item, $data) {
             $ids = $data['cost_center_ids'] ?? null;

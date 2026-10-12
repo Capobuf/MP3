@@ -1,3 +1,4 @@
+import { InlineEdit } from './inline-edit';
 import {
     Fragment,
     useCallback,
@@ -37,6 +38,7 @@ import {
 } from '@tanstack/react-table';
 import type {
     ColumnDef,
+    Cell,
     ColumnOrderState,
     ExpandedState,
     SortingState,
@@ -129,7 +131,7 @@ import type {
     BudgetSnapshot,
     BudgetType,
 } from './budget-types';
-import type { Option } from './types';
+import type { Expense, Option } from './types';
 
 const columnNames: Record<string, string> = {
     select: 'Selezione',
@@ -216,6 +218,21 @@ function readPreferences(key: string): Preferences {
     }
 }
 
+type SaveRecord = (
+    resource: string,
+    id: number,
+    changes: Record<string, unknown>,
+) => Promise<void>;
+
+// Cell templates are pure render callbacks. Calling them keeps editor components
+// mounted when refreshed column definitions change during a save.
+function renderCell(cell: Cell<BudgetEntry, unknown>) {
+    const renderer = cell.column.columnDef.cell;
+    return typeof renderer === 'function'
+        ? renderer(cell.getContext())
+        : renderer;
+}
+
 function InlineAmount({
     value,
     label,
@@ -277,7 +294,20 @@ function InlineAmount({
             className="h-auto min-h-8 w-full justify-end financial-value"
             aria-label={label}
             disabled={disabled}
-            onClick={() => {
+            title="Doppio clic per modificare · Invio o F2 da tastiera"
+            onKeyDown={(event) => {
+                if (
+                    event.key === 'Enter' ||
+                    event.key === 'F2' ||
+                    event.key === ' '
+                ) {
+                    event.preventDefault();
+                    submitting.current = false;
+                    setDraft(value ?? '');
+                    setEditing(true);
+                }
+            }}
+            onDoubleClick={() => {
                 submitting.current = false;
                 setDraft(value ?? '');
                 setEditing(true);
@@ -330,33 +360,44 @@ function ExpenseAmount({
     label,
     busy,
     highlightIncomplete,
-    onEdit,
+    expense,
+    field,
+    slug,
+    onRecordSave,
 }: {
     value: string | null | undefined;
     label: string;
     busy: boolean;
     highlightIncomplete?: boolean;
-    onEdit: () => void;
+    expense: Expense;
+    field: 'allocated_amount' | 'actual_amount';
+    slug: string;
+    onRecordSave: SaveRecord;
 }) {
     return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <Button
-                    variant={value == null ? 'outline' : 'ghost'}
-                    size="sm"
-                    className="h-auto min-h-8 w-full justify-end financial-value tabular-nums hover:bg-accent focus-visible:ring-ring"
-                    aria-label={label}
-                    disabled={busy}
-                    data-budget-incomplete={
-                        highlightIncomplete && value == null
-                    }
-                    onClick={onEdit}
+        <div data-budget-incomplete={highlightIncomplete && value == null}>
+            {expense.lines?.length ? (
+                <Link
+                    href={`/t/${slug}/expenses/${expense.id}`}
+                    title="Importo calcolato dalle righe economiche"
                 >
-                    {value == null ? 'Da inserire' : money(value)}
-                </Button>
-            </TooltipTrigger>
-            <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
+                    {money(value)}
+                </Link>
+            ) : (
+                <InlineEdit
+                    value={value}
+                    display={money(value)}
+                    label={label.replace(/^Modifica /, '')}
+                    disabled={busy}
+                    className="text-right financial-value"
+                    onSave={(value) =>
+                        onRecordSave('expenses', expense.id, {
+                            [field]: decimalInput(value),
+                        })
+                    }
+                />
+            )}
+        </div>
     );
 }
 
@@ -367,6 +408,7 @@ function ExpenseRows({
     busy,
     highlightIncomplete,
     onExpenseEdit,
+    onRecordSave,
 }: {
     entry: BudgetEntry;
     columnIds: string[];
@@ -374,6 +416,7 @@ function ExpenseRows({
     busy: boolean;
     highlightIncomplete: boolean;
     onExpenseEdit: (id: number) => void;
+    onRecordSave: SaveRecord;
 }) {
     return entry.expenses.map((expense) => (
         <TableRow
@@ -403,11 +446,22 @@ function ExpenseRows({
                 >
                     {id === 'description' ? (
                         <div className="ml-4 flex min-w-48 flex-col gap-1 border-l-2 border-border py-1 pl-4">
+                            <InlineEdit
+                                value={expense.title}
+                                label={`Titolo di ${expense.title}`}
+                                disabled={busy}
+                                className="font-medium break-words"
+                                onSave={(value) =>
+                                    onRecordSave('expenses', expense.id, {
+                                        title: value,
+                                    })
+                                }
+                            />
                             <Link
-                                className="rounded-sm font-medium break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                className="text-xs text-primary"
                                 href={`/t/${slug}/expenses/${expense.id}`}
                             >
-                                {expense.title}
+                                Apri spesa
                             </Link>
                             {periodLabel(
                                 expense.period_starts_on,
@@ -437,7 +491,14 @@ function ExpenseRows({
                             highlightIncomplete={
                                 highlightIncomplete && expense.contributes
                             }
-                            onEdit={() => onExpenseEdit(expense.id)}
+                            expense={expense}
+                            field={
+                                id === 'allocated'
+                                    ? 'allocated_amount'
+                                    : 'actual_amount'
+                            }
+                            slug={slug}
+                            onRecordSave={onRecordSave}
                         />
                     ) : id === 'actions' ? (
                         <DropdownMenu>
@@ -458,7 +519,7 @@ function ExpenseRows({
                                             onExpenseEdit(expense.id)
                                         }
                                     >
-                                        Modifica
+                                        Righe e collegamenti
                                     </DropdownMenuItem>
                                     <DropdownMenuItem asChild>
                                         <Link
@@ -546,16 +607,10 @@ function SortableBudgetRow({
                                         : 'Trascina nel gruppo. Da tastiera: Spazio, frecce, Spazio per confermare, Esc per annullare.'}
                                 </TooltipContent>
                             </Tooltip>
-                            {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext(),
-                            )}
+                            {renderCell(cell)}
                         </div>
                     ) : (
-                        flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                        )
+                        renderCell(cell)
                     )}
                 </TableCell>
             ))}
@@ -604,6 +659,7 @@ function EntryDetail({
     busy,
     mutate,
     onExpenseEdit,
+    onRecordSave,
     highlightIncomplete,
 }: {
     entry: BudgetEntry;
@@ -613,6 +669,7 @@ function EntryDetail({
     busy: boolean;
     mutate: BudgetMutate;
     onExpenseEdit: (id: number) => void;
+    onRecordSave: SaveRecord;
     highlightIncomplete: boolean;
 }) {
     if (entry.type === 'manual')
@@ -650,11 +707,19 @@ function EntryDetail({
                     </Link>
                 </Button>
             </div>
-            {entry.notes && (
-                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                    {entry.notes}
-                </p>
-            )}
+            <InlineEdit
+                value={entry.notes}
+                label={entry.type === 'project' ? 'Descrizione' : 'Note'}
+                multiline
+                disabled={busy}
+                className="text-sm whitespace-pre-wrap text-muted-foreground"
+                onSave={(value) =>
+                    onRecordSave(`${entry.type}s`, entry.source_id!, {
+                        [entry.type === 'project' ? 'description' : 'notes']:
+                            value || null,
+                    })
+                }
+            />
             {!entry.expenses.length ? (
                 <Alert
                     tabIndex={-1}
@@ -758,6 +823,7 @@ export function BudgetTable({
     onAdd,
     onMissing,
     onExpenseEdit,
+    onRecordSave,
     typeFilter,
     setTypeFilter,
 }: {
@@ -771,6 +837,11 @@ export function BudgetTable({
     onAdd: () => void;
     onMissing: () => void;
     onExpenseEdit: (id: number) => void;
+    onRecordSave: (
+        resource: string,
+        id: number,
+        changes: Record<string, unknown>,
+    ) => Promise<void>;
     typeFilter: string;
     setTypeFilter: (value: string) => void;
 }) {
@@ -903,16 +974,38 @@ export function BudgetTable({
                 enableHiding: false,
                 cell: ({ row }) => (
                     <div className="max-w-96 min-w-52 whitespace-normal">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-auto min-h-8 max-w-full justify-start text-left whitespace-normal"
-                            aria-expanded={details.includes(row.original.id)}
-                            aria-controls={`budget-detail-${row.original.id}`}
-                            onClick={() => toggleDetail(row.original.id)}
-                        >
-                            {row.original.description}
-                        </Button>
+                        <InlineEdit
+                            value={row.original.description}
+                            label={`Descrizione di ${row.original.description}`}
+                            disabled={busy}
+                            onSave={async (value) => {
+                                if (row.original.type === 'manual') {
+                                    const ok = await mutate(
+                                        'entries',
+                                        'PATCH',
+                                        {
+                                            action: 'update',
+                                            ids: [row.original.id],
+                                            changes: { description: value },
+                                        },
+                                    );
+                                    if (!ok)
+                                        throw new Error(
+                                            'Salvataggio non riuscito.',
+                                        );
+                                } else {
+                                    await onRecordSave(
+                                        `${row.original.type}s`,
+                                        row.original.source_id!,
+                                        {
+                                            [row.original.type === 'expense'
+                                                ? 'title'
+                                                : 'name']: value,
+                                        },
+                                    );
+                                }
+                            }}
+                        />
                         {preferences.group === 'center' &&
                             preferences.visibility.type === false && (
                                 <Badge variant="secondary" className="text-xs">
@@ -1056,9 +1149,14 @@ export function BudgetTable({
                                 }
                                 busy={busy}
                                 label={`Modifica ${columnNames[field]} della spesa ${row.original.description}`}
-                                onEdit={() =>
-                                    onExpenseEdit(row.original.source_id!)
+                                expense={row.original.expenses[0]}
+                                field={
+                                    field === 'allocated'
+                                        ? 'allocated_amount'
+                                        : 'actual_amount'
                                 }
+                                slug={slug}
+                                onRecordSave={onRecordSave}
                             />
                         ) : (
                             <Tooltip>
@@ -1167,7 +1265,7 @@ export function BudgetTable({
                                                     );
                                             }}
                                         >
-                                            Modifica
+                                            Righe e collegamenti
                                         </DropdownMenuItem>
                                     )}
                                     <DropdownMenuItem
@@ -1382,6 +1480,7 @@ export function BudgetTable({
                                                 highlightIncomplete
                                             }
                                             onExpenseEdit={onExpenseEdit}
+                                            onRecordSave={onRecordSave}
                                         />
                                     </div>
                                 </TableCell>
@@ -1397,6 +1496,7 @@ export function BudgetTable({
                                     busy={busy}
                                     highlightIncomplete={highlightIncomplete}
                                     onExpenseEdit={onExpenseEdit}
+                                    onRecordSave={onRecordSave}
                                 />
                             )}
                         </>
@@ -1677,9 +1777,15 @@ export function BudgetTable({
                 <Button onClick={onAdd} disabled={busy}>
                     Aggiungi voce
                 </Button>
-                <Button variant="outline" onClick={onMissing} disabled={busy}>
-                    Inserisci spese mancanti
-                </Button>
+                {budget.has_missing_entries && (
+                    <Button
+                        variant="outline"
+                        onClick={onMissing}
+                        disabled={busy}
+                    >
+                        Inserisci spese mancanti
+                    </Button>
+                )}
                 {sorting.length > 0 && (
                     <Button
                         size="sm"

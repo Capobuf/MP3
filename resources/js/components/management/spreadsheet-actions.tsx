@@ -1,5 +1,5 @@
 import { usePage } from '@inertiajs/react';
-import { Download, Upload } from 'lucide-react';
+import { Download, FileSpreadsheet, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,6 +9,13 @@ import {
     DialogTitle,
     DialogDescription,
 } from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { DataImport } from './data-import';
 
 export function SpreadsheetActions({
@@ -47,29 +54,46 @@ export function SpreadsheetActions({
         query.set('year', String(economicContext.year));
     }
     return (
-        <div className="flex flex-wrap gap-2">
-            {!exportOnly && (
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={disabled}
-                    onClick={() => setOpen(true)}
-                >
-                    <Upload data-icon="inline-start" />
-                    Importa Excel
-                </Button>
-            )}
-            <Button type="button" variant="outline" disabled={disabled} asChild>
-                <a
-                    href={`${path}/export.xlsx?${query}`}
-                    onClick={(event) => {
-                        if (disabled) event.preventDefault();
-                    }}
-                >
-                    <Download data-icon="inline-start" />
-                    Esporta Excel
-                </a>
-            </Button>
+        <>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={disabled || busy}
+                        aria-label={`Opzioni Excel · ${label}`}
+                        title="Opzioni Excel"
+                    >
+                        <FileSpreadsheet aria-hidden="true" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuGroup>
+                        {!exportOnly && (
+                            <DropdownMenuItem
+                                disabled={disabled || busy}
+                                onSelect={() => setOpen(true)}
+                            >
+                                <Upload aria-hidden="true" />
+                                Importa Excel
+                            </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem disabled={disabled || busy} asChild>
+                            <a
+                                href={`${path}/export.xlsx?${query}`}
+                                onClick={(event) => {
+                                    if (disabled || busy)
+                                        event.preventDefault();
+                                }}
+                            >
+                                <Download aria-hidden="true" />
+                                Esporta Excel
+                            </a>
+                        </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                </DropdownMenuContent>
+            </DropdownMenu>
             <Dialog
                 open={open}
                 onOpenChange={(value) => {
@@ -104,6 +128,6 @@ export function SpreadsheetActions({
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+        </>
     );
 }

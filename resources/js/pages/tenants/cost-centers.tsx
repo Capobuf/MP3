@@ -1,6 +1,11 @@
+import { RecordMoreActions } from '@/components/management/record-more-actions';
+import {
+    InlineEdit,
+    saveInlineRecord,
+} from '@/components/management/inline-edit';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, router } from '@inertiajs/react';
-import { CornerDownRight, Plus, Pencil, Trash2 } from 'lucide-react';
+import { CornerDownRight, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/components/management/helpers';
@@ -93,9 +98,17 @@ export default function CostCenters({
                                 className="size-4 shrink-0 text-muted-foreground"
                             />
                         )}
-                        <span className="font-medium break-words">
-                            {center.name}
-                        </span>
+                        <InlineEdit
+                            value={center.name}
+                            label={`Nome di ${center.name}`}
+                            disabled={busy}
+                            className="font-medium break-words"
+                            onSave={(value) =>
+                                saveInlineRecord(`${path}/${center.id}`, {
+                                    name: value,
+                                })
+                            }
+                        />
                     </div>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
@@ -120,17 +133,10 @@ export default function CostCenters({
                                 <Plus />
                             </Button>
                         )}
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            aria-label={`Modifica ${center.name}`}
-                            onClick={() =>
-                                router.visit(`${path}/${center.id}/edit`)
-                            }
-                        >
-                            <Pencil />
-                        </Button>
+                        <RecordMoreActions
+                            href={`${path}/${center.id}/edit`}
+                            disabled={busy}
+                        />
                         <Button
                             type="button"
                             variant="ghost"
@@ -164,17 +170,17 @@ export default function CostCenters({
                             Sono consentiti due livelli: padre e figlio.
                         </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button onClick={() => router.visit(`${path}/create`)}>
+                            <Plus data-icon="inline-start" />
+                            Nuovo Centro di Costo
+                        </Button>
                         <SpreadsheetActions
                             slug={tenant.slug}
                             resource="cost-centers"
                             label="Centri di costo"
                             filters={filters}
                         />
-                        <Button onClick={() => router.visit(`${path}/create`)}>
-                            <Plus data-icon="inline-start" />
-                            Nuovo Centro di Costo
-                        </Button>
                     </div>
                 </header>
                 <form

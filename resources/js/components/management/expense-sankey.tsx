@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/button';
+import { Link } from '@inertiajs/react';
 import { useState } from 'react';
 import { Sankey } from 'recharts';
 import type { SankeyLinkProps, SankeyNodeProps } from 'recharts';
@@ -11,7 +11,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { buildSankey } from './analytics-helpers';
+import { buildSankey, sumGroups } from './analytics-helpers';
 import type {
     EntityFilter,
     ExpenseAnalytics,
@@ -21,6 +21,7 @@ import type {
 } from './analytics-types';
 import {
     AnalyticsCard,
+    ChartReset,
     EmptyChart,
     MetricSelect,
     Reconciliation,
@@ -29,28 +30,58 @@ import { money } from './helpers';
 
 export function ExpenseSankey({
     analytics,
-    onSelect,
+    getHref,
 }: {
     analytics: ExpenseAnalytics;
-    onSelect: (field: EntityFilter, id: GroupId) => void;
+    getHref: (field: EntityFilter, id: GroupId) => string | undefined;
 }) {
     const [metric, setMetric] = useState<Metric>('actual');
     const [destination, setDestination] = useState<'projects' | 'contracts'>(
         'projects',
     );
     const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+    const [selected, setSelected] = useState<{
+        field: EntityFilter;
+        id: GroupId;
+    } | null>(null);
     const field = destination === 'projects' ? 'project_id' : 'contract_id';
-    const data = buildSankey(
-        analytics.pairs[destination],
-        analytics.vendors,
-        analytics[destination],
-        metric,
-        field,
+    const pairs = analytics.pairs[destination].filter(
+        (pair) =>
+            selected === null ||
+            (selected.field === 'vendor_id'
+                ? pair.vendor_id
+                : pair.destination_id) === selected.id,
     );
+    const vendors =
+        selected === null
+            ? analytics.vendors
+            : analytics.vendors.map((row) => ({
+                  ...row,
+                  ...sumGroups(
+                      pairs.filter((pair) => pair.vendor_id === row.id),
+                  ),
+              }));
+    const destinations =
+        selected === null
+            ? analytics[destination]
+            : analytics[destination].map((row) => ({
+                  ...row,
+                  ...sumGroups(
+                      pairs.filter((pair) => pair.destination_id === row.id),
+                  ),
+              }));
+    const data = buildSankey(pairs, vendors, destinations, metric, field);
     const activeKey = data.nodes.find((node) => node.key === hoveredKey)?.key;
     const select = (node: SankeyNode) => {
-        if (node.field && node.id !== undefined && node.id !== 'others')
-            onSelect(node.field, node.id);
+        if (node.field && node.id !== undefined && node.id !== 'others') {
+            const selection = { field: node.field, id: node.id };
+            setSelected((current) =>
+                current?.field === selection.field &&
+                current.id === selection.id
+                    ? null
+                    : selection,
+            );
+        }
     };
     const renderNode = ({
         x,
@@ -61,34 +92,54 @@ export function ExpenseSankey({
         payload,
     }: SankeyNodeProps) => {
         const node = data.nodes[index];
+        if (!node) return <g />;
         const target = node.field === field;
         const actionable = !!node.field && node.id !== 'others';
+        const href =
+            node.field && node.id !== undefined
+                ? getHref(node.field, node.id)
+                : undefined;
+        const label = (
+            <text
+                x={target ? x - 8 : x + width + 8}
+                y={y + height / 2}
+                textAnchor={target ? 'end' : 'start'}
+                dominantBaseline="middle"
+                fill="var(--foreground)"
+                fontSize={12}
+            >
+                {node.name.length > 25
+                    ? `${node.name.slice(0, 24)}…`
+                    : node.name}
+            </text>
+        );
         return (
             <g
-                role={actionable ? 'button' : undefined}
-                tabIndex={actionable ? 0 : undefined}
-                aria-label={actionable ? `Filtra ${node.name}` : node.name}
-                className={
-                    actionable
-                        ? 'cursor-pointer outline-none focus:opacity-70'
-                        : ''
-                }
                 onMouseEnter={() => setHoveredKey(node.key)}
                 onMouseLeave={() => setHoveredKey(null)}
                 onFocus={() => setHoveredKey(node.key)}
                 onBlur={() => setHoveredKey(null)}
-                onClick={() => select(node)}
-                onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        select(node);
-                    }
-                }}
             >
                 <title>
                     {node.name}: {money(payload.value)}
                 </title>
                 <rect
+                    role={actionable ? 'button' : undefined}
+                    tabIndex={actionable ? 0 : undefined}
+                    aria-label={actionable ? `Filtra ${node.name}` : node.name}
+                    aria-pressed={
+                        actionable
+                            ? selected?.field === node.field &&
+                              selected?.id === node.id
+                            : undefined
+                    }
+                    onClick={() => select(node)}
+                    onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            select(node);
+                        }
+                    }}
                     x={x}
                     y={y}
                     width={width}
@@ -104,20 +155,20 @@ export function ExpenseSankey({
                     }
                     strokeWidth={2}
                     opacity={activeKey && activeKey !== node.key ? 0.7 : 1}
-                    className="transition-[opacity,stroke] duration-200 motion-reduce:transition-none"
+                    className={
+                        actionable
+                            ? 'cursor-pointer transition-[opacity,stroke] duration-200 outline-none focus:opacity-70 motion-reduce:transition-none'
+                            : 'transition-[opacity,stroke] duration-200 motion-reduce:transition-none'
+                    }
                 />
-                <text
-                    x={target ? x - 8 : x + width + 8}
-                    y={y + height / 2}
-                    textAnchor={target ? 'end' : 'start'}
-                    dominantBaseline="middle"
-                    fill="var(--foreground)"
-                    fontSize={12}
-                >
-                    {node.name.length > 25
-                        ? `${node.name.slice(0, 24)}…`
-                        : node.name}
-                </text>
+                {href ? (
+                    <Link href={href} aria-label={`Apri ${node.name}`}>
+                        <title>{node.name}</title>
+                        {label}
+                    </Link>
+                ) : (
+                    label
+                )}
             </g>
         );
     };
@@ -150,9 +201,8 @@ export function ExpenseSankey({
     return (
         <AnalyticsCard
             title="Flussi economici"
-            description={`Spese → Fornitori → ${destination === 'projects' ? 'Progetti' : 'Contratti'}. Seleziona un nodo per filtrare.`}
             controls={
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <MetricSelect
                         value={metric}
                         onChange={(value) => {
@@ -164,6 +214,7 @@ export function ExpenseSankey({
                         value={destination}
                         onValueChange={(value) => {
                             setHoveredKey(null);
+                            setSelected(null);
                             setDestination(value as 'projects' | 'contracts');
                         }}
                     >
@@ -184,6 +235,9 @@ export function ExpenseSankey({
                             </SelectGroup>
                         </SelectContent>
                     </Select>
+                    {selected !== null && (
+                        <ChartReset onReset={() => setSelected(null)} />
+                    )}
                 </div>
             }
         >
@@ -244,37 +298,12 @@ export function ExpenseSankey({
                     </ChartContainer>
                 </div>
             )}
-            <div
-                className="mt-4 flex flex-wrap gap-2"
-                aria-label="Filtra i flussi per record"
-            >
-                {data.nodes
-                    .filter((node) => node.field && node.id !== 'others')
-                    .map((node) => (
-                        <Button
-                            key={node.key}
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="h-auto min-h-8 max-w-full whitespace-normal"
-                            onClick={() => select(node)}
-                        >
-                            {node.field === 'vendor_id'
-                                ? 'Fornitore'
-                                : node.field === 'project_id'
-                                  ? 'Progetto'
-                                  : 'Contratto'}
-                            : {node.name}
-                        </Button>
-                    ))}
-            </div>
-            <Reconciliation values={analytics.current} metric={metric} />
-            <p className="mt-3 text-sm text-muted-foreground">
-                Volume positivo lordo: ogni spesa contribuisce una volta per
-                livello. Totale netto = positivi − valore assoluto delle
-                rettifiche. “Altri” raggruppa oltre i sei principali fornitori e
-                destinazioni; i gruppi senza associazione restano distinti.
-            </p>
+            <Reconciliation
+                values={
+                    selected === null ? analytics.current : sumGroups(pairs)
+                }
+                metric={metric}
+            />
         </AnalyticsCard>
     );
 }

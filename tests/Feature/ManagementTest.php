@@ -30,6 +30,57 @@ class ManagementTest extends TestCase
         $this->actingAs($user);
     }
 
+    public function test_catalog_fields_can_be_patched_without_resending_required_fields(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore', 'email' => 'originale@example.com']);
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto', 'vendor_id' => $vendor->id, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31']);
+        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo', 'starts_on' => '2026-01-01']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $contract->costCenters()->attach($center);
+
+        $this->patchJson('/t/alfa/vendors/'.$vendor->id, ['notes' => 'Note fornitore'])->assertOk();
+        $this->patchJson('/t/alfa/contracts/'.$contract->id, ['notes' => 'Note contratto'])->assertOk();
+        $this->patchJson('/t/alfa/projects/'.$project->id, ['description' => 'Descrizione progetto'])->assertOk();
+
+        $this->assertSame('Fornitore', $vendor->refresh()->name);
+        $this->assertSame('originale@example.com', $vendor->email);
+        $this->assertSame('Note fornitore', $vendor->notes);
+        $this->assertSame('Contratto', $contract->refresh()->name);
+        $this->assertSame($vendor->id, $contract->vendor_id);
+        $this->assertSame('2026-12-31', $contract->ends_on->toDateString());
+        $this->assertSame([$center->id], $contract->costCenters->modelKeys());
+        $this->assertSame('Note contratto', $contract->notes);
+        $this->assertSame('Progetto', $project->refresh()->name);
+        $this->assertSame('attivo', $project->status);
+        $this->assertSame('Descrizione progetto', $project->description);
+    }
+
+    public function test_inline_catalog_changes_still_validate_required_values_and_tenant_links(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $foreignVendor = $this->other->vendors()->create(['name' => 'Altro fornitore']);
+        $this->patchJson('/t/alfa/projects/'.$project->id, ['name' => ''])->assertUnprocessable()->assertJsonValidationErrors('name');
+        $this->patchJson('/t/alfa/projects/'.$project->id, ['status' => ''])->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->patchJson('/t/alfa/contracts/'.$contract->id, ['vendor_id' => $foreignVendor->id])->assertUnprocessable()->assertJsonValidationErrors('vendor_id');
+        $this->assertSame('Progetto', $project->refresh()->name);
+        $this->assertSame('attivo', $project->status);
+        $this->assertNull($contract->refresh()->vendor_id);
+    }
+
+    public function test_inline_date_changes_are_checked_against_the_other_saved_date(): void
+    {
+        foreach (['contracts', 'projects'] as $catalog) {
+            $record = $this->tenant->{$catalog}()->create(['name' => 'Elemento', 'starts_on' => '2026-04-01', 'ends_on' => '2026-08-31', ...($catalog === 'projects' ? ['status' => 'attivo'] : [])]);
+            $path = '/t/alfa/'.$catalog.'/'.$record->id;
+            $this->patchJson($path, ['ends_on' => '2026-03-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
+            $this->patchJson($path, ['starts_on' => '2026-09-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
+            $this->patchJson($path, ['ends_on' => '2026-10-01'])->assertOk();
+            $this->assertSame('2026-04-01', $record->refresh()->starts_on->toDateString());
+            $this->assertSame('2026-10-01', $record->ends_on->toDateString());
+        }
+    }
+
     public function test_catalog_crud_and_required_fields(): void
     {
         foreach (['vendors', 'contracts', 'projects'] as $catalog) {

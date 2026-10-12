@@ -6,14 +6,19 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { InlineEdit } from './inline-edit';
 import { cn } from '@/lib/utils';
 
 export function DetailNotes({
     text,
     title = 'Note',
+    onSave,
+    disabled,
 }: {
     text: string;
     title?: string;
+    onSave?: (value: string) => Promise<void>;
+    disabled?: boolean;
 }) {
     const [open, setOpen] = useState(false);
     return (
@@ -37,16 +42,39 @@ export function DetailNotes({
                     </Button>
                 </CollapsibleTrigger>
             </div>
-            {!open && (
-                <p className="mt-2 line-clamp-3 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-muted-foreground">
-                    {text}
-                </p>
+            {onSave ? (
+                <InlineEdit
+                    value={text}
+                    label={title}
+                    multiline
+                    disabled={disabled}
+                    onSave={onSave}
+                    className="mt-2"
+                    display={
+                        <p
+                            className={cn(
+                                'text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-muted-foreground',
+                                !open && 'line-clamp-3',
+                            )}
+                        >
+                            {text || `Aggiungi ${title.toLowerCase()}`}
+                        </p>
+                    }
+                />
+            ) : (
+                <>
+                    {!open && (
+                        <p className="mt-2 line-clamp-3 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-muted-foreground">
+                            {text}
+                        </p>
+                    )}
+                    <CollapsibleContent className="detail-collapse">
+                        <p className="pt-2 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-muted-foreground">
+                            {text}
+                        </p>
+                    </CollapsibleContent>
+                </>
             )}
-            <CollapsibleContent className="detail-collapse">
-                <p className="pt-2 text-sm [overflow-wrap:anywhere] whitespace-pre-wrap text-muted-foreground">
-                    {text}
-                </p>
-            </CollapsibleContent>
         </Collapsible>
     );
 }

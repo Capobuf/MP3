@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from '@inertiajs/react';
 import { Cell, Pie, PieChart, Sector } from 'recharts';
 import {
     ChartContainer,
@@ -6,7 +7,13 @@ import {
     ChartTooltipContent,
 } from '@/components/ui/chart';
 import type { PieProps, PieSectorDataItem } from 'recharts';
-import { cents, palette, percent, topGroups } from './analytics-helpers';
+import {
+    cents,
+    palette,
+    percent,
+    sumGroups,
+    topGroups,
+} from './analytics-helpers';
 import type {
     EconomicGroup,
     EconomicValues,
@@ -15,6 +22,7 @@ import type {
 } from './analytics-types';
 import {
     AnalyticsCard,
+    ChartReset,
     EmptyChart,
     MetricSelect,
     Reconciliation,
@@ -26,38 +34,67 @@ export function DistributionChart({
     rows,
     values,
     vendorConcentration = false,
-    onSelect,
+    getHref,
 }: {
     title: string;
     rows: EconomicGroup[];
     values: EconomicValues;
     vendorConcentration?: boolean;
-    onSelect?: (id: GroupId) => void;
+    getHref?: (id: GroupId) => string | undefined;
 }) {
     const [metric, setMetric] = useState<Metric>('actual');
+    const [selected, setSelected] = useState<GroupId | null>(null);
     const key = `${metric}_positive` as const;
-    const total = cents(values[key]);
+    const source =
+        selected === null || selected === 'others'
+            ? rows
+            : rows.filter((row) => row.id === selected);
     const groups = (
-        vendorConcentration ? topGroups(rows, 6, metric, true) : rows
+        vendorConcentration ? topGroups(source, 6, metric, true) : source
     ).filter((row) => cents(row[key]) > 0);
-    const data = groups.map((row, index) => ({
-        ...row,
-        value: Number(row[key]),
-        fill: palette[index % palette.length],
-    }));
-    const concentration = rows
-        .filter((row) => row.id !== 'none')
-        .toSorted((a, b) => cents(b[key]) - cents(a[key]))
-        .slice(0, 3)
-        .reduce((sum, row) => sum + cents(row[key]), 0);
+    const data = groups
+        .map((row, index) => ({
+            ...row,
+            value: Number(row[key]),
+            fill: palette[index % palette.length],
+        }))
+        .filter((row) => selected === null || row.id === selected);
+    const displayedValues = selected === null ? values : sumGroups(data);
+    const total = cents(displayedValues[key]);
     const select = (id: GroupId) => {
-        if (id !== 'others') onSelect?.(id);
+        setSelected((current) => (current === id ? null : id));
+    };
+    const renderSector = (props: PieSectorDataItem, active = false) => {
+        const row = props.payload as EconomicGroup | undefined;
+        if (!row) return <Sector {...props} />;
+        return (
+            <Sector
+                {...props}
+                outerRadius={(props.outerRadius ?? 0) + (active ? 5 : 0)}
+                role="button"
+                tabIndex={0}
+                aria-label={`Filtra ${row.name}`}
+                aria-pressed={row.id === selected}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        select(row.id);
+                    }
+                }}
+            />
+        );
     };
     return (
         <AnalyticsCard
             title={title}
-            description="Quote degli importi positivi. Rettifiche riportate separatamente."
-            controls={<MetricSelect value={metric} onChange={setMetric} />}
+            controls={
+                <div className="flex items-center gap-2">
+                    <MetricSelect value={metric} onChange={setMetric} />
+                    {selected !== null && (
+                        <ChartReset onReset={() => setSelected(null)} />
+                    )}
+                </div>
+            }
         >
             {total <= 0 ? (
                 <EmptyChart>
@@ -96,22 +133,18 @@ export function DistributionChart({
                                 }
                             />
                             <Pie
-                                activeShape={(props: PieSectorDataItem) => (
-                                    <Sector
-                                        {...props}
-                                        outerRadius={
-                                            (props.outerRadius ?? 0) + 5
-                                        }
-                                    />
-                                )}
+                                shape={(props) => renderSector(props)}
+                                activeShape={(props) =>
+                                    renderSector(props, true)
+                                }
                                 data={data}
                                 dataKey="value"
                                 nameKey="name"
                                 innerRadius="58%"
                                 outerRadius="85%"
                                 paddingAngle={2}
-                                onClick={(_row, index) =>
-                                    select(data[index].id)
+                                onClick={(row) =>
+                                    select((row.payload as EconomicGroup).id)
                                 }
                                 isAnimationActive="auto"
                                 animationBegin={60}
@@ -125,64 +158,54 @@ export function DistributionChart({
                                     <Cell
                                         key={row.id}
                                         fill={row.fill}
-                                        className={
-                                            onSelect && row.id !== 'others'
-                                                ? 'cursor-pointer'
-                                                : ''
-                                        }
+                                        className="cursor-pointer"
                                     />
                                 ))}
                             </Pie>
                         </PieChart>
                     </ChartContainer>
                     <dl className="flex flex-col gap-3 text-sm">
-                        {data.map((row) => (
-                            <div
-                                key={row.id}
-                                className="flex flex-wrap items-start justify-between gap-2"
-                            >
-                                <dt className="flex min-w-0 flex-1 basis-28 items-start gap-2">
-                                    <span
-                                        className="mt-0.5 size-2.5 shrink-0 rounded-sm"
-                                        style={{ background: row.fill }}
-                                    />
-                                    <button
-                                        type="button"
-                                        className="min-w-0 rounded text-left break-words focus-visible:ring-2 focus-visible:ring-ring"
-                                        disabled={
-                                            !onSelect || row.id === 'others'
-                                        }
-                                        onClick={() => select(row.id)}
-                                    >
-                                        {row.name}
-                                    </button>
-                                </dt>
-                                <dd className="shrink-0 text-right financial-value">
-                                    {money(row.value)}
-                                    <br />
-                                    <span className="text-muted-foreground">
-                                        {percent(
-                                            (cents(row[key]) * 100) / total,
+                        {data.map((row) => {
+                            const href = getHref?.(row.id);
+                            return (
+                                <div
+                                    key={row.id}
+                                    className="flex flex-wrap items-start justify-between gap-2"
+                                >
+                                    <dt className="flex min-w-0 flex-1 basis-28 items-start gap-2">
+                                        <span
+                                            className="mt-0.5 size-2.5 shrink-0 rounded-sm"
+                                            style={{ background: row.fill }}
+                                        />
+                                        {href ? (
+                                            <Link
+                                                href={href}
+                                                className="min-w-0 rounded text-left break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                                            >
+                                                {row.name}
+                                            </Link>
+                                        ) : (
+                                            <span className="min-w-0 break-words">
+                                                {row.name}
+                                            </span>
                                         )}
-                                    </span>
-                                </dd>
-                            </div>
-                        ))}
+                                    </dt>
+                                    <dd className="shrink-0 text-right financial-value">
+                                        {money(row.value)}
+                                        <br />
+                                        <span className="text-muted-foreground">
+                                            {percent(
+                                                (cents(row[key]) * 100) / total,
+                                            )}
+                                        </span>
+                                    </dd>
+                                </div>
+                            );
+                        })}
                     </dl>
                 </div>
             )}
-            <p className="mt-3 text-sm text-muted-foreground">
-                Denominatore: {money(values[key])} di importi positivi.
-                {vendorConcentration && total > 0 && (
-                    <>
-                        {' '}
-                        Quota dei primi tre fornitori:{' '}
-                        {percent((concentration * 100) / total)} (esclude «Senza
-                        fornitore» dal numeratore).
-                    </>
-                )}
-            </p>
-            <Reconciliation values={values} metric={metric} />
+            <Reconciliation values={displayedValues} metric={metric} />
         </AnalyticsCard>
     );
 }

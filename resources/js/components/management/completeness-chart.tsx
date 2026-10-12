@@ -1,4 +1,5 @@
-import { Bar, BarChart, XAxis, YAxis } from 'recharts';
+import { useState } from 'react';
+import { Bar, BarChart, Rectangle, XAxis, YAxis } from 'recharts';
 import {
     ChartContainer,
     ChartTooltip,
@@ -6,7 +7,7 @@ import {
 } from '@/components/ui/chart';
 import { palette, percent } from './analytics-helpers';
 import type { Completeness } from './analytics-types';
-import { AnalyticsCard, EmptyChart } from './analytics-ui';
+import { AnalyticsCard, ChartReset, EmptyChart } from './analytics-ui';
 const labels = {
     complete: 'Entrambi presenti',
     allocated_only: 'Solo allocato',
@@ -14,7 +15,13 @@ const labels = {
     missing: 'Entrambi mancanti',
 };
 export function CompletenessChart({ rows }: { rows: Completeness[] }) {
-    const total = rows.reduce((sum, row) => sum + row.count, 0);
+    const [selected, setSelected] = useState<Completeness['id'] | null>(null);
+    const select = (id: Completeness['id']) =>
+        setSelected((current) => (current === id ? null : id));
+    const displayed = rows.filter(
+        (row) => selected === null || row.id === selected,
+    );
+    const total = displayed.reduce((sum, row) => sum + row.count, 0);
     const config = Object.fromEntries(
         rows.map((row, index) => [
             row.id,
@@ -24,7 +31,11 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
     return (
         <AnalyticsCard
             title="Completezza dei dati"
-            description="Presenza degli importi nelle spese filtrate. Zero è un valore presente."
+            controls={
+                selected !== null && (
+                    <ChartReset onReset={() => setSelected(null)} />
+                )
+            }
         >
             {total === 0 ? (
                 <EmptyChart />
@@ -36,7 +47,7 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                             layout="vertical"
                             data={[
                                 Object.fromEntries(
-                                    rows.map((row) => [row.id, row.count]),
+                                    displayed.map((row) => [row.id, row.count]),
                                 ),
                             ]}
                         >
@@ -64,12 +75,32 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                                     />
                                 }
                             />
-                            {rows.map((row, index) => (
+                            {displayed.map((row, index) => (
                                 <Bar
                                     key={row.id}
                                     dataKey={row.id}
                                     stackId="complete"
                                     fill={`var(--color-${row.id})`}
+                                    className="cursor-pointer"
+                                    onClick={() => select(row.id)}
+                                    shape={(props) => (
+                                        <Rectangle
+                                            {...props}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label={`Filtra ${labels[row.id]}`}
+                                            aria-pressed={selected === row.id}
+                                            onKeyDown={(event) => {
+                                                if (
+                                                    event.key === 'Enter' ||
+                                                    event.key === ' '
+                                                ) {
+                                                    event.preventDefault();
+                                                    select(row.id);
+                                                }
+                                            }}
+                                        />
+                                    )}
                                     isAnimationActive="auto"
                                     animationBegin={60 + index * 60}
                                     animationDuration={650}
@@ -79,7 +110,7 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                         </BarChart>
                     </ChartContainer>
                     <dl className="mt-5 flex flex-col gap-4 text-sm">
-                        {rows.map((row, index) => (
+                        {displayed.map((row) => (
                             <div
                                 key={row.id}
                                 className="flex items-center justify-between gap-3"
@@ -87,19 +118,26 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                                 <dt className="flex items-center gap-2">
                                     <span
                                         className="size-2.5 shrink-0 rounded-sm"
-                                        style={{ background: palette[index] }}
+                                        style={{
+                                            background: config[row.id].color,
+                                        }}
                                     />
-                                    {labels[row.id]}
+                                    <button
+                                        type="button"
+                                        className="rounded text-left focus-visible:ring-2 focus-visible:ring-ring"
+                                        aria-pressed={selected === row.id}
+                                        onClick={() => select(row.id)}
+                                    >
+                                        {labels[row.id]}
+                                    </button>
                                 </dt>
                                 <dd className="font-medium whitespace-nowrap">
-                                    {row.count} · {percent(row.percentage)}
+                                    {row.count} ·{' '}
+                                    {percent((row.count * 100) / total)}
                                 </dd>
                             </div>
                         ))}
                     </dl>
-                    <p className="mt-5 text-sm text-muted-foreground">
-                        Percentuali su {total} spese.
-                    </p>
                 </>
             )}
         </AnalyticsCard>

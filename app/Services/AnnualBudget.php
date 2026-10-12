@@ -89,6 +89,7 @@ class AnnualBudget
             'entries' => $rows, 'totals' => $this->totals($included), 'groups' => $groups,
             'cost_center_groups' => array_map(fn ($group) => $this->totals($group), $centers),
             'owners' => $owners,
+            'has_missing_entries' => $expenses->contains(fn (Expense $expense) => ! isset($owners[$expense->id])),
         ];
     }
 

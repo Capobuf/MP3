@@ -52,6 +52,7 @@ export type BudgetSnapshot = {
     groups: Record<BudgetType, BudgetTotals>;
     cost_center_groups: Record<string, BudgetTotals>;
     owners: Record<string, number>;
+    has_missing_entries: boolean;
 };
 export type BudgetYear = {
     id: number;

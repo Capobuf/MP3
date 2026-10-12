@@ -1,4 +1,6 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { ArrowUpRight } from 'lucide-react';
+import { RecordMoreActions } from '@/components/management/record-more-actions';
+import { Head, Link } from '@inertiajs/react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
@@ -7,10 +9,14 @@ import { DetailBreakdownChart } from '@/components/management/detail-breakdown-c
 import { DetailKpis } from '@/components/management/detail-kpis';
 import { DetailNotes } from '@/components/management/detail-notes';
 import { ExpenseLines } from '@/components/management/expense-lines';
-import { dateLabel } from '@/components/management/helpers';
-import type { Expense } from '@/components/management/types';
-import { Badge } from '@/components/ui/badge';
+import {
+    InlineEdit,
+    saveInlineRecord,
+} from '@/components/management/inline-edit';
+import { dateLabel, decimalInput } from '@/components/management/helpers';
+import type { Expense, Options } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
     Card,
     CardContent,
@@ -23,11 +29,15 @@ import type { Tenant } from '@/types';
 export default function ExpenseDetail({
     tenant,
     expense,
+    options,
 }: {
     tenant: Tenant;
     expense: Expense;
+    options: Options;
 }) {
     const path = `/t/${tenant.slug}/expenses`;
+    const save = (field: string, value: unknown) =>
+        saveInlineRecord(`${path}/${expense.id}`, { [field]: value });
     const lines = expense.lines ?? [];
     const years =
         expense.contract_id && lines.length
@@ -47,9 +57,13 @@ export default function ExpenseDetail({
                         >
                             {tenant.name} / Spese / {expense.year}
                         </Link>
-                        <h1 className="mt-2 page-title [overflow-wrap:anywhere]">
-                            {expense.title}
-                        </h1>
+                        <InlineEdit
+                            value={expense.title}
+                            label="Titolo della spesa"
+                            as="h1"
+                            className="mt-2 page-title [overflow-wrap:anywhere]"
+                            onSave={(value) => save('title', value)}
+                        />
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                             <Badge variant="secondary">
                                 Imputazione {years}
@@ -64,13 +78,9 @@ export default function ExpenseDetail({
                         </div>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                        <Button
-                            onClick={() =>
-                                router.visit(`${path}/${expense.id}/edit`)
-                            }
-                        >
-                            Modifica spesa
-                        </Button>
+                        <RecordMoreActions
+                            href={`${path}/${expense.id}/edit`}
+                        />
                         <DeleteRecord
                             url={`${path}/${expense.id}`}
                             redirect={`${path}?year=${expense.year}`}
@@ -96,6 +106,41 @@ export default function ExpenseDetail({
                         <CardContent className="min-w-0 px-5">
                             <ExpenseLines
                                 readOnly
+                                onSaveLine={(key, field, value) =>
+                                    save(
+                                        'lines',
+                                        lines.map((line, index) => {
+                                            const data = {
+                                                description: line.description,
+                                                type: line.type,
+                                                unit_price: line.unit_price,
+                                                quantity: line.quantity,
+                                                period_starts_on:
+                                                    line.period_starts_on ??
+                                                    null,
+                                                period_ends_on:
+                                                    line.period_ends_on ?? null,
+                                                year: line.year ?? expense.year,
+                                            };
+                                            return String(line.id ?? index) ===
+                                                key
+                                                ? {
+                                                      ...data,
+                                                      [field]: [
+                                                          'unit_price',
+                                                          'quantity',
+                                                      ].includes(field)
+                                                          ? decimalInput(value)
+                                                          : field.endsWith(
+                                                                  '_on',
+                                                              )
+                                                            ? value || null
+                                                            : value,
+                                                  }
+                                                : data;
+                                        }),
+                                    )
+                                }
                                 showSummary={false}
                                 showHeading={false}
                                 contractMode={!!expense.contract_id}
@@ -107,8 +152,11 @@ export default function ExpenseDetail({
                         </CardContent>
                     </Card>
                     <DetailBreakdownChart
+                        key={JSON.stringify([
+                            expense.id,
+                            lines.map((line) => line.id),
+                        ])}
                         breakdown={expenseBreakdown(lines)}
-                        description="Il totale si distribuisce tra le righe della grandezza selezionata."
                     />
                 </div>
                 <section
@@ -124,7 +172,15 @@ export default function ExpenseDetail({
                                 Anno di imputazione
                             </dt>
                             <dd className="mt-1 text-sm font-medium">
-                                {years}
+                                {expense.contract_id ? (
+                                    years
+                                ) : (
+                                    <InlineEdit
+                                        value={String(expense.year)}
+                                        label="Anno di imputazione"
+                                        onSave={(value) => save('year', value)}
+                                    />
+                                )}
                             </dd>
                         </div>
                         {expense.period_starts_on && expense.period_ends_on && (
@@ -139,26 +195,80 @@ export default function ExpenseDetail({
                             </div>
                         )}
                         {(['vendor', 'contract', 'project'] as const).map(
-                            (relation) =>
-                                expense[relation] && (
+                            (relation) => {
+                                const label =
+                                    relation === 'vendor'
+                                        ? 'Fornitore'
+                                        : relation === 'contract'
+                                          ? 'Contratto'
+                                          : 'Progetto';
+                                const related = expense[relation];
+                                const choices =
+                                    options[
+                                        relation === 'vendor'
+                                            ? 'vendors'
+                                            : relation === 'contract'
+                                              ? 'contracts'
+                                              : 'projects'
+                                    ];
+                                return (
                                     <div key={relation}>
                                         <dt className="text-xs text-muted-foreground">
-                                            {relation === 'vendor'
-                                                ? 'Fornitore'
-                                                : relation === 'contract'
-                                                  ? 'Contratto'
-                                                  : 'Progetto'}
+                                            {label}
                                         </dt>
-                                        <dd className="mt-1 text-sm [overflow-wrap:anywhere]">
-                                            <Link
-                                                className="text-primary hover:underline"
-                                                href={`/t/${tenant.slug}/${relation}s/${expense[relation]!.id}`}
-                                            >
-                                                {expense[relation]!.name}
-                                            </Link>
+                                        <dd className="mt-1 flex items-center gap-2 text-sm [overflow-wrap:anywhere]">
+                                            <InlineEdit
+                                                value={
+                                                    expense[`${relation}_id`] ==
+                                                    null
+                                                        ? ''
+                                                        : String(
+                                                              expense[
+                                                                  `${relation}_id`
+                                                              ],
+                                                          )
+                                                }
+                                                label={label}
+                                                display={
+                                                    related?.name ?? 'Nessuno'
+                                                }
+                                                choices={[
+                                                    {
+                                                        value: '',
+                                                        label: 'Nessuno',
+                                                    },
+                                                    ...choices.map((item) => ({
+                                                        value: String(item.id),
+                                                        label: item.name,
+                                                    })),
+                                                ]}
+                                                onSave={(value) =>
+                                                    save(
+                                                        `${relation}_id`,
+                                                        value
+                                                            ? Number(value)
+                                                            : null,
+                                                    )
+                                                }
+                                            />
+                                            {related && (
+                                                <Button
+                                                    asChild
+                                                    variant="ghost"
+                                                    size="icon"
+                                                >
+                                                    <Link
+                                                        aria-label={`Apri ${related.name}`}
+                                                        href={`/t/${tenant.slug}/${relation}s/${related.id}`}
+                                                    >
+                                                        <ArrowUpRight />
+                                                    </Link>
+                                                </Button>
+                                            )}
                                         </dd>
                                     </div>
-                                ),
+                                );
+                            },
                         )}
                         {!!expense.cost_centers?.length && (
                             <div className="sm:col-span-2">
@@ -174,9 +284,11 @@ export default function ExpenseDetail({
                         )}
                     </dl>
                 </section>
-                {expense.notes && (
-                    <DetailNotes key={expense.id} text={expense.notes} />
-                )}
+                <DetailNotes
+                    key={expense.id}
+                    text={expense.notes ?? ''}
+                    onSave={(value) => save('notes', value || null)}
+                />
                 <AttachmentsSection
                     compact
                     key={`${tenant.id}:${expense.id}`}

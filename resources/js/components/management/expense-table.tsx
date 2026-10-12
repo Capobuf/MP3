@@ -1,6 +1,7 @@
+import { InlineEdit, saveInlineRecord } from './inline-edit';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, router, usePage } from '@inertiajs/react';
-import { ArrowDown, ArrowUp, Ellipsis } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpRight, Ellipsis } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -33,7 +34,13 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { CostCenterTags } from './cost-center-tags';
-import { api, dateLabel, money, varianceTextClass } from './helpers';
+import {
+    api,
+    dateLabel,
+    decimalInput,
+    money,
+    varianceTextClass,
+} from './helpers';
 import type { DeletionResult, Expense, Filters } from './types';
 
 type AmountField = 'allocated_amount' | 'actual_amount';
@@ -46,7 +53,6 @@ export function ExpenseTable({
     rows,
     loading = false,
     slug,
-    onEdit,
     showYear = false,
     contractMode = false,
     filters,
@@ -56,7 +62,6 @@ export function ExpenseTable({
     rows: Expense[];
     loading?: boolean;
     slug: string;
-    onEdit: (expense: Expense) => void;
     showYear?: boolean;
     contractMode?: boolean;
     filters?: Filters;
@@ -166,16 +171,27 @@ export function ExpenseTable({
     }
 
     function amount(expense: Expense, field: AmountField) {
-        return (
-            <button
-                type="button"
-                disabled={busy}
-                aria-label={`Modifica ${amountLabels[field].toLowerCase()} per ${expense.title}`}
-                className="min-h-9 rounded px-1 text-right text-sm font-medium tracking-normal whitespace-nowrap text-foreground tabular-nums hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                onClick={() => onEdit(expense)}
+        return expense.lines?.length ? (
+            <Link
+                href={`/t/${slug}/expenses/${expense.id}`}
+                title="Importo calcolato dalle righe economiche"
+                className="financial-value"
             >
                 {money(expense[field])}
-            </button>
+            </Link>
+        ) : (
+            <InlineEdit
+                value={expense[field]}
+                label={`${amountLabels[field]} per ${expense.title}`}
+                disabled={busy}
+                className="text-right financial-value"
+                display={money(expense[field])}
+                onSave={(value) =>
+                    saveInlineRecord(`/t/${slug}/expenses/${expense.id}`, {
+                        [field]: decimalInput(value),
+                    })
+                }
+            />
         );
     }
 
@@ -382,13 +398,33 @@ export function ExpenseTable({
                                     />
                                 </TableCell>
                                 <TableCell className="col-start-2 row-start-1 min-w-0 px-0 whitespace-normal @5xl/expense-table:px-2">
-                                    <Link
-                                        href={`/t/${slug}/expenses/${expense.id}`}
-                                        className="block rounded font-medium break-words focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                                        title={expense.title}
-                                    >
-                                        {expense.title}
-                                    </Link>
+                                    <div className="flex items-start gap-2">
+                                        <InlineEdit
+                                            value={expense.title}
+                                            label={`Titolo di ${expense.title}`}
+                                            disabled={busy}
+                                            className="flex-1 font-medium break-words"
+                                            onSave={(value) =>
+                                                saveInlineRecord(
+                                                    `/t/${slug}/expenses/${expense.id}`,
+                                                    { title: value },
+                                                )
+                                            }
+                                        />
+                                        <Button
+                                            asChild
+                                            variant="ghost"
+                                            size="icon"
+                                            disabled={busy}
+                                        >
+                                            <Link
+                                                href={`/t/${slug}/expenses/${expense.id}`}
+                                                aria-label={`Apri ${expense.title}`}
+                                            >
+                                                <ArrowUpRight />
+                                            </Link>
+                                        </Button>
+                                    </div>
                                     <p
                                         className="mt-1 line-clamp-2 text-sm text-muted-foreground"
                                         title={`${expense.vendor?.name ?? 'Senza fornitore'} · ${expense.project?.name ?? 'Senza progetto'}`}
@@ -495,12 +531,13 @@ export function ExpenseTable({
                                                         Apri dettaglio
                                                     </Link>
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    onSelect={() =>
-                                                        onEdit(expense)
-                                                    }
-                                                >
-                                                    Modifica
+                                                <DropdownMenuItem asChild>
+                                                    <Link
+                                                        href={`/t/${slug}/expenses/${expense.id}/edit`}
+                                                    >
+                                                        Gestisci righe e
+                                                        collegamenti
+                                                    </Link>
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem

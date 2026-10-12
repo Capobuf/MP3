@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { Link } from '@inertiajs/react';
 import {
     Bar,
     BarChart,
     CartesianGrid,
     ReferenceLine,
+    Rectangle,
     XAxis,
     YAxis,
 } from 'recharts';
@@ -15,34 +17,52 @@ import {
 } from '@/components/ui/chart';
 import { compactMoney, economicConfig, topGroups } from './analytics-helpers';
 import type { EconomicGroup, GroupId, Metric } from './analytics-types';
-import { AnalyticsCard, EmptyChart, MetricSelect } from './analytics-ui';
+import {
+    AnalyticsCard,
+    ChartReset,
+    EmptyChart,
+    MetricSelect,
+} from './analytics-ui';
 import { money, varianceTextClass } from './helpers';
 
 export type ChartRow = EconomicGroup;
 export function EconomicChart({
     title,
     rows,
-    onSelect,
+    getHref,
 }: {
     title: string;
     rows: EconomicGroup[];
-    onSelect: (id: GroupId) => void;
+    getHref: (id: GroupId) => string | undefined;
 }) {
     const [metric, setMetric] = useState<Metric>('actual');
-    const groups = topGroups(rows, 10, metric);
-    const data = groups.map((row) => ({
-        ...row,
-        allocated: row.allocated === null ? null : Number(row.allocated),
-        actual: row.actual === null ? null : Number(row.actual),
-    }));
+    const [selected, setSelected] = useState<GroupId | null>(null);
+    const source =
+        selected === null || selected === 'others'
+            ? rows
+            : rows.filter((row) => row.id === selected);
+    const groups = topGroups(source, 10, metric);
+    const data = groups
+        .filter((row) => selected === null || row.id === selected)
+        .map((row) => ({
+            ...row,
+            allocated: row.allocated === null ? null : Number(row.allocated),
+            actual: row.actual === null ? null : Number(row.actual),
+        }));
     const select = (id: GroupId) => {
-        if (id !== 'others') onSelect(id);
+        setSelected((current) => (current === id ? null : id));
     };
     return (
         <AnalyticsCard
             title={title}
-            description="Primi 10 per la metrica selezionata, Altri e gruppi senza associazione. Clic per filtrare."
-            controls={<MetricSelect value={metric} onChange={setMetric} />}
+            controls={
+                <div className="flex items-center gap-2">
+                    <MetricSelect value={metric} onChange={setMetric} />
+                    {selected !== null && (
+                        <ChartReset onReset={() => setSelected(null)} />
+                    )}
+                </div>
+            }
         >
             {data.every(
                 (row) => row.allocated === null && row.actual === null,
@@ -76,11 +96,38 @@ export function EconomicChart({
                             interval={0}
                             tickLine={false}
                             axisLine={false}
-                            tickFormatter={(name: string) =>
-                                name.length > 23
-                                    ? `${name.slice(0, 22)}…`
-                                    : name
-                            }
+                            tick={({ x, y, index, payload }) => {
+                                const row = data[index];
+                                if (!row || row.name !== payload.value)
+                                    return <g />;
+                                const href = getHref(row.id);
+                                const label = (
+                                    <text
+                                        textAnchor="end"
+                                        dominantBaseline="middle"
+                                        fill="var(--muted-foreground)"
+                                    >
+                                        {row.name.length > 23
+                                            ? `${row.name.slice(0, 22)}…`
+                                            : row.name}
+                                    </text>
+                                );
+                                return (
+                                    <g transform={`translate(${x},${y})`}>
+                                        {href ? (
+                                            <Link
+                                                href={href}
+                                                aria-label={`Apri ${row.name}`}
+                                            >
+                                                <title>{row.name}</title>
+                                                {label}
+                                            </Link>
+                                        ) : (
+                                            label
+                                        )}
+                                    </g>
+                                );
+                            }}
                         />
                         <ReferenceLine x={0} stroke="var(--muted-foreground)" />
                         <ChartTooltip
@@ -134,9 +181,33 @@ export function EconomicChart({
                                 radius={3}
                                 maxBarSize={14}
                                 className="cursor-pointer"
-                                onClick={(_row, index) =>
-                                    select(data[index].id)
+                                onClick={(row) =>
+                                    select((row.payload as ChartRow).id)
                                 }
+                                shape={(props) => {
+                                    const row = props.payload as
+                                        | ChartRow
+                                        | undefined;
+                                    if (!row) return <g />;
+                                    return (
+                                        <Rectangle
+                                            {...props}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-pressed={row.id === selected}
+                                            aria-label={`Filtra ${row.name}`}
+                                            onKeyDown={(event) => {
+                                                if (
+                                                    event.key === 'Enter' ||
+                                                    event.key === ' '
+                                                ) {
+                                                    event.preventDefault();
+                                                    select(row.id);
+                                                }
+                                            }}
+                                        />
+                                    );
+                                }}
                                 isAnimationActive="auto"
                                 animationBegin={key === 'allocated' ? 60 : 140}
                                 animationDuration={650}
@@ -146,21 +217,6 @@ export function EconomicChart({
                     </BarChart>
                 </ChartContainer>
             )}
-            <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                {groups
-                    .filter((row) => row.id !== 'others')
-                    .map((row) => (
-                        <button
-                            key={row.id}
-                            type="button"
-                            className="max-w-full rounded text-left break-words text-primary focus-visible:ring-2 focus-visible:ring-ring"
-                            onClick={() => select(row.id)}
-                            title={row.name}
-                        >
-                            {row.name}
-                        </button>
-                    ))}
-            </div>
         </AnalyticsCard>
     );
 }

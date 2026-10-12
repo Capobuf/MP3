@@ -1,13 +1,8 @@
+import { Link } from '@inertiajs/react';
 import { useState } from 'react';
 import { Sankey } from 'recharts';
 import type { SankeyLinkProps, SankeyNodeProps } from 'recharts';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import {
     Empty,
@@ -16,7 +11,8 @@ import {
     EmptyTitle,
 } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { detailCents } from './detail-breakdown';
+import { ChartReset } from './analytics-ui';
+import { detailCents, detailDecimal } from './detail-breakdown';
 import { money } from './helpers';
 import type { DetailBreakdown } from './types';
 
@@ -28,12 +24,15 @@ const color = (index: number) => `var(--chart-${(index % 5) + 1})`;
 
 export function DetailBreakdownChart({
     breakdown,
-    description,
+    getHref,
 }: {
     breakdown: DetailBreakdown;
-    description: string;
+    getHref?: (id: string) => string | undefined;
 }) {
     const [selected, setSelected] = useState<'allocated' | 'actual'>('actual');
+    const [selectedItem, setSelectedItem] = useState<string | null>(null);
+    const selectItem = (id: string) =>
+        setSelectedItem((current) => (current === id ? null : id));
     const available = (metric: 'allocated' | 'actual') =>
         breakdown[metric].net !== null;
     const metric = available(selected)
@@ -42,7 +41,11 @@ export function DetailBreakdownChart({
           ? 'actual'
           : 'allocated';
     const current = breakdown[metric];
-    const items = current.items;
+    const items = current.items.filter(
+        (item) => selectedItem === null || item.id === selectedItem,
+    );
+    const itemColor = (id: string) =>
+        color(current.items.findIndex((item) => item.id === id));
     const gross = detailCents(current.positive);
     const negative = detailCents(current.negative);
     const showFlows =
@@ -59,8 +62,16 @@ export function DetailBreakdownChart({
             : `Totale ${metric === 'actual' ? 'effettivo' : 'previsto'}`;
     const data = {
         nodes: [
-            { name: source, amount: current.positive },
-            ...items.map((item) => ({ name: item.name, amount: item.amount })),
+            {
+                name: source,
+                amount: detailDecimal(
+                    items.reduce(
+                        (sum, item) => sum + detailCents(item.amount),
+                        0n,
+                    ),
+                ),
+            },
+            ...items.map((item) => ({ ...item })),
         ],
         links: items.map((item, index) => ({
             source: 0,
@@ -68,16 +79,11 @@ export function DetailBreakdownChart({
             value: Number(detailCents(item.amount)),
         })),
     };
-    const node = ({ x, y, width, height, index }: SankeyNodeProps) => (
-        <g>
-            <rect
-                x={x}
-                y={y}
-                width={width}
-                height={height}
-                rx={3}
-                fill={color(index === 0 ? 0 : index - 1)}
-            />
+    const node = ({ x, y, width, height, index }: SankeyNodeProps) => {
+        const item = items[index - 1];
+        if (index !== 0 && !item) return <g />;
+        const href = item && getHref?.(item.id);
+        const label = (
             <text
                 x={index === 0 ? x + width + 8 : x - 8}
                 y={y + height / 2}
@@ -88,12 +94,49 @@ export function DetailBreakdownChart({
             >
                 {index === 0
                     ? 'Totale'
-                    : data.nodes[index].name.length > 20
-                      ? `${data.nodes[index].name.slice(0, 19)}…`
-                      : data.nodes[index].name}
+                    : item.name.length > 20
+                      ? `${item.name.slice(0, 19)}…`
+                      : item.name}
             </text>
-        </g>
-    );
+        );
+        return (
+            <g>
+                <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    rx={3}
+                    fill={item ? itemColor(item.id) : color(0)}
+                    className={item ? 'cursor-pointer' : undefined}
+                    role={item ? 'button' : undefined}
+                    tabIndex={item ? 0 : undefined}
+                    aria-label={item ? `Filtra ${item.name}` : undefined}
+                    aria-pressed={item ? selectedItem === item.id : undefined}
+                    onClick={() => {
+                        if (item) selectItem(item.id);
+                    }}
+                    onKeyDown={(event) => {
+                        if (
+                            item &&
+                            (event.key === 'Enter' || event.key === ' ')
+                        ) {
+                            event.preventDefault();
+                            selectItem(item.id);
+                        }
+                    }}
+                />
+                {href ? (
+                    <Link href={href} aria-label={`Apri ${item.name}`}>
+                        <title>{item.name}</title>
+                        {label}
+                    </Link>
+                ) : (
+                    label
+                )}
+            </g>
+        );
+    };
     const link = ({
         sourceX,
         sourceY,
@@ -105,10 +148,14 @@ export function DetailBreakdownChart({
         index,
     }: SankeyLinkProps) => (
         <path
-            className="recharts-sankey-link"
+            className="recharts-sankey-link cursor-pointer"
+            onClick={() => {
+                const item = items[index];
+                if (item) selectItem(item.id);
+            }}
             d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
             fill="none"
-            stroke={color(index)}
+            stroke={items[index] ? itemColor(items[index].id) : color(index)}
             strokeOpacity={0.35}
             strokeWidth={linkWidth}
         />
@@ -116,35 +163,39 @@ export function DetailBreakdownChart({
     return (
         <Card className="@container/breakdown min-w-0 detail-enter gap-4 self-start">
             <CardHeader className="gap-3 px-5">
-                <div className="flex flex-col gap-1.5">
-                    <CardTitle>Ripartizione economica</CardTitle>
-                    <CardDescription>{description}</CardDescription>
+                <CardTitle>Ripartizione economica</CardTitle>
+                <div className="flex items-center gap-2">
+                    <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        size="sm"
+                        value={metric}
+                        onValueChange={(value) => {
+                            if (value === 'allocated' || value === 'actual') {
+                                setSelected(value);
+                                setSelectedItem(null);
+                            }
+                        }}
+                        aria-label="Importi della ripartizione"
+                        className="justify-self-start"
+                    >
+                        <ToggleGroupItem
+                            value="allocated"
+                            disabled={!available('allocated')}
+                        >
+                            Previsto
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                            value="actual"
+                            disabled={!available('actual')}
+                        >
+                            Effettivo
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                    {selectedItem !== null && (
+                        <ChartReset onReset={() => setSelectedItem(null)} />
+                    )}
                 </div>
-                <ToggleGroup
-                    type="single"
-                    variant="outline"
-                    size="sm"
-                    value={metric}
-                    onValueChange={(value) => {
-                        if (value === 'allocated' || value === 'actual')
-                            setSelected(value);
-                    }}
-                    aria-label="Importi della ripartizione"
-                    className="justify-self-start"
-                >
-                    <ToggleGroupItem
-                        value="allocated"
-                        disabled={!available('allocated')}
-                    >
-                        Previsto
-                    </ToggleGroupItem>
-                    <ToggleGroupItem
-                        value="actual"
-                        disabled={!available('actual')}
-                    >
-                        Effettivo
-                    </ToggleGroupItem>
-                </ToggleGroup>
             </CardHeader>
             <CardContent
                 className="flex min-w-0 flex-col gap-4 px-5"
@@ -156,11 +207,10 @@ export function DetailBreakdownChart({
                         {money(current.net === null ? null : current.positive)}
                     </p>
                 </div>
-                {showFlows && items.length > 1 && (
+                {showFlows && items.length > 0 && (
                     <div
                         key={metric}
                         className="hidden detail-enter @sm/breakdown:block"
-                        aria-hidden="true"
                     >
                         <ChartContainer
                             className="aspect-auto w-full"
@@ -247,36 +297,62 @@ export function DetailBreakdownChart({
                         aria-label="Voci positive in ordine di importo"
                         className="flex min-w-0 flex-col gap-3"
                     >
-                        {items.map((item, index) => (
-                            <li key={item.id} className="min-w-0">
-                                <div className="flex items-start justify-between gap-3 text-sm">
-                                    <span
-                                        className="min-w-0 break-words"
-                                        title={item.name}
-                                    >
-                                        {item.name}
-                                    </span>
-                                    <span className="shrink-0 text-right financial-value">
-                                        {money(item.amount)}
-                                        <span className="block text-xs text-muted-foreground">
-                                            {share(item.amount)}
+                        {items.map((item) => {
+                            const href = getHref?.(item.id);
+                            return (
+                                <li key={item.id} className="min-w-0">
+                                    <div className="flex items-start justify-between gap-3 text-sm">
+                                        {href ? (
+                                            <Link
+                                                className="min-w-0 rounded break-words text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                                                href={href}
+                                                title={item.name}
+                                                aria-label={`Apri ${item.name}`}
+                                            >
+                                                {item.name}
+                                            </Link>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                className="min-w-0 rounded text-left break-words focus-visible:ring-2 focus-visible:ring-ring"
+                                                title={item.name}
+                                                aria-pressed={
+                                                    selectedItem === item.id
+                                                }
+                                                onClick={() =>
+                                                    selectItem(item.id)
+                                                }
+                                            >
+                                                {item.name}
+                                            </button>
+                                        )}
+                                        <span className="shrink-0 text-right financial-value">
+                                            {money(item.amount)}
+                                            <span className="block text-xs text-muted-foreground">
+                                                {share(item.amount)}
+                                            </span>
                                         </span>
-                                    </span>
-                                </div>
-                                <div
-                                    className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted"
-                                    aria-hidden="true"
-                                >
-                                    <div
-                                        className="h-full rounded-full transition-[width] duration-300"
-                                        style={{
-                                            width: `${(Number(detailCents(item.amount)) / Number(gross)) * 100}%`,
-                                            backgroundColor: color(index),
-                                        }}
-                                    />
-                                </div>
-                            </li>
-                        ))}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="mt-1.5 block h-3 w-full overflow-hidden rounded-full bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                                        aria-label={`Filtra ${item.name}`}
+                                        aria-pressed={selectedItem === item.id}
+                                        onClick={() => selectItem(item.id)}
+                                    >
+                                        <div
+                                            className="h-full rounded-full transition-[width] duration-300"
+                                            style={{
+                                                width: `${(Number(detailCents(item.amount)) / Number(gross)) * 100}%`,
+                                                backgroundColor: itemColor(
+                                                    item.id,
+                                                ),
+                                            }}
+                                        />
+                                    </button>
+                                </li>
+                            );
+                        })}
                     </ol>
                 )}
                 {negative < 0n && (
@@ -294,14 +370,6 @@ export function DetailBreakdownChart({
                             {money(current.net)}
                         </dd>
                     </dl>
-                )}
-                {(current.missing > 0 || current.zero > 0) && (
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                        {current.missing > 0 &&
-                            `${current.missing} voci con importo assente: ripartizione parziale. `}
-                        {current.zero > 0 &&
-                            `${current.zero} voci a zero, senza flussi.`}
-                    </p>
                 )}
             </CardContent>
         </Card>

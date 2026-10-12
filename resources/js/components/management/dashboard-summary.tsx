@@ -4,7 +4,6 @@ import {
     Card,
     CardAction,
     CardDescription,
-    CardFooter,
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
@@ -72,20 +71,16 @@ export function DashboardSummary({
     year,
     loading = false,
     scope = 'expenses',
-    comparableCount,
 }: {
     analytics: SummaryAnalytics;
     year: number;
     loading?: boolean;
     scope?: 'expenses' | 'budget';
-    comparableCount?: number;
 }) {
     const { current, previous, comparisons } = analytics;
     const previousYear = previous?.year ?? year - 1;
-    const complete = current.count - current.incomplete;
     const points = comparisons.completeness.points;
     const isBudget = scope === 'budget';
-    const unit = isBudget ? 'voci' : 'spese';
     return (
         <div className="@container/summary flex flex-col gap-3">
             <div className="summary-grid @md/summary:grid-cols-2 @5xl/summary:grid-cols-4">
@@ -146,24 +141,6 @@ export function DashboardSummary({
                                         />
                                     )}
                                 </CardHeader>
-                                <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
-                                    <div className="font-medium">
-                                        {comparable
-                                            ? `${money(comparison.difference)} ${metric === 'variance' ? 'di differenza sullo scostamento' : 'rispetto al'} ${previousYear}`
-                                            : previous
-                                              ? `Confronto con ${previousYear} non disponibile`
-                                              : 'Nessun dato di confronto'}
-                                    </div>
-                                    <div className="text-muted-foreground">
-                                        {metric === 'allocated'
-                                            ? 'Importi previsti presenti'
-                                            : metric === 'actual'
-                                              ? 'Costi reali registrati'
-                                              : isBudget
-                                                ? `${comparableCount} spese o voci libere confrontabili`
-                                                : `${complete} spese con entrambi gli importi`}
-                                    </div>
-                                </CardFooter>
                             </Card>
                         );
                     },
@@ -189,23 +166,8 @@ export function DashboardSummary({
                             />
                         )}
                     </CardHeader>
-                    <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
-                        <div className="font-medium">
-                            {complete}/{current.count} {unit} complete
-                        </div>
-                        <div className="text-muted-foreground">
-                            {previous && points !== null
-                                ? `${signedNumber.format(points)}% rispetto al ${previousYear}`
-                                : 'Confronto annuale non disponibile'}
-                        </div>
-                    </CardFooter>
                 </Card>
             </div>
-            <p className="text-sm text-muted-foreground">
-                {current.count} {unit} nel perimetro · {current.incomplete}{' '}
-                incomplete. Scostamento = effettivo − allocato, soltanto per
-                importi entrambi presenti. Effettivo indica costi registrati.
-            </p>
         </div>
     );
 }

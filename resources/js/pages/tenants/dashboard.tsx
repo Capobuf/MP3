@@ -1,4 +1,3 @@
-import { changeEconomicYear } from '@/lib/economic-year';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { AnalyticsLoadingContext } from '@/components/management/analytics-ui';
 import { Head } from '@inertiajs/react';
@@ -11,10 +10,7 @@ import type {
 import { AnnualComparisonChart } from '@/components/management/annual-comparison-chart';
 import { CompletenessChart } from '@/components/management/completeness-chart';
 import { ContractExpiryChart } from '@/components/management/contract-expiry-chart';
-import {
-    DashboardFilters,
-    applyFilters,
-} from '@/components/management/dashboard-filters';
+import { DashboardFilters } from '@/components/management/dashboard-filters';
 import { DashboardSummary } from '@/components/management/dashboard-summary';
 import { DistributionChart } from '@/components/management/distribution-chart';
 import { EconomicChart } from '@/components/management/economic-chart';
@@ -31,9 +27,15 @@ export default function TenantDashboard(
     const path = `/t/${tenant.slug}/dashboard`;
     const year = filters.year!;
     const refresh = usePageRefresh(path);
-    const select = (field: EntityFilter, id: GroupId) => {
-        if (!tableBusy && id !== 'others')
-            applyFilters(path, { ...filters, [field]: String(id) });
+    const chartKey = JSON.stringify([tenant.id, filters]);
+    const recordHref = (field: EntityFilter, id: GroupId) => {
+        if (typeof id !== 'number') return undefined;
+        const catalog = {
+            vendor_id: 'vendors',
+            project_id: 'projects',
+            contract_id: 'contracts',
+        }[field];
+        return `/t/${tenant.slug}/${catalog}/${id}?year=${year}`;
     };
     return (
         <>
@@ -60,13 +62,14 @@ export default function TenantDashboard(
                         <h1 className="mt-1 page-title">
                             Panoramica economica
                         </h1>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            Allocazioni, costi registrati e qualità dei dati nel
-                            perimetro selezionato.
-                            <span role="status">
-                                {refresh.visible ? ' Aggiornamento…' : ''}
-                            </span>
-                        </p>
+                        {refresh.visible && (
+                            <p
+                                className="mt-2 text-sm text-muted-foreground"
+                                role="status"
+                            >
+                                Aggiornamento…
+                            </p>
+                        )}
                     </div>
                 </header>
                 <DashboardFilters
@@ -96,15 +99,13 @@ export default function TenantDashboard(
                         <div className="grid min-w-0 gap-4 xl:grid-cols-3">
                             <div className="min-w-0 xl:col-span-2">
                                 <AnnualComparisonChart
+                                    key={`${chartKey}:annual`}
                                     rows={analytics.annual}
                                     year={year}
-                                    onSelect={(year) => {
-                                        if (!tableBusy && !refresh.pending)
-                                            changeEconomicYear(year);
-                                    }}
                                 />
                             </div>
                             <CompletenessChart
+                                key={`${chartKey}:completeness`}
                                 rows={analytics.current.completeness}
                             />
                         </div>
@@ -118,16 +119,18 @@ export default function TenantDashboard(
                         </h2>
                         <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                             <DistributionChart
+                                key={`${chartKey}:vendors-distribution`}
                                 title="Distribuzione percentuale per fornitore"
                                 rows={analytics.vendors}
                                 values={analytics.current}
                                 vendorConcentration
-                                onSelect={(id) => select('vendor_id', id)}
+                                getHref={(id) => recordHref('vendor_id', id)}
                             />
                             <EconomicChart
+                                key={`${chartKey}:vendors-ranking`}
                                 title="Classifica fornitori"
                                 rows={analytics.vendors}
-                                onSelect={(id) => select('vendor_id', id)}
+                                getHref={(id) => recordHref('vendor_id', id)}
                             />
                         </div>
                     </section>
@@ -136,8 +139,9 @@ export default function TenantDashboard(
                         aria-label="Flussi economici"
                     >
                         <ExpenseSankey
+                            key={`${chartKey}:flows`}
                             analytics={analytics}
-                            onSelect={select}
+                            getHref={recordHref}
                         />
                     </section>
                     <section
@@ -152,11 +156,13 @@ export default function TenantDashboard(
                         </h2>
                         <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                             <EconomicChart
+                                key={`${chartKey}:projects`}
                                 title="Allocato ed effettivo per progetto"
                                 rows={analytics.projects}
-                                onSelect={(id) => select('project_id', id)}
+                                getHref={(id) => recordHref('project_id', id)}
                             />
                             <DistributionChart
+                                key={`${chartKey}:project-statuses`}
                                 title="Distribuzione per stato del progetto"
                                 rows={analytics.projectStatuses}
                                 values={analytics.current}
@@ -164,11 +170,13 @@ export default function TenantDashboard(
                         </div>
                         <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                             <EconomicChart
+                                key={`${chartKey}:contracts`}
                                 title="Spese per contratto"
                                 rows={analytics.contracts}
-                                onSelect={(id) => select('contract_id', id)}
+                                getHref={(id) => recordHref('contract_id', id)}
                             />
                             <ContractExpiryChart
+                                key={`${chartKey}:expiry`}
                                 expiry={analytics.expiry}
                                 slug={tenant.slug}
                             />
@@ -182,6 +190,7 @@ export default function TenantDashboard(
                             Scostamenti e criticità
                         </h2>
                         <VarianceChart
+                            key={`${chartKey}:variances`}
                             rows={analytics.variances}
                             slug={tenant.slug}
                             disabled={tableBusy}

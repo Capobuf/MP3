@@ -1,11 +1,12 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
+import { RotateCcw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Card,
     CardAction,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
@@ -16,14 +17,27 @@ import type { EconomicValues, Metric } from './analytics-types';
 
 export const AnalyticsLoadingContext = createContext(false);
 
+export function ChartReset({ onReset }: { onReset: () => void }) {
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onReset}
+            aria-label="Mostra tutti"
+            title="Mostra tutti"
+        >
+            <RotateCcw aria-hidden="true" />
+        </Button>
+    );
+}
+
 export function AnalyticsCard({
     title,
-    description,
     controls,
     children,
 }: {
     title: string;
-    description: ReactNode;
     controls?: ReactNode;
     children: ReactNode;
 }) {
@@ -33,11 +47,8 @@ export function AnalyticsCard({
                 <CardTitle className="text-base leading-snug">
                     {title}
                 </CardTitle>
-                <CardDescription className="col-span-full">
-                    {description}
-                </CardDescription>
                 {controls && (
-                    <CardAction className="col-start-1 row-span-1 row-start-3 justify-self-start @lg/card-header:col-start-2 @lg/card-header:row-start-1 @lg/card-header:justify-self-end">
+                    <CardAction className="col-start-1 row-span-1 row-start-2 justify-self-start @lg/card-header:col-start-2 @lg/card-header:row-start-1 @lg/card-header:justify-self-end">
                         {controls}
                     </CardAction>
                 )}

@@ -77,13 +77,6 @@ function BudgetHeader({
                 <h1 className="page-title">Budget</h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-                <SpreadsheetActions
-                    slug={props.tenant.slug}
-                    resource="budget"
-                    label="Budget"
-                    filters={{ year: props.selectedYear }}
-                    disabled={busy}
-                />
                 <Button
                     variant="outline"
                     onClick={() =>
@@ -119,6 +112,13 @@ function BudgetHeader({
                         </DropdownMenuContent>
                     </DropdownMenu>
                 )}
+                <SpreadsheetActions
+                    slug={props.tenant.slug}
+                    resource="budget"
+                    label="Budget"
+                    filters={{ year: props.selectedYear }}
+                    disabled={busy}
+                />
             </div>
         </header>
     );
@@ -204,6 +204,28 @@ function BudgetWorkspace({
             setLoading(false);
         }
     }
+    async function saveRecord(
+        resource: string,
+        id: number,
+        changes: Record<string, unknown>,
+    ) {
+        if (lock.current)
+            throw new Error('Attendi il completamento dell’operazione.');
+        lock.current = true;
+        setBusy(true);
+        try {
+            await api(
+                `/t/${props.tenant.slug}/${resource}/${id}`,
+                'PATCH',
+                changes,
+            );
+            const result = await api<{ budget: BudgetSnapshot }>(base);
+            setBudget(result.budget);
+        } finally {
+            lock.current = false;
+            setBusy(false);
+        }
+    }
     async function editExpense(id: number) {
         setLoading(true);
         try {
@@ -237,10 +259,9 @@ function BudgetWorkspace({
                     analytics={budgetSummary(totals, props.previousBudget)}
                     year={year.year}
                     scope="budget"
-                    comparableCount={totals.comparable_count}
                 />
             </section>
-            <BudgetSankey budget={budget} onSelect={setTypeFilter} />
+            <BudgetSankey budget={budget} />
             <div className="flex flex-wrap items-center justify-end gap-3">
                 <div className="flex gap-2">
                     <Button
@@ -283,6 +304,7 @@ function BudgetWorkspace({
                 setTypeFilter={setTypeFilter}
                 onAdd={() => setAdd(true)}
                 onMissing={() => setMissing(true)}
+                onRecordSave={saveRecord}
                 onExpenseEdit={(id) => {
                     void editExpense(id);
                 }}

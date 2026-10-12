@@ -1,17 +1,19 @@
-import { router } from '@inertiajs/react';
+import { useState } from 'react';
+import { Link } from '@inertiajs/react';
 import {
     Bar,
     BarChart,
     CartesianGrid,
     Cell,
     ReferenceLine,
+    Rectangle,
     XAxis,
     YAxis,
 } from 'recharts';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { compactMoney } from './analytics-helpers';
 import type { VarianceRow } from './analytics-types';
-import { AnalyticsCard, EmptyChart } from './analytics-ui';
+import { AnalyticsCard, ChartReset, EmptyChart } from './analytics-ui';
 import { money, varianceTextClass } from './helpers';
 
 export function VarianceChart({
@@ -23,19 +25,26 @@ export function VarianceChart({
     slug: string;
     disabled: boolean;
 }) {
-    const data = rows.map((row) => ({ ...row, value: Number(row.variance) }));
+    const [selected, setSelected] = useState<VarianceRow['id'] | null>(null);
+    const select = (id: VarianceRow['id']) =>
+        setSelected((current) => (current === id ? null : id));
+    const displayed = rows.filter(
+        (row) => selected === null || row.id === selected,
+    );
+    const data = displayed.map((row) => ({
+        ...row,
+        value: Number(row.variance),
+    }));
     const extent = Math.max(1, ...data.map((row) => Math.abs(row.value)));
-    const open = (id: number) => {
-        if (!disabled) router.get(`/t/${slug}/expenses/${id}`);
-    };
     return (
         <AnalyticsCard
             title="Principali sforamenti e risparmi"
-            description="Cinque maggiori sforamenti e risparmi. Seleziona una spesa per aprirla."
+            controls={
+                selected !== null && (
+                    <ChartReset onReset={() => setSelected(null)} />
+                )
+            }
         >
-            <p className="mb-3 text-sm text-muted-foreground">
-                Effettivo − allocato sulle sole spese con entrambi gli importi.
-            </p>
             {data.length === 0 ? (
                 <EmptyChart>
                     Nessuno scostamento non nullo confrontabile.
@@ -43,7 +52,7 @@ export function VarianceChart({
             ) : (
                 <ChartContainer
                     className="w-full"
-                    style={{ height: Math.max(320, rows.length * 40 + 50) }}
+                    style={{ height: Math.max(320, data.length * 40 + 50) }}
                     config={{
                         value: {
                             label: 'Scostamento',
@@ -68,11 +77,34 @@ export function VarianceChart({
                             dataKey="title"
                             interval={0}
                             width={145}
-                            tickFormatter={(title: string) =>
-                                title.length > 25
-                                    ? `${title.slice(0, 24)}…`
-                                    : title
-                            }
+                            tick={({ x, y, index, payload }) => {
+                                const row = data[index];
+                                if (!row || row.title !== payload.value)
+                                    return <g />;
+                                return (
+                                    <g transform={`translate(${x},${y})`}>
+                                        <Link
+                                            href={`/t/${slug}/expenses/${row.id}`}
+                                            aria-label={`Apri ${row.title}`}
+                                            onClick={(event) => {
+                                                if (disabled)
+                                                    event.preventDefault();
+                                            }}
+                                        >
+                                            <title>{row.title}</title>
+                                            <text
+                                                textAnchor="end"
+                                                dominantBaseline="middle"
+                                                fill="var(--muted-foreground)"
+                                            >
+                                                {row.title.length > 25
+                                                    ? `${row.title.slice(0, 24)}…`
+                                                    : row.title}
+                                            </text>
+                                        </Link>
+                                    </g>
+                                );
+                            }}
                             tickLine={false}
                             axisLine={false}
                         />
@@ -112,7 +144,33 @@ export function VarianceChart({
                             radius={3}
                             maxBarSize={24}
                             className="cursor-pointer"
-                            onClick={(_row, index) => open(data[index].id)}
+                            onClick={(row) =>
+                                select((row.payload as VarianceRow).id)
+                            }
+                            shape={(props) => {
+                                const row = props.payload as
+                                    | VarianceRow
+                                    | undefined;
+                                if (!row) return <g />;
+                                return (
+                                    <Rectangle
+                                        {...props}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Filtra ${row.title}`}
+                                        aria-pressed={selected === row.id}
+                                        onKeyDown={(event) => {
+                                            if (
+                                                event.key === 'Enter' ||
+                                                event.key === ' '
+                                            ) {
+                                                event.preventDefault();
+                                                select(row.id);
+                                            }
+                                        }}
+                                    />
+                                );
+                            }}
                             isAnimationActive="auto"
                             animationBegin={60}
                             animationDuration={650}
@@ -132,20 +190,6 @@ export function VarianceChart({
                     </BarChart>
                 </ChartContainer>
             )}
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                {rows.map((row) => (
-                    <button
-                        key={row.id}
-                        type="button"
-                        disabled={disabled}
-                        className="max-w-full rounded text-left break-words text-primary focus-visible:ring-2 focus-visible:ring-ring"
-                        onClick={() => open(row.id)}
-                        title={row.title}
-                    >
-                        {row.title}
-                    </button>
-                ))}
-            </div>
         </AnalyticsCard>
     );
 }

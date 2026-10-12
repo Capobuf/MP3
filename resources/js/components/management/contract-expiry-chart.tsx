@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link } from '@inertiajs/react';
-import { Bar, BarChart, Cell, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, Cell, Rectangle, XAxis, YAxis } from 'recharts';
 import { Button } from '@/components/ui/button';
 import {
     ChartContainer,
@@ -7,8 +8,7 @@ import {
     ChartTooltipContent,
 } from '@/components/ui/chart';
 import type { ContractExpiry } from './analytics-types';
-import { AnalyticsCard, EmptyChart } from './analytics-ui';
-import { dateLabel } from './helpers';
+import { AnalyticsCard, ChartReset, EmptyChart } from './analytics-ui';
 
 export function ContractExpiryChart({
     expiry,
@@ -17,11 +17,23 @@ export function ContractExpiryChart({
     expiry: ContractExpiry;
     slug: string;
 }) {
+    const [selected, setSelected] = useState<
+        ContractExpiry['groups'][number]['id'] | null
+    >(null);
+    const select = (id: ContractExpiry['groups'][number]['id']) =>
+        setSelected((current) => (current === id ? null : id));
+    const displayed = expiry.groups.filter(
+        (row) => selected === null || row.id === selected,
+    );
     const count = expiry.groups.reduce((sum, row) => sum + row.count, 0);
     return (
         <AnalyticsCard
             title="Scadenze contrattuali"
-            description={`Tutti i contratti, indipendentemente dai filtri economici. Al ${dateLabel(expiry.asOf)}.`}
+            controls={
+                selected !== null && (
+                    <ChartReset onReset={() => setSelected(null)} />
+                )
+            }
         >
             {count === 0 ? (
                 <EmptyChart>
@@ -36,7 +48,7 @@ export function ContractExpiryChart({
                 >
                     <BarChart
                         accessibilityLayer
-                        data={expiry.groups}
+                        data={displayed}
                         layout="vertical"
                         margin={{ right: 16 }}
                     >
@@ -54,12 +66,44 @@ export function ContractExpiryChart({
                         <Bar
                             dataKey="count"
                             radius={3}
+                            className="cursor-pointer"
+                            onClick={(row) =>
+                                select(
+                                    (
+                                        row.payload as ContractExpiry['groups'][number]
+                                    ).id,
+                                )
+                            }
+                            shape={(props) => {
+                                const row = props.payload as
+                                    | ContractExpiry['groups'][number]
+                                    | undefined;
+                                if (!row) return <g />;
+                                return (
+                                    <Rectangle
+                                        {...props}
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Filtra ${row.name}`}
+                                        aria-pressed={selected === row.id}
+                                        onKeyDown={(event) => {
+                                            if (
+                                                event.key === 'Enter' ||
+                                                event.key === ' '
+                                            ) {
+                                                event.preventDefault();
+                                                select(row.id);
+                                            }
+                                        }}
+                                    />
+                                );
+                            }}
                             isAnimationActive="auto"
                             animationBegin={60}
                             animationDuration={650}
                             animationEasing="cubic-bezier(0.22,1,0.36,1)"
                         >
-                            {expiry.groups.map((row) => (
+                            {displayed.map((row) => (
                                 <Cell
                                     key={row.id}
                                     fill={
@@ -73,9 +117,6 @@ export function ContractExpiryChart({
                     </BarChart>
                 </ChartContainer>
             )}
-            <p className="mt-3 text-sm text-muted-foreground">
-                {expiry.undated} contratti senza data finale.
-            </p>
             <Button
                 className="mt-3 max-w-full whitespace-normal"
                 variant="outline"

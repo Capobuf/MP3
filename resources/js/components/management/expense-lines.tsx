@@ -1,3 +1,4 @@
+import { InlineEdit } from './inline-edit';
 import { usePage } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -100,6 +101,7 @@ export function lineCents(line: ExpenseLine): bigint | null {
 export function ExpenseLines({
     lines,
     onChange,
+    onSaveLine,
     disabled = false,
     readOnly = false,
     showSummary = true,
@@ -111,6 +113,11 @@ export function ExpenseLines({
 }: {
     lines: DraftLine[];
     onChange?: (lines: DraftLine[]) => void;
+    onSaveLine?: (
+        key: string,
+        field: keyof ExpenseLine,
+        value: string,
+    ) => Promise<void>;
     disabled?: boolean;
     readOnly?: boolean;
     showSummary?: boolean;
@@ -132,7 +139,8 @@ export function ExpenseLines({
                 .toLocaleLowerCase('it')
                 .includes(search.toLocaleLowerCase('it')),
     );
-    const showYearColumn = contractMode && visible.some(periodCrossesYears);
+    const showYearColumn =
+        !!onSaveLine || (contractMode && visible.some(periodCrossesYears));
     const selectedLines = lines.filter((line) => selected.includes(line.key));
     const visibleSelected = visible.filter((line) =>
         selected.includes(line.key),
@@ -229,6 +237,32 @@ export function ExpenseLines({
     function resetFilters() {
         setSearch('');
         setFilter('all');
+    }
+    function editable(
+        line: DraftLine,
+        field: keyof ExpenseLine,
+        label: string,
+        display?: React.ReactNode,
+    ) {
+        if (!onSaveLine) return display ?? String(line[field] ?? '—');
+        return (
+            <InlineEdit
+                value={String(line[field] ?? '')}
+                label={label}
+                disabled={disabled}
+                type={field.endsWith('_on') ? 'date' : 'text'}
+                display={display}
+                options={
+                    field === 'type'
+                        ? [
+                              { value: 'allocated', label: allocatedLabel },
+                              { value: 'actual', label: 'Effettivo' },
+                          ]
+                        : undefined
+                }
+                onSave={(value) => onSaveLine(line.key, field, value)}
+            />
+        );
     }
     const format = (cents: bigint) => money(Number(cents) / 100);
     return (
@@ -660,17 +694,23 @@ export function ExpenseLines({
                                         )}
                                     >
                                         {readOnly ? (
-                                            <Badge
-                                                variant={
-                                                    line.type === 'allocated'
-                                                        ? 'outline'
-                                                        : 'secondary'
-                                                }
-                                            >
-                                                {line.type === 'allocated'
-                                                    ? allocatedLabel
-                                                    : 'Effettivo'}
-                                            </Badge>
+                                            editable(
+                                                line,
+                                                'type',
+                                                `Tipo ${label}`,
+                                                <Badge
+                                                    variant={
+                                                        line.type ===
+                                                        'allocated'
+                                                            ? 'outline'
+                                                            : 'secondary'
+                                                    }
+                                                >
+                                                    {line.type === 'allocated'
+                                                        ? allocatedLabel
+                                                        : 'Effettivo'}
+                                                </Badge>,
+                                            )
                                         ) : (
                                             <NativeSelect
                                                 aria-label={`Tipo ${label}`}
@@ -713,15 +753,34 @@ export function ExpenseLines({
                                     >
                                         {readOnly ? (
                                             <div className="flex flex-col gap-1.5">
-                                                <span>{line.description}</span>
-                                                <span className="financial-value text-xs text-muted-foreground md:hidden">
-                                                    {Number(
-                                                        line.quantity,
-                                                    ).toLocaleString('it-IT', {
-                                                        maximumFractionDigits: 4,
-                                                    })}{' '}
-                                                    × {money(line.unit_price)}
-                                                </span>
+                                                {editable(
+                                                    line,
+                                                    'description',
+                                                    `Descrizione ${label}`,
+                                                    line.description,
+                                                )}
+                                                <div className="flex items-center gap-1 financial-value text-xs text-muted-foreground md:hidden">
+                                                    {editable(
+                                                        line,
+                                                        'quantity',
+                                                        `Quantità ${label}`,
+                                                        Number(
+                                                            line.quantity,
+                                                        ).toLocaleString(
+                                                            'it-IT',
+                                                            {
+                                                                maximumFractionDigits: 4,
+                                                            },
+                                                        ),
+                                                    )}
+                                                    <span>×</span>
+                                                    {editable(
+                                                        line,
+                                                        'unit_price',
+                                                        `Prezzo unitario ${label}`,
+                                                        money(line.unit_price),
+                                                    )}
+                                                </div>
                                                 <Badge
                                                     className="self-start sm:hidden"
                                                     variant="outline"
@@ -779,7 +838,12 @@ export function ExpenseLines({
                                         )}
                                     >
                                         {readOnly ? (
-                                            money(line.unit_price)
+                                            editable(
+                                                line,
+                                                'unit_price',
+                                                `Prezzo unitario ${label}`,
+                                                money(line.unit_price),
+                                            )
                                         ) : (
                                             <MoneyField
                                                 aria-label={`Prezzo unitario ${label}`}
@@ -814,11 +878,16 @@ export function ExpenseLines({
                                         )}
                                     >
                                         {readOnly ? (
-                                            Number(
-                                                line.quantity,
-                                            ).toLocaleString('it-IT', {
-                                                maximumFractionDigits: 4,
-                                            })
+                                            editable(
+                                                line,
+                                                'quantity',
+                                                `Quantità ${label}`,
+                                                Number(
+                                                    line.quantity,
+                                                ).toLocaleString('it-IT', {
+                                                    maximumFractionDigits: 4,
+                                                }),
+                                            )
                                         ) : (
                                             <Input
                                                 aria-label={`Quantità ${label}`}
@@ -881,7 +950,12 @@ export function ExpenseLines({
                                                 className="min-w-44"
                                             >
                                                 {readOnly ? (
-                                                    dateLabel(line[field])
+                                                    editable(
+                                                        line,
+                                                        field,
+                                                        `${field === 'period_starts_on' ? 'Dal' : 'Al'} ${label}`,
+                                                        dateLabel(line[field]),
+                                                    )
                                                 ) : (
                                                     <DateField
                                                         id={`${line.key}-${field}`}
@@ -919,7 +993,14 @@ export function ExpenseLines({
                                     {showYearColumn && (
                                         <TableCell className="w-px">
                                             {readOnly ? (
-                                                periodCrossesYears(line) ? (
+                                                onSaveLine ? (
+                                                    editable(
+                                                        line,
+                                                        'year',
+                                                        `Anno ${label}`,
+                                                        line.year,
+                                                    )
+                                                ) : periodCrossesYears(line) ? (
                                                     line.year
                                                 ) : null
                                             ) : (

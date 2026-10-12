@@ -1,3 +1,9 @@
+import { ArrowUpRight } from 'lucide-react';
+import { RecordMoreActions } from '@/components/management/record-more-actions';
+import {
+    InlineEdit,
+    saveInlineRecord,
+} from '@/components/management/inline-edit';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -7,7 +13,11 @@ import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { ExpenseTable } from '@/components/management/expense-table';
 import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
 import { DetailNotes } from '@/components/management/detail-notes';
-import { dateLabel, money } from '@/components/management/helpers';
+import {
+    dateLabel,
+    decimalInput,
+    money,
+} from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import { DashboardSummary } from '@/components/management/dashboard-summary';
 import type { SummaryAnalytics } from '@/components/management/dashboard-summary';
@@ -29,6 +39,7 @@ export default function CatalogDetail({
     tenant,
     catalog,
     record,
+    options,
     expenses,
     analytics,
     breakdown,
@@ -49,17 +60,21 @@ export default function CatalogDetail({
 }) {
     const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/${catalog}`;
+    const save = (field: string, value: unknown) =>
+        saveInlineRecord(`${path}/${record.id}`, { [field]: value });
     const info =
         catalog === 'vendors'
             ? [
-                  ['Partita IVA', record.vat_number],
-                  ['Email', record.email],
-                  ['Telefono', record.phone],
+                  ['Partita IVA', 'vat_number', record.vat_number],
+                  ['Email', 'email', record.email],
+                  ['Telefono', 'phone', record.phone],
               ]
             : [
-                  ['Data iniziale', dateLabel(record.starts_on)],
-                  ['Data finale', dateLabel(record.ends_on)],
-                  ...(catalog === 'projects' ? [['Stato', record.status]] : []),
+                  ['Data iniziale', 'starts_on', record.starts_on],
+                  ['Data finale', 'ends_on', record.ends_on],
+                  ...(catalog === 'projects'
+                      ? [['Stato', 'status', record.status]]
+                      : []),
               ];
     const economics = (
         <>
@@ -119,11 +134,6 @@ export default function CatalogDetail({
                         slug={tenant.slug}
                         showYear
                         contractMode={catalog === 'contracts'}
-                        onEdit={(expense) =>
-                            router.visit(
-                                `/t/${tenant.slug}/expenses/${expense.id}/edit${catalog === 'contracts' ? `?contract_id=${record.id}` : ''}`,
-                            )
-                        }
                         onBusyChange={setTableBusy}
                     />
                     <div
@@ -140,8 +150,13 @@ export default function CatalogDetail({
                 {breakdown && (
                     <div className="order-1 min-w-0 @5xl/detail:order-2">
                         <DetailBreakdownChart
+                            key={`${tenant.slug}:${catalog}:${record.id}:${year}:${history}`}
                             breakdown={breakdown}
-                            description={`Totale delle spese collegate → singole spese · ${year}.`}
+                            getHref={(id) =>
+                                /^\d+$/.test(id)
+                                    ? `/t/${tenant.slug}/expenses/${id}`
+                                    : undefined
+                            }
                         />
                     </div>
                 )}
@@ -160,9 +175,14 @@ export default function CatalogDetail({
                         >
                             {tenant.name} / {labels[catalog]}
                         </Link>
-                        <h1 className="mt-2 page-title [overflow-wrap:anywhere]">
-                            {record.name}
-                        </h1>
+                        <InlineEdit
+                            value={record.name}
+                            label="Nome"
+                            disabled={tableBusy}
+                            as="h1"
+                            className="mt-2 page-title [overflow-wrap:anywhere]"
+                            onSave={(value) => save('name', value)}
+                        />
                         {catalog !== 'vendors' && (
                             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                                 {catalog === 'projects' && (
@@ -178,15 +198,11 @@ export default function CatalogDetail({
                             </div>
                         )}
                     </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                        <Button
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        <RecordMoreActions
+                            href={`${path}/${record.id}/edit`}
                             disabled={tableBusy}
-                            onClick={() =>
-                                router.visit(`${path}/${record.id}/edit`)
-                            }
-                        >
-                            Modifica
-                        </Button>
+                        />
                         <DeleteRecord
                             url={`${path}/${record.id}`}
                             redirect={path}
@@ -202,6 +218,7 @@ export default function CatalogDetail({
                                 year,
                             }}
                             exportOnly
+                            disabled={tableBusy}
                         />
                     </div>
                 </header>
@@ -212,52 +229,131 @@ export default function CatalogDetail({
                     </CardHeader>
                     <CardContent className="min-w-0">
                         <dl className="grid gap-5 sm:grid-cols-3">
-                            {info
-                                .filter(([, value]) => value && value !== '—')
-                                .map(([label, value]) => (
-                                    <div key={label}>
-                                        <dt className="text-sm text-muted-foreground">
-                                            {label}
-                                        </dt>
-                                        <dd className="mt-1 text-sm font-medium">
-                                            {value ?? '—'}
-                                        </dd>
-                                    </div>
-                                ))}
-                            {catalog === 'contracts' && record.vendor && (
+                            {info.map(([label, field, value]) => (
+                                <div key={label}>
+                                    <dt className="text-sm text-muted-foreground">
+                                        {label}
+                                    </dt>
+                                    <dd className="mt-1 text-sm font-medium">
+                                        <InlineEdit
+                                            value={value}
+                                            label={label!}
+                                            disabled={tableBusy}
+                                            type={
+                                                field?.endsWith('_on')
+                                                    ? 'date'
+                                                    : field === 'email'
+                                                      ? 'email'
+                                                      : 'text'
+                                            }
+                                            display={
+                                                field?.endsWith('_on')
+                                                    ? dateLabel(value)
+                                                    : value || 'Da inserire'
+                                            }
+                                            options={
+                                                field === 'status'
+                                                    ? [
+                                                          'pianificato',
+                                                          'attivo',
+                                                          'completato',
+                                                      ].map((value) => ({
+                                                          value,
+                                                          label: value,
+                                                      }))
+                                                    : undefined
+                                            }
+                                            onSave={(value) =>
+                                                save(field!, value || null)
+                                            }
+                                        />
+                                    </dd>
+                                </div>
+                            ))}
+                            {catalog === 'contracts' && (
                                 <div>
                                     <dt className="text-sm text-muted-foreground">
                                         Fornitore
                                     </dt>
-                                    <dd className="mt-1">
-                                        {record.vendor ? (
-                                            <Link
-                                                className="text-sm text-primary"
-                                                href={`/t/${tenant.slug}/vendors/${record.vendor.id}`}
+                                    <dd className="mt-1 flex items-center gap-2">
+                                        <InlineEdit
+                                            value={
+                                                record.vendor_id == null
+                                                    ? ''
+                                                    : String(record.vendor_id)
+                                            }
+                                            label="Fornitore"
+                                            disabled={tableBusy}
+                                            display={
+                                                record.vendor?.name ??
+                                                'Senza fornitore'
+                                            }
+                                            choices={[
+                                                {
+                                                    value: '',
+                                                    label: 'Senza fornitore',
+                                                },
+                                                ...options.vendors.map(
+                                                    (vendor) => ({
+                                                        value: String(
+                                                            vendor.id,
+                                                        ),
+                                                        label: vendor.name,
+                                                    }),
+                                                ),
+                                            ]}
+                                            onSave={(value) =>
+                                                save(
+                                                    'vendor_id',
+                                                    value
+                                                        ? Number(value)
+                                                        : null,
+                                                )
+                                            }
+                                        />
+                                        {record.vendor && (
+                                            <Button
+                                                asChild
+                                                variant="ghost"
+                                                size="icon"
                                             >
-                                                {record.vendor.name}
-                                            </Link>
-                                        ) : (
-                                            '—'
+                                                <Link
+                                                    aria-label={`Apri ${record.vendor.name}`}
+                                                    href={`/t/${tenant.slug}/vendors/${record.vendor.id}`}
+                                                >
+                                                    <ArrowUpRight />
+                                                </Link>
+                                            </Button>
                                         )}
                                     </dd>
                                 </div>
                             )}
-                            {catalog === 'contracts' &&
-                                record.reference_amount != null && (
-                                    <div>
-                                        <dt className="text-sm text-muted-foreground">
-                                            Valore di riferimento
-                                        </dt>
-                                        <dd className="mt-1 financial-value text-sm">
-                                            {money(record.reference_amount)}
-                                        </dd>
-                                        <p className="mt-1 text-xs text-muted-foreground">
-                                            Autonomo rispetto alle spese
-                                            collegate
-                                        </p>
-                                    </div>
-                                )}
+                            {catalog === 'contracts' && (
+                                <div>
+                                    <dt className="text-sm text-muted-foreground">
+                                        Valore di riferimento
+                                    </dt>
+                                    <dd className="mt-1 financial-value text-sm">
+                                        <InlineEdit
+                                            value={record.reference_amount}
+                                            label="Valore di riferimento"
+                                            disabled={tableBusy}
+                                            display={money(
+                                                record.reference_amount,
+                                            )}
+                                            onSave={(value) =>
+                                                save(
+                                                    'reference_amount',
+                                                    decimalInput(value),
+                                                )
+                                            }
+                                        />
+                                    </dd>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Autonomo rispetto alle spese collegate
+                                    </p>
+                                </div>
+                            )}
                         </dl>
                         {catalog !== 'vendors' &&
                             !!record.cost_centers?.length && (
@@ -282,13 +378,22 @@ export default function CatalogDetail({
                         )}
                     </CardContent>
                 </Card>
-                {(record.notes || record.description) && (
+                {
                     <DetailNotes
                         key={record.id}
                         text={record.notes ?? record.description ?? ''}
                         title={catalog === 'projects' ? 'Descrizione' : 'Note'}
+                        disabled={tableBusy}
+                        onSave={(value) =>
+                            save(
+                                catalog === 'projects'
+                                    ? 'description'
+                                    : 'notes',
+                                value || null,
+                            )
+                        }
                     />
-                )}
+                }
                 {catalog !== 'vendors' && (
                     <AttachmentsSection
                         compact

@@ -5,13 +5,11 @@ import {
     Card,
     CardHeader,
     CardTitle,
-    CardDescription,
     CardContent,
     CardFooter,
 } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Button } from '@/components/ui/button';
 import {
     Empty,
     EmptyHeader,
@@ -21,19 +19,20 @@ import {
 import { money } from './helpers';
 import { budgetLabels, budgetTypes } from './budget-types';
 import type { BudgetSnapshot, BudgetType } from './budget-types';
+import { ChartReset } from './analytics-ui';
 
-export function BudgetSankey({
-    budget,
-    onSelect,
-}: {
-    budget: BudgetSnapshot;
-    onSelect: (type: BudgetType) => void;
-}) {
+export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
     const [metric, setMetric] = useState<'allocated' | 'actual'>('allocated');
+    const [selected, setSelected] = useState<BudgetType | null>(null);
+    const onSelect = (type: BudgetType) =>
+        setSelected((current) => (current === type ? null : type));
+    const values = selected === null ? budget.totals : budget.groups[selected];
     const positive = `${metric}_positive` as const;
     const negative = `${metric}_negative` as const;
     const categories = budgetTypes.filter(
-        (type) => Number(budget.groups[type][positive]) > 0,
+        (type) =>
+            Number(budget.groups[type][positive]) > 0 &&
+            (selected === null || selected === type),
     );
     const data = {
         nodes: [
@@ -46,28 +45,56 @@ export function BudgetSankey({
             value: Number(budget.groups[type][positive]),
         })),
     };
-    const node = ({ x, y, width, height, index }: SankeyNodeProps) => (
-        <g>
-            <rect
-                x={x}
-                y={y}
-                width={width}
-                height={height}
-                rx={3}
-                fill={`var(--chart-${index + 1})`}
-            />
-            <text
-                x={index === 0 ? x + width + 8 : x - 8}
-                y={y + height / 2}
-                dominantBaseline="middle"
-                textAnchor={index === 0 ? 'start' : 'end'}
-                fill="var(--foreground)"
-                fontSize={12}
+    const node = ({ x, y, width, height, index }: SankeyNodeProps) => {
+        const item = data.nodes[index];
+        if (!item) return <g />;
+        return (
+            <g
+                role={index > 0 ? 'button' : undefined}
+                tabIndex={index > 0 ? 0 : undefined}
+                aria-label={index > 0 ? `Filtra ${item.name}` : undefined}
+                aria-pressed={
+                    index > 0 ? selected === categories[index - 1] : undefined
+                }
+                className={
+                    index > 0
+                        ? 'cursor-pointer outline-none focus:opacity-70'
+                        : ''
+                }
+                onClick={() => {
+                    if (index > 0) onSelect(categories[index - 1]);
+                }}
+                onKeyDown={(event) => {
+                    if (
+                        index > 0 &&
+                        (event.key === 'Enter' || event.key === ' ')
+                    ) {
+                        event.preventDefault();
+                        onSelect(categories[index - 1]);
+                    }
+                }}
             >
-                {data.nodes[index].name}
-            </text>
-        </g>
-    );
+                <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    rx={3}
+                    fill={`var(--chart-${index + 1})`}
+                />
+                <text
+                    x={index === 0 ? x + width + 8 : x - 8}
+                    y={y + height / 2}
+                    dominantBaseline="middle"
+                    textAnchor={index === 0 ? 'start' : 'end'}
+                    fill="var(--foreground)"
+                    fontSize={12}
+                >
+                    {item.name}
+                </text>
+            </g>
+        );
+    };
     const link = ({
         sourceX,
         sourceY,
@@ -89,27 +116,28 @@ export function BudgetSankey({
     return (
         <Card className="min-w-0 gap-3">
             <CardHeader className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex flex-col gap-1">
-                    <CardTitle>Ripartizione del Budget</CardTitle>
-                    <CardDescription>
-                        Le stesse attribuzioni della tabella, sulle voci
-                        incluse.
-                    </CardDescription>
+                <CardTitle>Ripartizione del Budget</CardTitle>
+                <div className="flex items-center gap-2">
+                    <ToggleGroup
+                        type="single"
+                        value={metric}
+                        onValueChange={(value) => {
+                            if (value) setMetric(value as typeof metric);
+                        }}
+                        variant="outline"
+                        aria-label="Importi del Sankey"
+                    >
+                        <ToggleGroupItem value="allocated">
+                            Previsto
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="actual">
+                            Effettivo
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                    {selected !== null && (
+                        <ChartReset onReset={() => setSelected(null)} />
+                    )}
                 </div>
-                <ToggleGroup
-                    type="single"
-                    value={metric}
-                    onValueChange={(value) => {
-                        if (value) setMetric(value as typeof metric);
-                    }}
-                    variant="outline"
-                    aria-label="Importi del Sankey"
-                >
-                    <ToggleGroupItem value="allocated">
-                        Previsto
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="actual">Effettivo</ToggleGroupItem>
-                </ToggleGroup>
             </CardHeader>
             <CardContent className="min-w-0">
                 {data.links.length ? (
@@ -168,25 +196,10 @@ export function BudgetSankey({
                 )}
             </CardContent>
             <CardFooter className="flex flex-col items-start gap-3">
-                <div className="flex flex-wrap gap-2">
-                    {budgetTypes.map((type) => (
-                        <Button
-                            key={type}
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onSelect(type)}
-                        >
-                            {budgetLabels[type]} ·{' '}
-                            {money(budget.groups[type][metric])}
-                        </Button>
-                    ))}
-                </div>
                 <p className="flex flex-wrap gap-x-5 gap-y-1 financial-value text-sm">
-                    <span>
-                        Positivi lordi: {money(budget.totals[positive])}
-                    </span>
-                    <span>Rettifiche: {money(budget.totals[negative])}</span>
-                    <span>Totale netto: {money(budget.totals[metric])}</span>
+                    <span>Positivi lordi: {money(values[positive])}</span>
+                    <span>Rettifiche: {money(values[negative])}</span>
+                    <span>Totale netto: {money(values[metric])}</span>
                 </p>
             </CardFooter>
         </Card>

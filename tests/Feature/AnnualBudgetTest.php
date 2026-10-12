@@ -52,11 +52,12 @@ class AnnualBudgetTest extends TestCase
     public function test_empty_years_are_explicit_and_unique(): void
     {
         $this->tenant->expenses()->create(['title' => 'Archivio', 'year' => 2027, 'allocated_amount' => '100']);
+        $this->getJson($this->url(''))->assertOk()->assertJsonPath('budget.has_missing_entries', false);
         $this->get('/t/budget/budget?year=2027')->assertInertia(fn (Assert $page) => $page->component('tenants/budget')->where('budgetYear', null)->where('budget', null));
         $this->postJson('/t/budget/budget/years', ['year' => 2027])->assertCreated();
         $this->postJson('/t/budget/budget/years', ['year' => 2027])->assertUnprocessable();
         $this->assertDatabaseCount('budget_entries', 0);
-        $this->get('/t/budget/budget?year=2027')->assertInertia(fn (Assert $page) => $page->where('budget.totals.allocated', '0.00')->has('budget.entries', 0));
+        $this->get('/t/budget/budget?year=2027')->assertInertia(fn (Assert $page) => $page->where('budget.totals.allocated', '0.00')->where('budget.has_missing_entries', true)->has('budget.entries', 0));
     }
 
     public function test_kpis_compare_only_the_previous_budget_of_the_same_tenant(): void
@@ -170,16 +171,18 @@ class AnnualBudgetTest extends TestCase
         $this->assertCount(3, $suggestions);
         $this->assertSame('20.00', $suggestions[0]['allocated']);
         $payload = ['entries' => array_map(fn ($row) => ['type' => $row['type'], 'source_id' => $row['source_id']], $suggestions)];
-        $this->postJson($this->url('entries/assist'), $payload)->assertOk()->assertJsonPath('budget.totals.allocated', '40.00');
-        $this->postJson($this->url('entries/assist'), $payload)->assertOk();
+        $this->getJson($this->url(''))->assertOk()->assertJsonPath('budget.has_missing_entries', true);
+        $this->postJson($this->url('entries/assist'), ['entries' => [$payload['entries'][0]]])->assertOk()->assertJsonPath('budget.has_missing_entries', true);
+        $this->postJson($this->url('entries/assist'), $payload)->assertOk()->assertJsonPath('budget.totals.allocated', '40.00')->assertJsonPath('budget.has_missing_entries', false);
+        $this->postJson($this->url('entries/assist'), $payload)->assertOk()->assertJsonPath('budget.has_missing_entries', false);
         $this->assertDatabaseCount('budget_entries', 3);
         $this->getJson($this->url('missing'))->assertOk()->assertJsonCount(0, 'suggestions');
         $id = $this->year->entries()->where('type', 'contract')->firstOrFail()->id;
-        $this->patchJson($this->url(), ['action' => 'exclude', 'ids' => [$id]])->assertOk();
+        $this->patchJson($this->url(), ['action' => 'exclude', 'ids' => [$id]])->assertOk()->assertJsonPath('budget.has_missing_entries', true);
         $this->getJson($this->url('missing'))->assertJsonPath('suggestions.0.state', 'excluded');
         $this->postJson($this->url('entries/assist'), $payload)->assertUnprocessable();
-        $this->add('contract', $contract->id, ['reactivate' => true]);
-        $this->patchJson($this->url(), ['action' => 'remove', 'ids' => [$id]])->assertOk();
+        $this->assertFalse($this->add('contract', $contract->id, ['reactivate' => true])['has_missing_entries']);
+        $this->patchJson($this->url(), ['action' => 'remove', 'ids' => [$id]])->assertOk()->assertJsonPath('budget.has_missing_entries', true);
         $this->getJson($this->url('missing'))->assertJsonPath('suggestions.0.state', 'removed');
         $this->postJson($this->url('entries/assist'), $payload)->assertUnprocessable();
         $this->assertSame(2, $this->year->entries()->count());

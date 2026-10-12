@@ -1,6 +1,10 @@
+import {
+    InlineEdit,
+    saveInlineRecord,
+} from '@/components/management/inline-edit';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Ellipsis, Search } from 'lucide-react';
+import { Plus, Ellipsis, ArrowUpRight, Search } from 'lucide-react';
 import { useState } from 'react';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
@@ -96,17 +100,17 @@ export default function CatalogPage({
                             }
                         </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button onClick={() => router.visit(`${path}/create`)}>
+                            <Plus data-icon="inline-start" />
+                            Nuovo {singular[catalog]}
+                        </Button>
                         <SpreadsheetActions
                             slug={tenant.slug}
                             resource={catalog}
                             label={labels[catalog]}
                             filters={filters}
                         />
-                        <Button onClick={() => router.visit(`${path}/create`)}>
-                            <Plus className="mr-2 size-4" />
-                            Nuovo {singular[catalog]}
-                        </Button>
                     </div>
                 </header>
                 <Card>
@@ -316,11 +320,34 @@ export default function CatalogPage({
                                     {records.data.map((record) => (
                                         <TableRow key={record.id}>
                                             <TableCell className="max-w-80 min-w-48 font-medium break-words whitespace-normal">
-                                                <Link
-                                                    href={`${path}/${record.id}`}
-                                                >
-                                                    {record.name}
-                                                </Link>
+                                                <div className="flex items-start gap-2">
+                                                    <InlineEdit
+                                                        value={record.name}
+                                                        label={`Nome di ${record.name}`}
+                                                        disabled={
+                                                            deleting !== null
+                                                        }
+                                                        className="flex-1"
+                                                        onSave={(value) =>
+                                                            saveInlineRecord(
+                                                                `${path}/${record.id}`,
+                                                                { name: value },
+                                                            )
+                                                        }
+                                                    />
+                                                    <Button
+                                                        asChild
+                                                        variant="ghost"
+                                                        size="icon"
+                                                    >
+                                                        <Link
+                                                            href={`${path}/${record.id}`}
+                                                            aria-label={`Apri ${record.name}`}
+                                                        >
+                                                            <ArrowUpRight />
+                                                        </Link>
+                                                    </Button>
+                                                </div>
                                                 {catalog !== 'vendors' && (
                                                     <CostCenterTags
                                                         centers={
@@ -332,14 +359,55 @@ export default function CatalogPage({
                                             <TableCell>
                                                 {catalog === 'vendors' ? (
                                                     <>
-                                                        <p>
-                                                            {record.email ??
-                                                                '—'}
-                                                        </p>
-                                                        <p className="text-sm text-muted-foreground">
-                                                            {record.phone ??
-                                                                '—'}
-                                                        </p>
+                                                        <div>
+                                                            <InlineEdit
+                                                                value={
+                                                                    record.email
+                                                                }
+                                                                label={`Email di ${record.name}`}
+                                                                type="email"
+                                                                disabled={
+                                                                    deleting !==
+                                                                    null
+                                                                }
+                                                                onSave={(
+                                                                    value,
+                                                                ) =>
+                                                                    saveInlineRecord(
+                                                                        `${path}/${record.id}`,
+                                                                        {
+                                                                            email:
+                                                                                value ||
+                                                                                null,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            <InlineEdit
+                                                                value={
+                                                                    record.phone
+                                                                }
+                                                                label={`Telefono di ${record.name}`}
+                                                                disabled={
+                                                                    deleting !==
+                                                                    null
+                                                                }
+                                                                onSave={(
+                                                                    value,
+                                                                ) =>
+                                                                    saveInlineRecord(
+                                                                        `${path}/${record.id}`,
+                                                                        {
+                                                                            phone:
+                                                                                value ||
+                                                                                null,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </div>
                                                     </>
                                                 ) : (
                                                     <>
@@ -351,19 +419,89 @@ export default function CatalogPage({
                                                                     'Senza fornitore'}
                                                             </p>
                                                         ) : (
-                                                            <Badge variant="secondary">
-                                                                {record.status}
-                                                            </Badge>
+                                                            <InlineEdit
+                                                                display={
+                                                                    <Badge variant="secondary">
+                                                                        {
+                                                                            record.status
+                                                                        }
+                                                                    </Badge>
+                                                                }
+                                                                value={
+                                                                    record.status
+                                                                }
+                                                                label={`Stato di ${record.name}`}
+                                                                options={[
+                                                                    'pianificato',
+                                                                    'attivo',
+                                                                    'completato',
+                                                                ].map(
+                                                                    (
+                                                                        value,
+                                                                    ) => ({
+                                                                        value,
+                                                                        label: value,
+                                                                    }),
+                                                                )}
+                                                                onSave={(
+                                                                    value,
+                                                                ) =>
+                                                                    saveInlineRecord(
+                                                                        `${path}/${record.id}`,
+                                                                        {
+                                                                            status: value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
                                                         )}
-                                                        <p className="mt-1 text-sm text-muted-foreground">
-                                                            {dateLabel(
-                                                                record.starts_on,
-                                                            )}{' '}
-                                                            →{' '}
-                                                            {dateLabel(
-                                                                record.ends_on,
-                                                            )}
-                                                        </p>
+                                                        <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+                                                            <InlineEdit
+                                                                value={
+                                                                    record.starts_on
+                                                                }
+                                                                type="date"
+                                                                label={`Data iniziale di ${record.name}`}
+                                                                display={dateLabel(
+                                                                    record.starts_on,
+                                                                )}
+                                                                onSave={(
+                                                                    value,
+                                                                ) =>
+                                                                    saveInlineRecord(
+                                                                        `${path}/${record.id}`,
+                                                                        {
+                                                                            starts_on:
+                                                                                value ||
+                                                                                null,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                            <span>→</span>
+                                                            <InlineEdit
+                                                                value={
+                                                                    record.ends_on
+                                                                }
+                                                                type="date"
+                                                                label={`Data finale di ${record.name}`}
+                                                                display={dateLabel(
+                                                                    record.ends_on,
+                                                                )}
+                                                                onSave={(
+                                                                    value,
+                                                                ) =>
+                                                                    saveInlineRecord(
+                                                                        `${path}/${record.id}`,
+                                                                        {
+                                                                            ends_on:
+                                                                                value ||
+                                                                                null,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </div>
                                                     </>
                                                 )}
                                             </TableCell>
@@ -396,13 +534,14 @@ export default function CatalogPage({
                                                                 </Link>
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
-                                                                onSelect={() =>
-                                                                    router.visit(
-                                                                        `${path}/${record.id}/edit`,
-                                                                    )
-                                                                }
+                                                                asChild
                                                             >
-                                                                Modifica
+                                                                <Link
+                                                                    href={`${path}/${record.id}/edit`}
+                                                                >
+                                                                    Gestisci
+                                                                    collegamenti
+                                                                </Link>
                                                             </DropdownMenuItem>
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem

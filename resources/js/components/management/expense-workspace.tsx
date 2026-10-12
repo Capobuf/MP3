@@ -1,4 +1,3 @@
-import { SpreadsheetActions } from './spreadsheet-actions';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -37,15 +36,6 @@ export function ExpenseWorkspace({
                     Dettaglio delle spese · {year}
                 </h2>
             )}
-            {!dashboard && (
-                <SpreadsheetActions
-                    slug={tenant.slug}
-                    resource="expenses"
-                    label="Spese"
-                    filters={filters}
-                    disabled={busy}
-                />
-            )}
             {showFilters && (
                 <DashboardFilters
                     tenant={tenant}
@@ -78,9 +68,6 @@ export function ExpenseWorkspace({
                                 ? 'desc'
                                 : 'asc',
                     })
-                }
-                onEdit={(record) =>
-                    router.visit(`/t/${tenant.slug}/expenses/${record.id}/edit`)
                 }
                 onBusyChange={(value) => {
                     setBusy(value);
