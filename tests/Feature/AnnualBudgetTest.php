@@ -59,6 +59,28 @@ class AnnualBudgetTest extends TestCase
         $this->get('/t/budget/budget?year=2027')->assertInertia(fn (Assert $page) => $page->where('budget.totals.allocated', '0.00')->has('budget.entries', 0));
     }
 
+    public function test_kpis_compare_only_the_previous_budget_of_the_same_tenant(): void
+    {
+        $this->get('/t/budget/budget?year=2026')->assertInertia(fn (Assert $page) => $page->where('previousBudget', null));
+
+        $previous = $this->tenant->budgetYears()->create(['year' => 2025]);
+        $previous->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'manual', 'description' => 'Inclusa', 'included' => true, 'manual_allocated' => '100.01', 'manual_actual' => '90.02']);
+        $previous->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'manual', 'description' => 'Esclusa', 'included' => false, 'manual_allocated' => '999.00']);
+        $this->tenant->expenses()->create(['title' => 'Fuori Budget', 'year' => 2025, 'allocated_amount' => '5000']);
+        $other = Tenant::create(['name' => 'Altro Budget', 'slug' => 'altro-budget']);
+        $other->budgetYears()->create(['year' => 2025])->entries()->create(['tenant_id' => $other->id, 'type' => 'manual', 'description' => 'Altro tenant', 'included' => true, 'manual_allocated' => '7000']);
+
+        $this->get('/t/budget/budget?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('previousBudget.year', 2025)
+            ->where('previousBudget.totals.allocated', '100.01')
+            ->where('previousBudget.totals.actual', '90.02')
+            ->where('previousBudget.totals.variance', '-9.99')
+            ->where('previousBudget.totals.count', 1)
+            ->where('previousBudget.totals.incomplete', 0));
+        $future = $this->tenant->budgetYears()->create(['year' => 2028]);
+        $this->get('/t/budget/budget?year='.$future->year)->assertInertia(fn (Assert $page) => $page->where('previousBudget', null));
+    }
+
     public function test_sources_are_references_and_removal_keeps_originals(): void
     {
         $contract = $this->tenant->contracts()->create(['name' => 'Contratto', 'reference_amount' => '90000']);

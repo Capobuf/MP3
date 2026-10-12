@@ -1,6 +1,7 @@
 import {
     Card,
     CardDescription,
+    CardFooter,
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
@@ -26,6 +27,7 @@ export function DetailKpis({
         {
             label: aggregate ? 'Totale previsto' : 'Allocato / Previsto',
             value: money(allocated),
+            context: 'Importi previsti presenti',
             hint: aggregate
                 ? 'Importi previsti delle spese collegate'
                 : 'Importo previsto della spesa',
@@ -33,11 +35,15 @@ export function DetailKpis({
         {
             label: aggregate ? 'Totale effettivo' : 'Effettivo',
             value: money(actual),
+            context: 'Importi effettivi presenti',
             hint: 'Costi effettivi registrati',
         },
         {
             label: aggregate ? 'Scostamento confrontabile' : 'Scostamento',
             value: variance == null ? 'Non determinabile' : money(variance),
+            context: aggregate
+                ? 'Confronto sulle voci complete'
+                : 'Confronto previsto / effettivo',
             hint: aggregate
                 ? `${count - incomplete} voci confrontabili${incomplete ? ` · confronto parziale: ${incomplete} da completare` : ''}`
                 : 'Effettivo meno previsto',
@@ -45,6 +51,9 @@ export function DetailKpis({
         {
             label: aggregate ? 'Voci economiche collegate' : 'Righe economiche',
             value: count.toLocaleString('it-IT'),
+            context: aggregate
+                ? 'Perimetro selezionato'
+                : 'Dettaglio della spesa',
             hint: aggregate
                 ? 'Spese e imputazioni nel perimetro selezionato'
                 : 'Righe previste ed effettive',
@@ -53,32 +62,28 @@ export function DetailKpis({
     return (
         <section
             aria-label="Riepilogo economico"
-            className="@container/detail-kpis"
+            className="@container/summary"
         >
-            <div className="summary-grid @md/detail-kpis:grid-cols-2 @5xl/detail-kpis:grid-cols-4">
+            <div className="summary-grid @md/summary:grid-cols-2 @5xl/summary:grid-cols-4">
                 {cards.map((card, index) => (
-                    <Card
-                        key={card.label}
-                        className="min-w-0 detail-enter gap-3 py-5 transition-shadow hover:shadow-md"
-                        style={{ animationDelay: `${index * 45}ms` }}
-                    >
-                        <CardHeader className="gap-3 px-5">
+                    <Card key={card.label} className="@container/card min-w-0">
+                        <CardHeader>
                             <CardDescription>{card.label}</CardDescription>
                             <CardTitle
                                 className={cn(
-                                    'financial-value text-2xl break-words tabular-nums',
+                                    'summary-value text-foreground',
                                     index === 2 && varianceTextClass(variance),
-                                    variance == null &&
-                                        index === 2 &&
-                                        'text-lg',
                                 )}
                             >
                                 {card.value}
                             </CardTitle>
-                            <p className="text-xs leading-relaxed text-muted-foreground">
-                                {card.hint}
-                            </p>
                         </CardHeader>
+                        <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
+                            <div className="font-medium">{card.context}</div>
+                            <div className="text-muted-foreground">
+                                {card.hint}
+                            </div>
+                        </CardFooter>
                     </Card>
                 ))}
             </div>

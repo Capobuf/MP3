@@ -12,7 +12,9 @@ import {
 } from '@/components/management/budget-entry-sheet';
 import { EntityForm } from '@/components/management/entity-form';
 import type { EntityFormHandle } from '@/components/management/entity-form';
-import { api, money, varianceTextClass } from '@/components/management/helpers';
+import { api } from '@/components/management/helpers';
+import { DashboardSummary } from '@/components/management/dashboard-summary';
+import { budgetSummary } from '@/components/management/budget-types';
 import type {
     BudgetProps,
     BudgetSnapshot,
@@ -20,13 +22,6 @@ import type {
 } from '@/components/management/budget-types';
 import type { RecordData } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardFooter,
-} from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -59,7 +54,6 @@ import {
 } from '@/components/ui/empty';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 
@@ -238,48 +232,14 @@ function BudgetWorkspace({
                     void mutate('copy', 'POST');
                 }}
             />
-            <div className="summary-grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-                {[
-                    {
-                        label: 'Budget previsto',
-                        value: money(totals.allocated),
-                        hint: 'Importi previsti disponibili nelle voci incluse',
-                    },
-                    {
-                        label: 'Spesa effettiva',
-                        value: money(totals.actual),
-                        hint: 'Importi effettivi registrati nelle voci incluse',
-                    },
-                    {
-                        label: 'Scostamento',
-                        value: money(totals.variance),
-                        hint: `${totals.comparable_count} spese o voci libere confrontabili · effettivo − previsto`,
-                    },
-                    {
-                        label: 'Completezza',
-                        value: `${totals.count - totals.incomplete} / ${totals.count}`,
-                        hint: `${totals.incomplete} voci con importi mancanti o non disponibili`,
-                    },
-                ].map((item) => (
-                    <Card key={item.label} className="@container/card min-w-0">
-                        <CardHeader>
-                            <CardDescription>{item.label}</CardDescription>
-                            <CardTitle
-                                className={cn(
-                                    'summary-value',
-                                    item.label === 'Scostamento' &&
-                                        varianceTextClass(totals.variance),
-                                )}
-                            >
-                                {item.value}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardFooter className="mt-auto text-sm text-muted-foreground">
-                            {item.hint}
-                        </CardFooter>
-                    </Card>
-                ))}
-            </div>
+            <section aria-label="Riepilogo budget">
+                <DashboardSummary
+                    analytics={budgetSummary(totals, props.previousBudget)}
+                    year={year.year}
+                    scope="budget"
+                    comparableCount={totals.comparable_count}
+                />
+            </section>
             <BudgetSankey budget={budget} onSelect={setTypeFilter} />
             <div className="flex flex-wrap items-center justify-end gap-3">
                 <div className="flex gap-2">

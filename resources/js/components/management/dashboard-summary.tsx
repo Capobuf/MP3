@@ -11,7 +11,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { percent } from './analytics-helpers';
-import type { ExpenseAnalytics } from './analytics-types';
+import type { EconomicSummary, ExpenseAnalytics } from './analytics-types';
 import { money, varianceTextClass } from './helpers';
 
 const signedNumber = new Intl.NumberFormat('it-IT', {
@@ -51,19 +51,41 @@ function ComparisonBadge({
     );
 }
 
+type SummaryValues = Pick<
+    EconomicSummary,
+    | 'allocated'
+    | 'actual'
+    | 'variance'
+    | 'count'
+    | 'incomplete'
+    | 'complete_percentage'
+>;
+
+export type SummaryAnalytics = {
+    current: SummaryValues;
+    previous: (SummaryValues & { year: number }) | null;
+    comparisons: ExpenseAnalytics['comparisons'];
+};
+
 export function DashboardSummary({
     analytics,
     year,
     loading = false,
+    scope = 'expenses',
+    comparableCount,
 }: {
-    analytics: ExpenseAnalytics;
+    analytics: SummaryAnalytics;
     year: number;
     loading?: boolean;
+    scope?: 'expenses' | 'budget';
+    comparableCount?: number;
 }) {
     const { current, previous, comparisons } = analytics;
     const previousYear = previous?.year ?? year - 1;
     const complete = current.count - current.incomplete;
     const points = comparisons.completeness.points;
+    const isBudget = scope === 'budget';
+    const unit = isBudget ? 'voci' : 'spese';
     return (
         <div className="@container/summary flex flex-col gap-3">
             <div className="summary-grid @md/summary:grid-cols-2 @5xl/summary:grid-cols-4">
@@ -86,8 +108,12 @@ export function DashboardSummary({
                                     <CardDescription className="min-w-0">
                                         {
                                             {
-                                                allocated: 'Totale allocato',
-                                                actual: 'Totale effettivo',
+                                                allocated: isBudget
+                                                    ? 'Budget previsto'
+                                                    : 'Totale allocato',
+                                                actual: isBudget
+                                                    ? 'Spesa effettiva'
+                                                    : 'Totale effettivo',
                                                 variance:
                                                     'Scostamento confrontabile',
                                             }[metric]
@@ -133,7 +159,9 @@ export function DashboardSummary({
                                             ? 'Importi previsti presenti'
                                             : metric === 'actual'
                                               ? 'Costi reali registrati'
-                                              : `${complete} spese con entrambi gli importi`}
+                                              : isBudget
+                                                ? `${comparableCount} spese o voci libere confrontabili`
+                                                : `${complete} spese con entrambi gli importi`}
                                     </div>
                                 </CardFooter>
                             </Card>
@@ -143,7 +171,8 @@ export function DashboardSummary({
                 <Card className="@container/card min-w-0">
                     <CardHeader>
                         <CardDescription>
-                            Completezza delle spese
+                            Completezza{' '}
+                            {isBudget ? 'del Budget' : 'delle spese'}
                         </CardDescription>
                         <CardTitle className="summary-value">
                             {loading ? (
@@ -155,25 +184,25 @@ export function DashboardSummary({
                         {!loading && previous && points !== null && (
                             <ComparisonBadge
                                 difference={points}
-                                label={`${signedNumber.format(points)} pp`}
+                                label={`${signedNumber.format(points)}%`}
                                 year={previousYear}
                             />
                         )}
                     </CardHeader>
                     <CardFooter className="mt-auto flex-col items-start gap-1.5 text-sm">
                         <div className="font-medium">
-                            {complete}/{current.count} spese complete
+                            {complete}/{current.count} {unit} complete
                         </div>
                         <div className="text-muted-foreground">
                             {previous && points !== null
-                                ? `${signedNumber.format(points)} punti percentuali rispetto al ${previousYear}`
+                                ? `${signedNumber.format(points)}% rispetto al ${previousYear}`
                                 : 'Confronto annuale non disponibile'}
                         </div>
                     </CardFooter>
                 </Card>
             </div>
             <p className="text-sm text-muted-foreground">
-                {current.count} spese nel perimetro · {current.incomplete}{' '}
+                {current.count} {unit} nel perimetro · {current.incomplete}{' '}
                 incomplete. Scostamento = effettivo − allocato, soltanto per
                 importi entrambi presenti. Effettivo indica costi registrati.
             </p>

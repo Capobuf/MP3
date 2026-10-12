@@ -59,7 +59,7 @@ final class ExpenseAnalytics
     }
 
     /** @return array<string, mixed> */
-    public static function data(Tenant $tenant, Request $request): array
+    public static function kpis(Tenant $tenant, Request $request): array
     {
         $year = EconomicYearContext::year($tenant, $request);
         $allYears = ExpenseOverview::query($tenant, $request, false)->toBase();
@@ -76,6 +76,15 @@ final class ExpenseAnalytics
             $comparisons[$metric] = ['difference' => $delta === null ? null : Money::decimal($delta), 'percentage' => $metric !== 'variance' && $delta !== null && Money::cents($before) > 0 ? $delta * 100 / Money::cents($before) : null];
         }
         $comparisons['completeness'] = ['points' => isset($previous['complete_percentage'], $current['complete_percentage']) ? $current['complete_percentage'] - $previous['complete_percentage'] : null];
+
+        return ['current' => $current, 'previous' => $previous, 'comparisons' => $comparisons, 'annual' => $annual];
+    }
+
+    /** @return array<string, mixed> */
+    public static function data(Tenant $tenant, Request $request): array
+    {
+        $kpis = self::kpis($tenant, $request);
+        $selected = ExpenseOverview::query($tenant, $request)->toBase();
 
         $groups = [];
         foreach (['vendor' => 'Senza fornitore', 'project' => 'Senza progetto', 'contract' => 'Senza contratto'] as $relation => $missing) {
@@ -114,7 +123,7 @@ final class ExpenseAnalytics
         }
 
         return [
-            'current' => $current, 'previous' => $previous, 'comparisons' => $comparisons, 'annual' => $annual,
+            ...$kpis,
             ...$groups, 'projectStatuses' => $projectStatuses, 'pairs' => $pairs,
             'variances' => self::variances($selected, $tenant), 'expiry' => self::expiry($tenant),
         ];

@@ -23,11 +23,13 @@ class BudgetController extends Controller
     {
         $selected = EconomicYearContext::year($tenant, $request);
         $year = $tenant->budgetYears()->where('year', $selected)->first();
+        $previous = $year ? $tenant->budgetYears()->where('year', $selected - 1)->first() : null;
 
         return Inertia::render('tenants/budget', [
             'tenant' => $tenant->only('id', 'name', 'slug'), 'selectedYear' => $selected,
             'budgetYear' => $year?->only('id', 'year', 'structure_copied'),
             'budget' => $year ? $budget->snapshot($tenant, $year) : null,
+            'previousBudget' => $previous ? ['year' => $previous->year, 'totals' => $budget->snapshot($tenant, $previous)['totals']] : null,
             'options' => ExpenseOverview::options($tenant),
         ]);
     }

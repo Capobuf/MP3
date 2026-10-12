@@ -59,7 +59,35 @@ class ExpenseAnalyticsTest extends TestCase
         $this->assertSame('1.05', $data['comparisons']['variance']['difference']);
         $this->get('/t/alfa/dashboard?'.http_build_query(['year' => 2026, ...$filters]))->assertInertia(fn (Assert $page) => $page
             ->where('analytics.current.count', 1)->where('analytics.previous.count', 1)->has('analytics.annual', 3)->where('analytics.vendors.0.id', $vendor->id)->where('analytics.projectStatuses.0.id', 'attivo'));
+        $this->get('/t/alfa/expenses?'.http_build_query(['year' => 2026, ...$filters]))->assertInertia(fn (Assert $page) => $page
+            ->component('tenants/expenses')->where('analytics.current', $data['current'])->where('analytics.previous', $data['previous'])->where('analytics.comparisons', $data['comparisons']));
         $this->get('/t/beta/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('analytics.current.allocated', '999.00')->has('analytics.vendors', 1));
+    }
+
+    public function test_catalog_kpis_compare_only_linked_expenses_in_the_selected_year(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Incluso']);
+        $contract = $this->tenant->contracts()->create(['name' => 'Incluso']);
+        $project = $this->tenant->projects()->create(['name' => 'Incluso', 'status' => 'attivo']);
+        foreach ([2025 => '10.01', 2026 => '20.02'] as $year => $allocated) {
+            $this->tenant->expenses()->create(['title' => 'Collegata', 'year' => $year, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => $allocated, 'actual_amount' => '0']);
+            $this->tenant->expenses()->create(['title' => 'Non collegata', 'year' => $year, 'allocated_amount' => '999', 'actual_amount' => '999']);
+        }
+        $this->other->expenses()->create(['title' => 'Altro tenant', 'year' => 2026, 'allocated_amount' => '999']);
+
+        foreach (['vendors' => $vendor, 'contracts' => $contract, 'projects' => $project] as $catalog => $record) {
+            $this->get('/t/alfa/'.$catalog.'/'.$record->id.'?year=2026&history=1')->assertInertia(fn (Assert $page) => $page
+                ->component('tenants/catalog-detail')
+                ->has('expenses.data', 2)
+                ->where('analytics.current.count', 1)
+                ->where('analytics.current.allocated', '20.02')
+                ->where('analytics.current.complete_percentage', 100)
+                ->where('analytics.previous.year', 2025)
+                ->where('analytics.previous.count', 1)
+                ->where('analytics.previous.allocated', '10.01')
+                ->where('analytics.comparisons.allocated.difference', '10.01')
+                ->where('analytics.comparisons.allocated.percentage', 100));
+        }
     }
 
     public function test_no_previous_data_and_zero_or_negative_bases_have_no_percentage(): void
@@ -172,8 +200,11 @@ class ExpenseAnalyticsTest extends TestCase
         $first = $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('analytics.current.allocated', '0.60'))->inertiaProps('analytics');
         $second = $this->get('/t/alfa/dashboard?year=2026&page=2&sort=actual_amount&direction=desc')->assertInertia(fn (Assert $page) => $page->has('expenses.data', 10))->inertiaProps('analytics');
         $this->assertSame($first, $second);
+        $this->get('/t/alfa/expenses?year=2026&page=2&sort=actual_amount&direction=desc')->assertInertia(fn (Assert $page) => $page
+            ->has('expenses.data', 10)->where('analytics.current', $first['current'])->where('analytics.previous', $first['previous'])->where('analytics.comparisons', $first['comparisons']));
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['actual_amount' => '1.01'])->assertOk();
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('analytics.current.actual', '1.01')->where('analytics.pairs.projects.0.actual_positive', '1.01'));
+        $this->get('/t/alfa/expenses?year=2026')->assertInertia(fn (Assert $page) => $page->where('analytics.current.actual', '1.01'));
         $vendor = $this->tenant->vendors()->create(['name' => 'Nuovo']);
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['vendor_id' => $vendor->id])->assertOk();
         $this->get('/t/alfa/dashboard?year=2026&vendor_id='.$vendor->id)->assertInertia(fn (Assert $page) => $page->where('analytics.current.count', 1)->where('analytics.vendors.0.id', $vendor->id));

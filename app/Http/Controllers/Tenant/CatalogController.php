@@ -12,6 +12,7 @@ use App\Services\AttachmentFiles;
 use App\Services\ExpenseWriter;
 use App\Support\CatalogQuery;
 use App\Support\EconomicYearContext;
+use App\Support\ExpenseAnalytics;
 use App\Support\ExpenseOverview;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\JsonResponse;
@@ -91,6 +92,7 @@ class CatalogController extends Controller
             'year' => $year,
             'history' => $history,
             'totals' => ExpenseOverview::totals($annual),
+            'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id])),
             'breakdown' => ExpenseOverview::breakdown($annual),
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,

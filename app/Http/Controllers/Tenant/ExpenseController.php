@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Tenant;
 use App\Services\AttachmentFiles;
 use App\Services\ExpenseWriter;
+use App\Support\ExpenseAnalytics;
 use App\Support\ExpenseOverview;
 use App\Support\ExpensePeriods;
 use Illuminate\Http\JsonResponse;
@@ -23,7 +24,10 @@ class ExpenseController extends Controller
 {
     public function index(Request $request, Tenant $tenant): Response
     {
-        return Inertia::render('tenants/expenses', ExpenseOverview::page($tenant, $request));
+        return Inertia::render('tenants/expenses', [
+            ...ExpenseOverview::page($tenant, $request),
+            'analytics' => ExpenseAnalytics::kpis($tenant, $request),
+        ]);
     }
 
     public function show(Tenant $tenant, Expense $expense): Response

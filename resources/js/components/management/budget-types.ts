@@ -1,3 +1,5 @@
+import { cents, decimal } from './analytics-helpers';
+import type { SummaryAnalytics } from './dashboard-summary';
 import type { Expense, Option, Options } from './types';
 import type { Tenant } from '@/types';
 
@@ -62,6 +64,7 @@ export type BudgetProps = {
     budgetYear: BudgetYear | null;
     budget: BudgetSnapshot | null;
     options: Options;
+    previousBudget: { year: number; totals: BudgetTotals } | null;
 };
 export type BudgetSuggestion = {
     key: string;
@@ -116,4 +119,53 @@ export function budgetTotals(rows: BudgetEntry[]): BudgetTotals {
             `${cents < 0n ? '-' : ''}${absolute / 100n}.${String(absolute % 100n).padStart(2, '0')}`;
     }
     return result;
+}
+
+export function budgetSummary(
+    totals: BudgetTotals,
+    previousBudget: BudgetProps['previousBudget'],
+): SummaryAnalytics {
+    const values = (totals: BudgetTotals) => ({
+        ...totals,
+        complete_percentage:
+            totals.count > 0
+                ? ((totals.count - totals.incomplete) * 100) / totals.count
+                : null,
+    });
+    const current = values(totals);
+    const previous = previousBudget
+        ? { ...values(previousBudget.totals), year: previousBudget.year }
+        : null;
+    const compare = (metric: 'allocated' | 'actual' | 'variance') => {
+        const before = previous ? cents(previous[metric]) : null;
+        const difference =
+            before !== null ? cents(current[metric]) - before : null;
+        return {
+            difference: difference !== null ? decimal(difference) : null,
+            percentage:
+                metric !== 'variance' &&
+                difference !== null &&
+                before !== null &&
+                before > 0
+                    ? (difference * 100) / before
+                    : null,
+        };
+    };
+    return {
+        current,
+        previous,
+        comparisons: {
+            allocated: compare('allocated'),
+            actual: compare('actual'),
+            variance: compare('variance'),
+            completeness: {
+                points:
+                    previous?.complete_percentage != null &&
+                    current.complete_percentage !== null
+                        ? current.complete_percentage -
+                          previous.complete_percentage
+                        : null,
+            },
+        },
+    };
 }

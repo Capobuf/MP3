@@ -6,11 +6,11 @@ import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { ExpenseTable } from '@/components/management/expense-table';
 import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
-import { DetailKpis } from '@/components/management/detail-kpis';
 import { DetailNotes } from '@/components/management/detail-notes';
 import { dateLabel, money } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
-import { Summary } from '@/components/management/summary';
+import { DashboardSummary } from '@/components/management/dashboard-summary';
+import type { SummaryAnalytics } from '@/components/management/dashboard-summary';
 import { labels } from '@/components/management/types';
 import type {
     Catalog,
@@ -19,7 +19,6 @@ import type {
     Options,
     Pagination as Page,
     RecordData,
-    Totals,
 } from '@/components/management/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,7 +30,7 @@ export default function CatalogDetail({
     catalog,
     record,
     expenses,
-    totals,
+    analytics,
     breakdown,
     contracts,
     year,
@@ -42,7 +41,7 @@ export default function CatalogDetail({
     record: RecordData;
     options: Options;
     expenses: Page<Expense>;
-    totals: Totals;
+    analytics: SummaryAnalytics;
     breakdown: DetailBreakdown | null;
     contracts: Page<RecordData> | null;
     year: number;
@@ -70,28 +69,7 @@ export default function CatalogDetail({
                         Totali delle spese collegate · {year}
                     </h2>
                 </div>
-                {catalog === 'vendors' ? (
-                    <Summary totals={totals} />
-                ) : (
-                    <DetailKpis
-                        aggregate
-                        allocated={
-                            breakdown?.allocated.net == null
-                                ? null
-                                : totals.allocated
-                        }
-                        actual={
-                            breakdown?.actual.net == null ? null : totals.actual
-                        }
-                        variance={
-                            totals.count > totals.incomplete
-                                ? totals.variance
-                                : null
-                        }
-                        count={totals.count}
-                        incomplete={totals.incomplete}
-                    />
-                )}
+                <DashboardSummary analytics={analytics} year={year} />
             </div>
             <div className="grid min-w-0 items-start gap-6 @5xl/detail:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
                 <section
