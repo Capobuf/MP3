@@ -75,7 +75,7 @@ class EconomicYearContextTest extends TestCase
     public function test_partial_reload_always_receives_the_current_economic_context(): void
     {
         $this->get('/t/alfa/expenses?year=2025', [
-            'X-Inertia' => 'true', 'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(request()), 'X-Inertia-Partial-Component' => 'tenants/expenses', 'X-Inertia-Partial-Data' => 'expenses',
+            'X-Inertia' => 'true', 'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request()), 'X-Inertia-Partial-Component' => 'tenants/expenses', 'X-Inertia-Partial-Data' => 'expenses',
         ])->assertOk()->assertJsonPath('props.economicContext.year', 2025)
             ->assertJsonPath('props.economicContext.years', [2026, 2025]);
     }
