@@ -30,27 +30,8 @@
             }
         </style>
 
-        <link rel="icon" href="/favicon.ico" type="image/x-icon">
-        <link id="theme-favicon" rel="icon" href="/branding/mp3-logo-black.svg" type="image/svg+xml" sizes="any">
+        <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-
-        <script>
-            (function() {
-                const favicon = document.getElementById('theme-favicon');
-                const colorScheme = window.matchMedia('(prefers-color-scheme: dark)');
-
-                // Use separate SVG sources because some browsers ignore media queries within SVG favicons.
-                const updateFavicon = () => {
-                    favicon.setAttribute(
-                        'href',
-                        colorScheme.matches ? '/branding/mp3-logo-white.svg' : '/branding/mp3-logo-black.svg',
-                    );
-                };
-
-                updateFavicon();
-                colorScheme.addEventListener('change', updateFavicon);
-            })();
-        </script>
 
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
