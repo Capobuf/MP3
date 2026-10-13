@@ -29,17 +29,19 @@ export function RecordSelect({
     label,
     includeNone = false,
     disabled = false,
+    excludeProjectId,
     ...aria
 }: {
     id?: string;
     slug: string;
-    catalog: Catalog;
+    catalog: Catalog | 'expenses';
     value: string;
     onChange: (value: string) => void;
     options: Option[];
     label: string;
     includeNone?: boolean;
     disabled?: boolean;
+    excludeProjectId?: number;
 } & Pick<AriaAttributes, 'aria-invalid' | 'aria-describedby'>) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
@@ -55,7 +57,7 @@ export function RecordSelect({
         setError('');
         const timer = setTimeout(() => {
             void api<{ records: Option[] }>(
-                `/t/${slug}/${catalog}/options?search=${encodeURIComponent(search)}`,
+                `/t/${slug}/${catalog}/options?search=${encodeURIComponent(search)}${excludeProjectId ? `&exclude_project_id=${excludeProjectId}` : ''}`,
             )
                 .then((data) => {
                     if (active) setResults(data.records);
@@ -72,7 +74,7 @@ export function RecordSelect({
             active = false;
             clearTimeout(timer);
         };
-    }, [search, open, slug, catalog]);
+    }, [search, open, slug, catalog, excludeProjectId]);
     const allOptions = [...options, ...results, ...(chosen ? [chosen] : [])];
     const selected = allOptions.find((option) => String(option.id) === value);
     return (
@@ -101,7 +103,7 @@ export function RecordSelect({
                 </Button>
             </PopoverTrigger>
             <PopoverContent
-                className="w-[320px] max-w-[90vw] p-0"
+                className="w-[var(--radix-popover-trigger-width)] p-0"
                 align="start"
             >
                 <Command shouldFilter={false}>
@@ -110,7 +112,10 @@ export function RecordSelect({
                         value={search}
                         onValueChange={setSearch}
                     />
-                    <CommandList aria-busy={loading}>
+                    <CommandList
+                        aria-busy={loading}
+                        className="max-h-[min(300px,calc(var(--radix-popover-content-available-height)-2.5rem))]"
+                    >
                         {showLoading && results.length === 0 && (
                             <div
                                 className="flex flex-col gap-2 p-3"

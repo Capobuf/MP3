@@ -16,6 +16,7 @@ export default function CreateRecord({
     year,
     options,
     contractContext,
+    projectContext,
     parentId,
     record,
 }: {
@@ -24,19 +25,22 @@ export default function CreateRecord({
     year: number;
     options: Options;
     contractContext: RecordData | null;
+    projectContext: RecordData | null;
     parentId: number | null;
     record: RecordData | null;
 }) {
     const { economicContext } = usePage().props;
     const workingYear = economicContext!.year;
     const path = `/t/${tenant.slug}/${kind}`;
-    const returnPath = contractContext
-        ? `/t/${tenant.slug}/contracts/${contractContext.id}`
-        : record && kind !== 'cost-centers'
-          ? `${path}/${record.id}`
-          : kind === 'expenses'
-            ? `${path}?year=${workingYear}`
-            : path;
+    const returnPath = projectContext
+        ? `/t/${tenant.slug}/projects/${projectContext.id}?year=${year}`
+        : contractContext
+          ? `/t/${tenant.slug}/contracts/${contractContext.id}`
+          : record && kind !== 'cost-centers'
+            ? `${path}/${record.id}`
+            : kind === 'expenses'
+              ? `${path}?year=${workingYear}`
+              : path;
     const close = () => router.visit(returnPath);
     return (
         <>
@@ -67,6 +71,7 @@ export default function CreateRecord({
                         year={year}
                         options={options}
                         contractContext={contractContext ?? undefined}
+                        projectContext={projectContext ?? undefined}
                         onClose={close}
                         onSaved={(record) =>
                             router.visit(
@@ -74,7 +79,7 @@ export default function CreateRecord({
                                     kind === 'contracts' ||
                                     kind === 'projects'
                                     ? `${path}/${record.id}`
-                                    : contractContext
+                                    : contractContext || projectContext
                                       ? returnPath
                                       : `${path}?year=${workingYear}`,
                             )

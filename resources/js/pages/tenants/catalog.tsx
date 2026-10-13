@@ -15,11 +15,16 @@ import {
 } from '@/components/management/table-view';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
+import { CostCenterSelect } from '@/components/management/cost-center-select';
 import { applyFilters } from '@/components/management/expense-workspace';
 import { dateLabel } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import { RecordSelect } from '@/components/management/record-select';
-import { labels, singular } from '@/components/management/types';
+import {
+    labels,
+    singular,
+    projectStatusLabel,
+} from '@/components/management/types';
 import type {
     Catalog,
     Filters,
@@ -100,15 +105,20 @@ export default function CatalogPage({
                 value: (record) => record.name,
                 canHide: false,
             },
-            {
-                id: 'info',
-                label:
-                    catalog === 'vendors'
-                        ? 'Contatti'
-                        : catalog === 'contracts'
-                          ? 'Fornitore / periodo'
-                          : 'Stato / periodo',
-            },
+            ...(catalog === 'vendors'
+                ? [
+                      { id: 'vat_number', label: 'Partita IVA' },
+                      { id: 'email', label: 'Email' },
+                      { id: 'phone', label: 'Telefono' },
+                  ]
+                : [
+                      ...(catalog === 'contracts'
+                          ? [{ id: 'vendor_id', label: 'Fornitore' }]
+                          : [{ id: 'status', label: 'Stato' }]),
+                      { id: 'cost_center_ids', label: 'Centri di costo' },
+                      { id: 'starts_on', label: 'Data iniziale' },
+                      { id: 'ends_on', label: 'Data finale' },
+                  ]),
             {
                 id: 'expenses_count',
                 label: 'Spese collegate · storico',
@@ -260,7 +270,9 @@ export default function CatalogPage({
                                                             value={status}
                                                             key={status}
                                                         >
-                                                            {status}
+                                                            {projectStatusLabel(
+                                                                status,
+                                                            )}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectGroup>
@@ -388,7 +400,7 @@ export default function CatalogPage({
                                                                 key="name"
                                                                 className="max-w-80 min-w-48 font-medium break-words whitespace-normal"
                                                             >
-                                                                <div className="flex items-start gap-2">
+                                                                <div className="flex items-center gap-2">
                                                                     <InlineEdit
                                                                         value={
                                                                             record.name
@@ -423,92 +435,105 @@ export default function CatalogPage({
                                                                         </Link>
                                                                     </Button>
                                                                 </div>
-                                                                {catalog !==
-                                                                    'vendors' && (
-                                                                    <CostCenterTags
-                                                                        centers={
-                                                                            record.cost_centers
-                                                                        }
-                                                                    />
-                                                                )}
                                                             </TableCell>
-                                                            <TableCell key="info">
-                                                                {catalog ===
-                                                                'vendors' ? (
-                                                                    <>
-                                                                        <div>
+                                                            {catalog !==
+                                                            'vendors' ? (
+                                                                <>
+                                                                    {catalog ===
+                                                                    'contracts' ? (
+                                                                        <TableCell
+                                                                            key="vendor_id"
+                                                                            className="min-w-40 whitespace-normal"
+                                                                        >
                                                                             <InlineEdit
                                                                                 value={
-                                                                                    record.email
+                                                                                    record.vendor_id ==
+                                                                                    null
+                                                                                        ? ''
+                                                                                        : String(
+                                                                                              record.vendor_id,
+                                                                                          )
                                                                                 }
-                                                                                label={`Email di ${record.name}`}
-                                                                                type="email"
+                                                                                label={`Fornitore di ${record.name}`}
                                                                                 disabled={
                                                                                     deleting !==
                                                                                     null
                                                                                 }
-                                                                                onSave={(
-                                                                                    value,
-                                                                                ) =>
-                                                                                    saveInlineRecord(
-                                                                                        `${path}/${record.id}`,
-                                                                                        {
-                                                                                            email:
-                                                                                                value ||
-                                                                                                null,
-                                                                                        },
-                                                                                    )
-                                                                                }
-                                                                            />
-                                                                        </div>
-                                                                        <div className="text-sm text-muted-foreground">
-                                                                            <InlineEdit
-                                                                                value={
-                                                                                    record.phone
-                                                                                }
-                                                                                label={`Telefono di ${record.name}`}
-                                                                                disabled={
-                                                                                    deleting !==
-                                                                                    null
-                                                                                }
-                                                                                onSave={(
-                                                                                    value,
-                                                                                ) =>
-                                                                                    saveInlineRecord(
-                                                                                        `${path}/${record.id}`,
-                                                                                        {
-                                                                                            phone:
-                                                                                                value ||
-                                                                                                null,
-                                                                                        },
-                                                                                    )
-                                                                                }
-                                                                            />
-                                                                        </div>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        {catalog ===
-                                                                        'contracts' ? (
-                                                                            <p>
-                                                                                {record
-                                                                                    .vendor
-                                                                                    ?.name ??
-                                                                                    'Senza fornitore'}
-                                                                            </p>
-                                                                        ) : (
-                                                                            <InlineEdit
                                                                                 display={
-                                                                                    <Badge variant="secondary">
-                                                                                        {
-                                                                                            record.status
-                                                                                        }
-                                                                                    </Badge>
+                                                                                    record
+                                                                                        .vendor
+                                                                                        ?.name ??
+                                                                                    'Non assegnato'
                                                                                 }
+                                                                                renderEditor={({
+                                                                                    value,
+                                                                                    onChange,
+                                                                                    disabled,
+                                                                                    invalid,
+                                                                                }) => (
+                                                                                    <RecordSelect
+                                                                                        slug={
+                                                                                            tenant.slug
+                                                                                        }
+                                                                                        catalog="vendors"
+                                                                                        value={
+                                                                                            value
+                                                                                        }
+                                                                                        onChange={
+                                                                                            onChange
+                                                                                        }
+                                                                                        options={[
+                                                                                            ...options.vendors,
+                                                                                            ...(record.vendor
+                                                                                                ? [
+                                                                                                      record.vendor,
+                                                                                                  ]
+                                                                                                : []),
+                                                                                        ]}
+                                                                                        label="Fornitore"
+                                                                                        disabled={
+                                                                                            disabled
+                                                                                        }
+                                                                                        aria-invalid={
+                                                                                            invalid
+                                                                                        }
+                                                                                    />
+                                                                                )}
+                                                                                onSave={(
+                                                                                    value,
+                                                                                ) =>
+                                                                                    saveInlineRecord(
+                                                                                        `${path}/${record.id}`,
+                                                                                        {
+                                                                                            vendor_id:
+                                                                                                value
+                                                                                                    ? Number(
+                                                                                                          value,
+                                                                                                      )
+                                                                                                    : null,
+                                                                                        },
+                                                                                    )
+                                                                                }
+                                                                            />
+                                                                        </TableCell>
+                                                                    ) : (
+                                                                        <TableCell key="status">
+                                                                            <InlineEdit
                                                                                 value={
                                                                                     record.status
                                                                                 }
                                                                                 label={`Stato di ${record.name}`}
+                                                                                disabled={
+                                                                                    deleting !==
+                                                                                    null
+                                                                                }
+                                                                                display={
+                                                                                    <Badge variant="secondary">
+                                                                                        {projectStatusLabel(
+                                                                                            record.status,
+                                                                                        )}
+                                                                                    </Badge>
+                                                                                }
                                                                                 options={[
                                                                                     'pianificato',
                                                                                     'attivo',
@@ -518,7 +543,9 @@ export default function CatalogPage({
                                                                                         value,
                                                                                     ) => ({
                                                                                         value,
-                                                                                        label: value,
+                                                                                        label: projectStatusLabel(
+                                                                                            value,
+                                                                                        ),
                                                                                     }),
                                                                                 )}
                                                                                 onSave={(
@@ -532,59 +559,207 @@ export default function CatalogPage({
                                                                                     )
                                                                                 }
                                                                             />
-                                                                        )}
-                                                                        <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+                                                                        </TableCell>
+                                                                    )}
+                                                                    <TableCell
+                                                                        key="cost_center_ids"
+                                                                        className="min-w-40 whitespace-normal"
+                                                                    >
+                                                                        <InlineEdit
+                                                                            value={JSON.stringify(
+                                                                                record.cost_centers?.map(
+                                                                                    (
+                                                                                        center,
+                                                                                    ) =>
+                                                                                        center.id,
+                                                                                ) ??
+                                                                                    [],
+                                                                            )}
+                                                                            label={`Centri di costo di ${record.name}`}
+                                                                            disabled={
+                                                                                deleting !==
+                                                                                null
+                                                                            }
+                                                                            display={
+                                                                                record
+                                                                                    .cost_centers
+                                                                                    ?.length ? (
+                                                                                    <CostCenterTags
+                                                                                        centers={
+                                                                                            record.cost_centers
+                                                                                        }
+                                                                                    />
+                                                                                ) : (
+                                                                                    'Non assegnati'
+                                                                                )
+                                                                            }
+                                                                            renderEditor={({
+                                                                                value,
+                                                                                onChange,
+                                                                                disabled,
+                                                                                invalid,
+                                                                            }) => (
+                                                                                <CostCenterSelect
+                                                                                    id={`${catalog}-${record.id}-centers`}
+                                                                                    options={[
+                                                                                        ...new Map(
+                                                                                            [
+                                                                                                ...options.cost_centers,
+                                                                                                ...(record.cost_centers ??
+                                                                                                    []),
+                                                                                            ].map(
+                                                                                                (
+                                                                                                    center,
+                                                                                                ) => [
+                                                                                                    center.id,
+                                                                                                    center,
+                                                                                                ],
+                                                                                            ),
+                                                                                        ).values(),
+                                                                                    ]}
+                                                                                    value={
+                                                                                        JSON.parse(
+                                                                                            value,
+                                                                                        ) as number[]
+                                                                                    }
+                                                                                    onChange={(
+                                                                                        ids,
+                                                                                    ) =>
+                                                                                        onChange(
+                                                                                            JSON.stringify(
+                                                                                                ids,
+                                                                                            ),
+                                                                                        )
+                                                                                    }
+                                                                                    disabled={
+                                                                                        disabled
+                                                                                    }
+                                                                                    invalid={
+                                                                                        invalid
+                                                                                    }
+                                                                                />
+                                                                            )}
+                                                                            onSave={(
+                                                                                value,
+                                                                            ) =>
+                                                                                saveInlineRecord(
+                                                                                    `${path}/${record.id}`,
+                                                                                    {
+                                                                                        cost_center_ids:
+                                                                                            JSON.parse(
+                                                                                                value,
+                                                                                            ) as number[],
+                                                                                    },
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </TableCell>
+                                                                    {(
+                                                                        [
+                                                                            'starts_on',
+                                                                            'ends_on',
+                                                                        ] as const
+                                                                    ).map(
+                                                                        (
+                                                                            field,
+                                                                        ) => (
+                                                                            <TableCell
+                                                                                key={
+                                                                                    field
+                                                                                }
+                                                                            >
+                                                                                <InlineEdit
+                                                                                    value={
+                                                                                        record[
+                                                                                            field
+                                                                                        ]
+                                                                                    }
+                                                                                    type="date"
+                                                                                    label={`${field === 'starts_on' ? 'Data iniziale' : 'Data finale'} di ${record.name}`}
+                                                                                    disabled={
+                                                                                        deleting !==
+                                                                                        null
+                                                                                    }
+                                                                                    display={dateLabel(
+                                                                                        record[
+                                                                                            field
+                                                                                        ],
+                                                                                    )}
+                                                                                    onSave={(
+                                                                                        value,
+                                                                                    ) =>
+                                                                                        saveInlineRecord(
+                                                                                            `${path}/${record.id}`,
+                                                                                            {
+                                                                                                [field]:
+                                                                                                    value ||
+                                                                                                    null,
+                                                                                            },
+                                                                                        )
+                                                                                    }
+                                                                                />
+                                                                            </TableCell>
+                                                                        ),
+                                                                    )}
+                                                                </>
+                                                            ) : (
+                                                                (
+                                                                    [
+                                                                        'vat_number',
+                                                                        'email',
+                                                                        'phone',
+                                                                    ] as const
+                                                                ).map(
+                                                                    (field) => (
+                                                                        <TableCell
+                                                                            key={
+                                                                                field
+                                                                            }
+                                                                            className="min-w-40 whitespace-normal"
+                                                                        >
                                                                             <InlineEdit
                                                                                 value={
-                                                                                    record.starts_on
+                                                                                    record[
+                                                                                        field
+                                                                                    ]
                                                                                 }
-                                                                                type="date"
-                                                                                label={`Data iniziale di ${record.name}`}
-                                                                                display={dateLabel(
-                                                                                    record.starts_on,
-                                                                                )}
+                                                                                label={`${field === 'vat_number' ? 'Partita IVA' : field === 'email' ? 'Email' : 'Telefono'} di ${record.name}`}
+                                                                                type={
+                                                                                    field ===
+                                                                                    'email'
+                                                                                        ? 'email'
+                                                                                        : 'text'
+                                                                                }
+                                                                                disabled={
+                                                                                    deleting !==
+                                                                                    null
+                                                                                }
+                                                                                display={
+                                                                                    record[
+                                                                                        field
+                                                                                    ] ??
+                                                                                    (field ===
+                                                                                    'phone'
+                                                                                        ? 'Non indicato'
+                                                                                        : 'Non indicata')
+                                                                                }
                                                                                 onSave={(
                                                                                     value,
                                                                                 ) =>
                                                                                     saveInlineRecord(
                                                                                         `${path}/${record.id}`,
                                                                                         {
-                                                                                            starts_on:
+                                                                                            [field]:
                                                                                                 value ||
                                                                                                 null,
                                                                                         },
                                                                                     )
                                                                                 }
                                                                             />
-                                                                            <span>
-                                                                                →
-                                                                            </span>
-                                                                            <InlineEdit
-                                                                                value={
-                                                                                    record.ends_on
-                                                                                }
-                                                                                type="date"
-                                                                                label={`Data finale di ${record.name}`}
-                                                                                display={dateLabel(
-                                                                                    record.ends_on,
-                                                                                )}
-                                                                                onSave={(
-                                                                                    value,
-                                                                                ) =>
-                                                                                    saveInlineRecord(
-                                                                                        `${path}/${record.id}`,
-                                                                                        {
-                                                                                            ends_on:
-                                                                                                value ||
-                                                                                                null,
-                                                                                        },
-                                                                                    )
-                                                                                }
-                                                                            />
-                                                                        </div>
-                                                                    </>
-                                                                )}
-                                                            </TableCell>
+                                                                        </TableCell>
+                                                                    ),
+                                                                )
+                                                            )}
                                                             <TableCell
                                                                 key="expenses_count"
                                                                 className="text-right tabular-nums"

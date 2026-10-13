@@ -48,16 +48,15 @@ import type {
 } from '@tanstack/react-table';
 import {
     ArrowDown,
-    ArrowRight,
     ArrowUp,
     ChevronDown,
     ChevronRight,
     GripVertical,
     Info,
     Ellipsis,
+    TriangleAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -115,7 +114,7 @@ import { BudgetCenterSelect, BudgetManualForm } from './budget-entry-sheet';
 import { TableColumnOrder } from './table-column-order';
 import { TableColumnSettings, TableFilters } from './table-view';
 import { draftLines, ExpenseLines } from './expense-lines';
-import { decimalInput, dateLabel, money, varianceTextClass } from './helpers';
+import { decimalInput, money, varianceTextClass } from './helpers';
 import { budgetLabels, budgetTypes, budgetTotals } from './budget-types';
 import type {
     BudgetEntry,
@@ -138,30 +137,48 @@ const columnNames: Record<string, string> = {
     actions: 'Azioni',
 };
 const defaultOrder = Object.keys(columnNames);
-function missingAmounts(allocated: string | null, actual: string | null) {
-    return [
-        allocated === null ? 'previsto' : null,
-        actual === null ? 'effettivo' : null,
-    ]
-        .filter((amount) => amount !== null)
-        .join(' e ');
+function missingAmounts(allocated: boolean, actual: boolean) {
+    if (allocated && actual) return 'Previsto ed effettivo mancanti';
+    if (allocated) return 'Importo previsto mancante';
+    if (actual) return 'Importo effettivo mancante';
+    return null;
+}
+
+function completionLabel(entry: BudgetEntry, year: number) {
+    if (entry.type === 'manual')
+        return missingAmounts(
+            entry.manual_allocated === null,
+            entry.manual_actual === null,
+        );
+    if (!entry.expenses.length) return `Nessuna spesa attribuita al ${year}`;
+    const contributing = entry.expenses.filter(
+        (expense) => expense.contributes,
+    );
+    return missingAmounts(
+        contributing.some((expense) => expense.allocated_amount == null),
+        contributing.some((expense) => expense.actual_amount == null),
+    );
 }
 
 function focusCompletion(id: number) {
     const detail = document.getElementById(`budget-detail-${id}`);
-    const detailRows = Array.from(
+    const incomplete = Array.from(
         document.querySelectorAll<HTMLElement>(
-            `[data-budget-detail-owner="${id}"]`,
+            `[data-budget-entry="${id}"] [data-budget-incomplete="true"], [data-budget-detail-owner="${id}"] [data-budget-incomplete="true"]`,
         ),
     );
+    const controls =
+        'input:not(:disabled), button:not(:disabled), a[href], [role="button"][tabindex="0"]';
     const target =
-        detailRows.flatMap((row) =>
-            Array.from(
-                row.querySelectorAll<HTMLElement>(
-                    '[data-budget-incomplete="true"] input, button[data-budget-incomplete="true"]',
-                ),
-            ),
-        )[0] ?? detail;
+        incomplete
+            .map((element) =>
+                element.matches(controls)
+                    ? element
+                    : element.querySelector<HTMLElement>(controls),
+            )
+            .find((element) => element !== null) ??
+        incomplete[0] ??
+        detail;
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({
         block: 'center',
@@ -310,16 +327,6 @@ function InlineAmount({
     );
 }
 
-function periodLabel(
-    start: string | null | undefined,
-    end: string | null | undefined,
-) {
-    if (start && end) return `${dateLabel(start)} – ${dateLabel(end)}`;
-    if (start) return `Dal ${dateLabel(start)}`;
-    if (end) return `Fino al ${dateLabel(end)}`;
-    return null;
-}
-
 function Attribution({
     expense,
 }: {
@@ -354,8 +361,8 @@ function ExpenseAmount({
     highlightIncomplete,
     expense,
     field,
-    slug,
     onRecordSave,
+    onExpenseEdit,
 }: {
     value: string | null | undefined;
     label: string;
@@ -363,22 +370,41 @@ function ExpenseAmount({
     highlightIncomplete?: boolean;
     expense: Expense;
     field: 'allocated_amount' | 'actual_amount';
-    slug: string;
     onRecordSave: SaveRecord;
+    onExpenseEdit: (id: number) => void;
 }) {
+    const display =
+        value == null
+            ? field === 'allocated_amount'
+                ? 'Previsto mancante'
+                : 'Effettivo mancante'
+            : money(value);
     return (
-        <div data-budget-incomplete={highlightIncomplete && value == null}>
+        <div
+            tabIndex={-1}
+            data-budget-incomplete={highlightIncomplete && value == null}
+            className={cn(
+                highlightIncomplete &&
+                    value == null &&
+                    'rounded bg-accent ring-1 ring-primary/40 ring-inset',
+            )}
+        >
             {expense.lines?.length ? (
-                <Link
-                    href={`/t/${slug}/expenses/${expense.id}`}
-                    title="Importo calcolato dalle righe economiche"
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto min-h-8 w-full justify-end financial-value"
+                    aria-label={`${label.replace(/^Modifica /, '')}: ${display}. Modifica le righe economiche`}
+                    disabled={busy}
+                    title="Importo calcolato dalle righe economiche: apri la modifica della spesa"
+                    onClick={() => onExpenseEdit(expense.id)}
                 >
-                    {money(value)}
-                </Link>
+                    {display}
+                </Button>
             ) : (
                 <InlineEdit
                     value={value}
-                    display={money(value)}
+                    display={display}
                     label={label.replace(/^Modifica /, '')}
                     disabled={busy}
                     className="text-right financial-value"
@@ -399,6 +425,8 @@ function ExpenseRows({
     slug,
     busy,
     highlightIncomplete,
+    expandedExpenses,
+    onToggleExpense,
     onExpenseEdit,
     onRecordSave,
 }: {
@@ -407,127 +435,181 @@ function ExpenseRows({
     slug: string;
     busy: boolean;
     highlightIncomplete: boolean;
+    expandedExpenses: string[];
+    onToggleExpense: (key: string) => void;
     onExpenseEdit: (id: number) => void;
     onRecordSave: SaveRecord;
 }) {
-    return entry.expenses.map((expense) => (
-        <TableRow
-            key={expense.id}
-            data-budget-detail-owner={entry.id}
-            className={cn(
-                'bg-muted/20 hover:bg-muted/40',
-                !expense.contributes && 'text-muted-foreground',
-            )}
-        >
-            {columnIds.map((id) => (
-                <TableCell
-                    key={id}
+    return entry.expenses.map((expense, index) => {
+        const key = `${entry.id}:${expense.id}`;
+        const expanded = expandedExpenses.includes(key);
+        const missing = expense.contributes
+            ? missingAmounts(
+                  expense.allocated_amount == null,
+                  expense.actual_amount == null,
+              )
+            : null;
+        const hiddenMissing =
+            missing &&
+            ((expense.allocated_amount == null &&
+                !columnIds.includes('allocated')) ||
+                (expense.actual_amount == null &&
+                    !columnIds.includes('actual')));
+        return (
+            <Fragment key={expense.id}>
+                <TableRow
+                    id={index === 0 ? `budget-detail-${entry.id}` : undefined}
+                    tabIndex={-1}
+                    data-budget-detail-owner={entry.id}
                     className={cn(
-                        'py-1.5',
-                        ['allocated', 'actual'].includes(id) &&
-                            'text-right financial-value tabular-nums',
-                        id === 'description' && 'whitespace-normal',
-                        highlightIncomplete &&
-                            expense.contributes &&
-                            ((id === 'allocated' &&
-                                expense.allocated_amount == null) ||
-                                (id === 'actual' &&
-                                    expense.actual_amount == null)) &&
-                            'bg-accent ring-1 ring-primary/40 ring-inset',
+                        'bg-muted/20 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                        !expense.contributes && 'text-muted-foreground',
                     )}
                 >
-                    {id === 'description' ? (
-                        <div className="ml-4 flex min-w-48 flex-col gap-1 border-l-2 border-border py-1 pl-4">
-                            <InlineEdit
-                                value={expense.title}
-                                label={`Titolo di ${expense.title}`}
-                                disabled={busy}
-                                className="font-medium break-words"
-                                onSave={(value) =>
-                                    onRecordSave('expenses', expense.id, {
-                                        title: value,
-                                    })
-                                }
-                            />
-                            <Link
-                                className="text-xs text-primary"
-                                href={`/t/${slug}/expenses/${expense.id}`}
-                            >
-                                Apri spesa
-                            </Link>
-                            {periodLabel(
-                                expense.period_starts_on,
-                                expense.period_ends_on,
-                            ) && (
-                                <span className="text-xs text-muted-foreground">
-                                    Periodo coperto:{' '}
-                                    {periodLabel(
-                                        expense.period_starts_on,
-                                        expense.period_ends_on,
-                                    )}
-                                </span>
+                    {columnIds.map((id) => (
+                        <TableCell
+                            key={id}
+                            className={cn(
+                                'py-1.5',
+                                ['allocated', 'actual'].includes(id) &&
+                                    'text-right financial-value tabular-nums',
+                                id === 'description' && 'whitespace-normal',
                             )}
-                            <Attribution expense={expense} />
-                        </div>
-                    ) : id === 'allocated' || id === 'actual' ? (
-                        <ExpenseAmount
-                            value={
-                                expense[
-                                    id === 'allocated'
-                                        ? 'allocated_amount'
-                                        : 'actual_amount'
-                                ]
-                            }
-                            label={`Modifica ${columnNames[id]} della spesa ${expense.title}`}
-                            busy={busy}
-                            highlightIncomplete={
-                                highlightIncomplete && expense.contributes
-                            }
-                            expense={expense}
-                            field={
-                                id === 'allocated'
-                                    ? 'allocated_amount'
-                                    : 'actual_amount'
-                            }
-                            slug={slug}
-                            onRecordSave={onRecordSave}
-                        />
-                    ) : id === 'actions' ? (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
+                        >
+                            {id === 'expand' && !!expense.lines?.length ? (
                                 <Button
                                     size="icon"
                                     variant="ghost"
-                                    disabled={busy}
-                                    aria-label={`Azioni per la spesa ${expense.title}`}
+                                    aria-label={`Righe economiche di ${expense.title}`}
+                                    aria-controls={`budget-expense-lines-${key}`}
+                                    aria-expanded={expanded}
+                                    onClick={() => onToggleExpense(key)}
                                 >
-                                    <Ellipsis />
+                                    {expanded ? (
+                                        <ChevronDown />
+                                    ) : (
+                                        <ChevronRight />
+                                    )}
                                 </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuGroup>
-                                    <DropdownMenuItem
-                                        onSelect={() =>
-                                            onExpenseEdit(expense.id)
+                            ) : id === 'description' ? (
+                                <div className="ml-4 flex min-w-48 flex-col gap-1 border-l-2 border-border pl-4">
+                                    <InlineEdit
+                                        value={expense.title}
+                                        label={`Titolo di ${expense.title}`}
+                                        disabled={busy}
+                                        className="font-medium break-words"
+                                        onSave={(value) =>
+                                            onRecordSave(
+                                                'expenses',
+                                                expense.id,
+                                                { title: value },
+                                            )
                                         }
+                                    />
+                                    <Link
+                                        className="text-xs text-primary"
+                                        href={`/t/${slug}/expenses/${expense.id}`}
                                     >
-                                        Righe e collegamenti
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem asChild>
-                                        <Link
-                                            href={`/t/${slug}/expenses/${expense.id}`}
+                                        Apri spesa
+                                    </Link>
+                                    {hiddenMissing && (
+                                        <Button
+                                            variant="link"
+                                            size="sm"
+                                            className={cn(
+                                                'h-auto justify-start px-0',
+                                                highlightIncomplete &&
+                                                    'bg-accent ring-1 ring-primary/40',
+                                            )}
+                                            data-budget-incomplete={
+                                                highlightIncomplete
+                                            }
+                                            disabled={busy}
+                                            onClick={() =>
+                                                onExpenseEdit(expense.id)
+                                            }
                                         >
-                                            Apri nell’archivio
-                                        </Link>
-                                    </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    ) : null}
-                </TableCell>
-            ))}
-        </TableRow>
-    ));
+                                            {missing}
+                                        </Button>
+                                    )}
+                                    <Attribution expense={expense} />
+                                </div>
+                            ) : id === 'allocated' || id === 'actual' ? (
+                                <ExpenseAmount
+                                    value={
+                                        expense[
+                                            id === 'allocated'
+                                                ? 'allocated_amount'
+                                                : 'actual_amount'
+                                        ]
+                                    }
+                                    label={`Modifica ${columnNames[id]} della spesa ${expense.title}`}
+                                    busy={busy}
+                                    highlightIncomplete={
+                                        highlightIncomplete &&
+                                        expense.contributes
+                                    }
+                                    expense={expense}
+                                    field={
+                                        id === 'allocated'
+                                            ? 'allocated_amount'
+                                            : 'actual_amount'
+                                    }
+                                    onExpenseEdit={onExpenseEdit}
+                                    onRecordSave={onRecordSave}
+                                />
+                            ) : id === 'actions' ? (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            disabled={busy}
+                                            aria-label={`Azioni per la spesa ${expense.title}`}
+                                        >
+                                            <Ellipsis />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuGroup>
+                                            <DropdownMenuItem
+                                                onSelect={() =>
+                                                    onExpenseEdit(expense.id)
+                                                }
+                                            >
+                                                Righe e collegamenti
+                                            </DropdownMenuItem>
+                                        </DropdownMenuGroup>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            ) : null}
+                        </TableCell>
+                    ))}
+                </TableRow>
+                {expanded && !!expense.lines?.length && (
+                    <TableRow data-budget-detail-owner={entry.id}>
+                        <TableCell
+                            colSpan={columnIds.length}
+                            className="bg-muted/20 p-3 whitespace-normal"
+                        >
+                            <div
+                                id={`budget-expense-lines-${key}`}
+                                className="ml-8 min-w-0 border-l-2 border-border pl-4"
+                            >
+                                <ExpenseLines
+                                    readOnly
+                                    showSummary={false}
+                                    showHeading={false}
+                                    contractMode={!!expense.contract_id}
+                                    lines={draftLines(expense)}
+                                />
+                            </div>
+                        </TableCell>
+                    </TableRow>
+                )}
+            </Fragment>
+        );
+    });
 }
 
 function SortableBudgetRow({
@@ -551,6 +633,7 @@ function SortableBudgetRow({
     return (
         <TableRow
             ref={setNodeRef}
+            data-budget-entry={row.original.id}
             style={{
                 transform: CSS.Translate.toString(transform),
                 position: 'relative',
@@ -651,7 +734,6 @@ function EntryDetail({
     busy,
     mutate,
     onExpenseEdit,
-    onRecordSave,
     highlightIncomplete,
 }: {
     entry: BudgetEntry;
@@ -661,7 +743,6 @@ function EntryDetail({
     busy: boolean;
     mutate: BudgetMutate;
     onExpenseEdit: (id: number) => void;
-    onRecordSave: SaveRecord;
     highlightIncomplete: boolean;
 }) {
     if (entry.type === 'manual')
@@ -681,125 +762,58 @@ function EntryDetail({
                 }
             />
         );
+    const expense = entry.expenses[0];
+    const missing = completionLabel(entry, year);
     return (
-        <div className="flex min-w-0 flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                {periodLabel(entry.starts_on, entry.ends_on) && (
-                    <p className="text-sm text-muted-foreground">
-                        Periodo{' '}
-                        {entry.type === 'contract'
-                            ? 'contrattuale'
-                            : 'del progetto'}
-                        : {periodLabel(entry.starts_on, entry.ends_on)}
-                    </p>
-                )}
-                <Button variant="outline" size="sm" asChild>
-                    <Link href={`/t/${slug}/${entry.type}s/${entry.source_id}`}>
-                        Apri nell’archivio
-                    </Link>
-                </Button>
-            </div>
-            <InlineEdit
-                value={entry.notes}
-                label={entry.type === 'project' ? 'Descrizione' : 'Note'}
-                multiline
-                disabled={busy}
-                className="text-sm whitespace-pre-wrap text-muted-foreground"
-                onSave={(value) =>
-                    onRecordSave(`${entry.type}s`, entry.source_id!, {
-                        [entry.type === 'project' ? 'description' : 'notes']:
-                            value || null,
-                    })
-                }
-            />
-            {!entry.expenses.length ? (
-                <Alert
+        <div className="flex min-w-0 flex-col gap-3">
+            {entry.incomplete > 0 && missing && (
+                <div
                     tabIndex={-1}
                     data-budget-incomplete={highlightIncomplete}
                     className={cn(
-                        highlightIncomplete && 'ring-1 ring-primary/40',
+                        'flex flex-wrap items-center gap-3 rounded text-sm focus-visible:ring-2 focus-visible:ring-ring',
+                        highlightIncomplete &&
+                            'bg-accent ring-1 ring-primary/40',
                     )}
                 >
-                    <AlertTitle>
-                        Nessun importo nell’anno selezionato
-                    </AlertTitle>
-                    <AlertDescription>
-                        <p>
-                            {entry.type === 'expense'
-                                ? `Verifica l’anno di imputazione e gli importi della spesa.`
-                                : `Collega una spesa con importi previsti o effettivi imputati al ${year}.`}
-                        </p>
-                        {entry.type === 'expense' && entry.source_id ? (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={busy}
-                                onClick={() => onExpenseEdit(entry.source_id!)}
-                            >
-                                Completa spesa
-                            </Button>
-                        ) : (
-                            <Button variant="outline" size="sm" asChild>
-                                <Link
-                                    href={
-                                        entry.type === 'contract'
-                                            ? `/t/${slug}/expenses/create?contract_id=${entry.source_id}&year=${year}`
-                                            : `/t/${slug}/projects/${entry.source_id}`
-                                    }
-                                >
-                                    {entry.type === 'contract'
-                                        ? 'Aggiungi spesa al contratto'
-                                        : 'Apri progetto'}
-                                </Link>
-                            </Button>
-                        )}
-                    </AlertDescription>
-                </Alert>
-            ) : entry.type === 'expense' ? (
-                <>
-                    {entry.incomplete > 0 && (
-                        <Alert
-                            tabIndex={-1}
-                            data-budget-incomplete={highlightIncomplete}
-                            className={cn(
-                                highlightIncomplete && 'ring-1 ring-primary/40',
-                            )}
+                    <span>{missing}</span>
+                    {entry.type === 'expense' ? (
+                        <Button
+                            variant="link"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                                onExpenseEdit(expense?.id ?? entry.source_id!)
+                            }
                         >
-                            <AlertTitle>Importi da completare</AlertTitle>
-                            <AlertDescription>
-                                <p>
-                                    Inserisci l’importo{' '}
-                                    {missingAmounts(
-                                        entry.expenses[0].allocated_amount ??
-                                            null,
-                                        entry.expenses[0].actual_amount ?? null,
-                                    )}{' '}
-                                    della spesa per il {year}.
-                                </p>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={busy}
-                                    onClick={() =>
-                                        onExpenseEdit(entry.expenses[0].id)
-                                    }
-                                >
-                                    Completa importi
-                                </Button>
-                            </AlertDescription>
-                        </Alert>
+                            Completa importi
+                        </Button>
+                    ) : (
+                        <Button variant="link" size="sm" asChild>
+                            <Link
+                                href={
+                                    entry.type === 'contract'
+                                        ? `/t/${slug}/expenses/create?contract_id=${entry.source_id}&year=${year}`
+                                        : `/t/${slug}/projects/${entry.source_id}`
+                                }
+                            >
+                                {entry.type === 'contract'
+                                    ? 'Aggiungi spesa al contratto'
+                                    : 'Apri progetto'}
+                            </Link>
+                        </Button>
                     )}
-                    {!!entry.expenses[0].lines?.length && (
-                        <ExpenseLines
-                            readOnly
-                            showSummary={false}
-                            showHeading={false}
-                            contractMode={!!entry.expenses[0].contract_id}
-                            lines={draftLines(entry.expenses[0])}
-                        />
-                    )}
-                </>
-            ) : null}
+                </div>
+            )}
+            {entry.type === 'expense' && !!expense?.lines?.length && (
+                <ExpenseLines
+                    readOnly
+                    showSummary={false}
+                    showHeading={false}
+                    contractMode={!!expense.contract_id}
+                    lines={draftLines(expense)}
+                />
+            )}
         </div>
     );
 }
@@ -844,6 +858,7 @@ export function BudgetTable({
     const [selection, setSelection] = useState<RowSelectionState>({});
     const [expanded, setExpanded] = useState<ExpandedState>(true);
     const [details, setDetails] = useState<number[]>([]);
+    const [expandedExpenses, setExpandedExpenses] = useState<string[]>([]);
     const [completionTarget, setCompletionTarget] = useState<{
         id: number;
     } | null>(null);
@@ -965,80 +980,99 @@ export function BudgetTable({
                 header: 'Descrizione',
                 enableHiding: false,
                 cell: ({ row }) => (
-                    <div className="max-w-96 min-w-52 whitespace-normal">
-                        <InlineEdit
-                            value={row.original.description}
-                            label={`Descrizione di ${row.original.description}`}
-                            disabled={busy}
-                            onSave={async (value) => {
-                                if (row.original.type === 'manual') {
-                                    const ok = await mutate(
-                                        'entries',
-                                        'PATCH',
-                                        {
-                                            action: 'update',
-                                            ids: [row.original.id],
-                                            changes: { description: value },
-                                        },
-                                    );
-                                    if (!ok)
-                                        throw new Error(
-                                            'Salvataggio non riuscito.',
+                    <div className="flex max-w-96 min-w-80 items-center gap-3 whitespace-normal">
+                        <div className="flex min-w-0 flex-1 items-center gap-1">
+                            <InlineEdit
+                                value={row.original.description}
+                                label={`Descrizione di ${row.original.description}`}
+                                disabled={busy}
+                                onSave={async (value) => {
+                                    if (row.original.type === 'manual') {
+                                        const ok = await mutate(
+                                            'entries',
+                                            'PATCH',
+                                            {
+                                                action: 'update',
+                                                ids: [row.original.id],
+                                                changes: { description: value },
+                                            },
                                         );
-                                } else {
-                                    await onRecordSave(
-                                        `${row.original.type}s`,
-                                        row.original.source_id!,
-                                        {
-                                            [row.original.type === 'expense'
-                                                ? 'title'
-                                                : 'name']: value,
-                                        },
-                                    );
-                                }
-                            }}
-                        />
-                        {preferences.group === 'center' &&
-                            preferences.visibility.type === false && (
-                                <Badge variant="secondary" className="text-xs">
-                                    {budgetLabels[row.original.type]}
-                                </Badge>
-                            )}
-                        {row.original.type === 'expense' &&
-                            row.original.expenses[0] && (
-                                <Attribution
-                                    expense={row.original.expenses[0]}
-                                />
-                            )}
-                        {!row.original.included && (
-                            <Badge variant="outline">Esclusa</Badge>
-                        )}
-                        {row.original.incomplete > 0 && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Badge asChild>
-                                        <button
-                                            type="button"
-                                            className="cursor-pointer"
-                                            aria-label={`Da completare: ${row.original.description}`}
-                                            aria-controls={`budget-detail-${row.original.id}`}
-                                            aria-expanded={details.includes(
-                                                row.original.id,
+                                        if (!ok)
+                                            throw new Error(
+                                                'Salvataggio non riuscito.',
+                                            );
+                                    } else {
+                                        await onRecordSave(
+                                            `${row.original.type}s`,
+                                            row.original.source_id!,
+                                            {
+                                                [row.original.type === 'expense'
+                                                    ? 'title'
+                                                    : 'name']: value,
+                                            },
+                                        );
+                                    }
+                                }}
+                            />
+                            {row.original.incomplete > 0 &&
+                                completionLabel(row.original, year) && (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="size-6 shrink-0"
+                                                disabled={busy || loading}
+                                                aria-label={`${completionLabel(row.original, year)}: ${row.original.description}`}
+                                                aria-controls={`budget-detail-${row.original.id}`}
+                                                aria-expanded={details.includes(
+                                                    row.original.id,
+                                                )}
+                                                onClick={() =>
+                                                    openCompletion(
+                                                        row.original.id,
+                                                    )
+                                                }
+                                            >
+                                                <TriangleAlert className="text-destructive" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            {completionLabel(
+                                                row.original,
+                                                year,
                                             )}
-                                            onClick={() =>
-                                                openCompletion(row.original.id)
-                                            }
+                                        </TooltipContent>
+                                    </Tooltip>
+                                )}
+                        </div>
+                        {((preferences.group === 'center' &&
+                            preferences.visibility.type === false) ||
+                            (row.original.type === 'expense' &&
+                                row.original.expenses[0]?.contributes ===
+                                    false) ||
+                            !row.original.included) && (
+                            <div className="flex max-w-48 flex-col items-start gap-1">
+                                {preferences.group === 'center' &&
+                                    preferences.visibility.type === false && (
+                                        <Badge
+                                            variant="secondary"
+                                            className="text-xs"
                                         >
-                                            Da completare
-                                            <ArrowRight />
-                                        </button>
-                                    </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    Mostra gli importi o le spese da completare
-                                    per il {year}.
-                                </TooltipContent>
-                            </Tooltip>
+                                            {budgetLabels[row.original.type]}
+                                        </Badge>
+                                    )}
+                                {row.original.type === 'expense' &&
+                                    row.original.expenses[0] && (
+                                        <Attribution
+                                            expense={row.original.expenses[0]}
+                                        />
+                                    )}
+                                {!row.original.included && (
+                                    <Badge variant="outline">Esclusa</Badge>
+                                )}
+                            </div>
                         )}
                     </div>
                 ),
@@ -1127,7 +1161,8 @@ export function BudgetTable({
                                 }
                             />
                         ) : row.original.type === 'expense' &&
-                          row.original.source_id ? (
+                          row.original.source_id &&
+                          row.original.expenses[0] ? (
                             <ExpenseAmount
                                 value={
                                     row.original.expenses[0] &&
@@ -1142,12 +1177,16 @@ export function BudgetTable({
                                 busy={busy}
                                 label={`Modifica ${columnNames[field]} della spesa ${row.original.description}`}
                                 expense={row.original.expenses[0]}
+                                highlightIncomplete={
+                                    completionTarget?.id === row.original.id &&
+                                    row.original.incomplete > 0
+                                }
                                 field={
                                     field === 'allocated'
                                         ? 'allocated_amount'
                                         : 'actual_amount'
                                 }
-                                slug={slug}
+                                onExpenseEdit={onExpenseEdit}
                                 onRecordSave={onRecordSave}
                             />
                         ) : (
@@ -1157,7 +1196,7 @@ export function BudgetTable({
                                         variant="ghost"
                                         size="sm"
                                         className="h-auto min-h-8 w-full justify-end financial-value tabular-nums"
-                                        aria-label={`Mostra le spese del ${row.original.type === 'contract' ? 'contratto' : 'progetto'} ${row.original.description}: ${columnNames[field]}`}
+                                        aria-label={`Mostra le spese di ${row.original.description}: ${columnNames[field]}`}
                                         aria-expanded={details.includes(
                                             row.original.id,
                                         )}
@@ -1174,7 +1213,9 @@ export function BudgetTable({
                                             )
                                         }
                                     >
-                                        {money(row.original[field])}
+                                        {row.original[field] === null
+                                            ? `${columnNames[field]} mancante`
+                                            : money(row.original[field])}
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -1292,8 +1333,10 @@ export function BudgetTable({
         [
             budget.entries,
             busy,
+            loading,
             centers,
             details,
+            completionTarget,
             mutate,
             onExpenseEdit,
             slug,
@@ -1451,32 +1494,35 @@ export function BudgetTable({
                         </TableRow>
                     ) : (
                         <>
-                            <TableRow data-budget-detail-owner={entry.id}>
-                                <TableCell
-                                    colSpan={visibleColumns.length}
-                                    className="bg-muted/20 p-3 whitespace-normal"
-                                >
-                                    <div
-                                        id={`budget-detail-${entry.id}`}
-                                        tabIndex={-1}
-                                        className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                            {(entry.type === 'manual' ||
+                                entry.type === 'expense' ||
+                                !entry.expenses.length) && (
+                                <TableRow data-budget-detail-owner={entry.id}>
+                                    <TableCell
+                                        colSpan={visibleColumns.length}
+                                        className="bg-muted/20 p-3 whitespace-normal"
                                     >
-                                        <EntryDetail
-                                            entry={entry}
-                                            slug={slug}
-                                            year={year}
-                                            centers={centers}
-                                            busy={busy}
-                                            mutate={mutate}
-                                            highlightIncomplete={
-                                                highlightIncomplete
-                                            }
-                                            onExpenseEdit={onExpenseEdit}
-                                            onRecordSave={onRecordSave}
-                                        />
-                                    </div>
-                                </TableCell>
-                            </TableRow>
+                                        <div
+                                            id={`budget-detail-${entry.id}`}
+                                            tabIndex={-1}
+                                            className="focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                                        >
+                                            <EntryDetail
+                                                entry={entry}
+                                                slug={slug}
+                                                year={year}
+                                                centers={centers}
+                                                busy={busy}
+                                                mutate={mutate}
+                                                highlightIncomplete={
+                                                    highlightIncomplete
+                                                }
+                                                onExpenseEdit={onExpenseEdit}
+                                            />
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )}
                             {(entry.type === 'contract' ||
                                 entry.type === 'project') && (
                                 <ExpenseRows
@@ -1487,6 +1533,16 @@ export function BudgetTable({
                                     slug={slug}
                                     busy={busy}
                                     highlightIncomplete={highlightIncomplete}
+                                    expandedExpenses={expandedExpenses}
+                                    onToggleExpense={(key) =>
+                                        setExpandedExpenses((current) =>
+                                            current.includes(key)
+                                                ? current.filter(
+                                                      (value) => value !== key,
+                                                  )
+                                                : [...current, key],
+                                        )
+                                    }
                                     onExpenseEdit={onExpenseEdit}
                                     onRecordSave={onRecordSave}
                                 />

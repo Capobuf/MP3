@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarDays } from 'lucide-react';
+import { ArrowUpRight, CalendarDays, ChevronDown } from 'lucide-react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
 import {
     InlineEdit,
@@ -6,7 +6,7 @@ import {
 } from '@/components/management/inline-edit';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
@@ -15,6 +15,7 @@ import {
     applyFilters,
 } from '@/components/management/dashboard-filters';
 import { ExpenseTable } from '@/components/management/expense-table';
+import { LinkProjectExpense } from '@/components/management/link-project-expense';
 import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
 import { DetailNotes } from '@/components/management/detail-notes';
 import {
@@ -25,7 +26,7 @@ import {
 import { Pagination } from '@/components/management/pagination';
 import { DashboardSummary } from '@/components/management/dashboard-summary';
 import type { SummaryAnalytics } from '@/components/management/dashboard-summary';
-import { labels } from '@/components/management/types';
+import { labels, projectStatusLabel } from '@/components/management/types';
 import type {
     Catalog,
     DetailBreakdown,
@@ -38,6 +39,13 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Tenant } from '@/types';
 
 export default function CatalogDetail({
@@ -66,6 +74,8 @@ export default function CatalogDetail({
     expenseFilters: Filters;
 }) {
     const [tableBusy, setTableBusy] = useState(false);
+    const [linkExpenseOpen, setLinkExpenseOpen] = useState(false);
+    const addExpenseButton = useRef<HTMLButtonElement>(null);
     const path = `/t/${tenant.slug}/${catalog}`;
     const save = (field: string, value: unknown) =>
         saveInlineRecord(`${path}/${record.id}`, { [field]: value });
@@ -112,32 +122,65 @@ export default function CatalogDetail({
                     <h2 className="font-semibold">
                         Spese collegate · {history ? 'Tutti gli anni' : year}
                     </h2>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={tableBusy}
-                        onClick={() =>
-                            router.get(
-                                `${path}/${record.id}`,
-                                {
-                                    ...expenseFilters,
-                                    year,
-                                    history: history ? undefined : 1,
-                                },
-                                { preserveScroll: true },
-                            )
-                        }
-                    >
-                        {history
-                            ? `Mostra solo ${year}`
-                            : 'Mostra storico completo'}
-                    </Button>
+                    {catalog === 'projects' && (
+                        <>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        ref={addExpenseButton}
+                                        disabled={tableBusy}
+                                    >
+                                        Aggiungi
+                                        <ChevronDown data-icon="inline-end" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                    align="end"
+                                    onCloseAutoFocus={(event) => {
+                                        if (linkExpenseOpen)
+                                            event.preventDefault();
+                                    }}
+                                >
+                                    <DropdownMenuGroup>
+                                        <DropdownMenuItem
+                                            disabled={tableBusy}
+                                            onSelect={() =>
+                                                router.visit(
+                                                    `/t/${tenant.slug}/expenses/create?project_id=${record.id}&year=${year}`,
+                                                )
+                                            }
+                                        >
+                                            Nuova Spesa
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            disabled={tableBusy}
+                                            onSelect={() =>
+                                                setLinkExpenseOpen(true)
+                                            }
+                                        >
+                                            Spesa Esistente
+                                        </DropdownMenuItem>
+                                    </DropdownMenuGroup>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <LinkProjectExpense
+                                slug={tenant.slug}
+                                project={record}
+                                open={linkExpenseOpen}
+                                onOpenChange={setLinkExpenseOpen}
+                                onCloseAutoFocus={(event) => {
+                                    event.preventDefault();
+                                    addExpenseButton.current?.focus();
+                                }}
+                            />
+                        </>
+                    )}
                     {catalog === 'contracts' && (
                         <Button
                             disabled={tableBusy}
                             onClick={() =>
                                 router.visit(
-                                    `/t/${tenant.slug}/expenses/create?contract_id=${record.id}`,
+                                    `/t/${tenant.slug}/expenses/create?contract_id=${record.id}&year=${year}`,
                                 )
                             }
                         >
@@ -178,6 +221,7 @@ export default function CatalogDetail({
                     hideRelations={[catalog]}
                     showYear
                     contractMode={catalog === 'contracts'}
+                    projectId={catalog === 'projects' ? record.id : undefined}
                     onBusyChange={setTableBusy}
                 />
                 <div
@@ -216,17 +260,19 @@ export default function CatalogDetail({
                         {catalog === 'projects' && (
                             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                                 <Badge variant="secondary">
-                                    {record.status}
+                                    {projectStatusLabel(record.status)}
                                 </Badge>
                                 <span>{year}</span>
                             </div>
                         )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2">
-                        <RecordMoreActions
-                            href={`${path}/${record.id}/edit`}
-                            disabled={tableBusy}
-                        />
+                        {catalog !== 'projects' && (
+                            <RecordMoreActions
+                                href={`${path}/${record.id}/edit`}
+                                disabled={tableBusy}
+                            />
+                        )}
                         <DeleteRecord
                             url={`${path}/${record.id}`}
                             redirect={path}
@@ -341,7 +387,11 @@ export default function CatalogDetail({
                                             display={
                                                 field?.endsWith('_on')
                                                     ? dateLabel(value)
-                                                    : value || 'Da inserire'
+                                                    : field === 'status'
+                                                      ? projectStatusLabel(
+                                                            value,
+                                                        )
+                                                      : value || 'Da inserire'
                                             }
                                             options={
                                                 field === 'status'
@@ -351,7 +401,9 @@ export default function CatalogDetail({
                                                           'completato',
                                                       ].map((value) => ({
                                                           value,
-                                                          label: value,
+                                                          label: projectStatusLabel(
+                                                              value,
+                                                          ),
                                                       }))
                                                     : undefined
                                             }

@@ -22,6 +22,26 @@ use Inertia\Response;
 
 class ExpenseController extends Controller
 {
+    public function options(Request $request, Tenant $tenant): JsonResponse
+    {
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'exclude_project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('tenant_id', $tenant->id)],
+        ]);
+        $query = $tenant->expenses()->with('project:id,name');
+        if (isset($data['exclude_project_id'])) {
+            $query->where(fn ($query) => $query->whereNull('project_id')->orWhere('project_id', '!=', $data['exclude_project_id']));
+        }
+        if ($search = trim($data['search'] ?? '')) {
+            $query->where('title', 'like', '%'.$search.'%');
+        }
+
+        return response()->json(['records' => $query->orderBy('title')->orderBy('id')->limit(50)->get()->map(fn (Expense $expense) => [
+            'id' => $expense->id,
+            'name' => $expense->title.' · '.$expense->year.' · '.($expense->project->name ?? 'Senza progetto'),
+        ])]);
+    }
+
     public function index(Request $request, Tenant $tenant): Response
     {
         return Inertia::render('tenants/expenses', [

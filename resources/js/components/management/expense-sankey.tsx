@@ -19,7 +19,6 @@ import type {
     Metric,
     SankeyNode,
     SankeyMode,
-    EconomicValues,
 } from './analytics-types';
 import {
     AnalyticsCard,
@@ -40,7 +39,11 @@ export function ExpenseSankey({
     const [destination, setDestination] = useState<'projects' | 'contracts'>(
         'projects',
     );
-    const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+    const [hovered, setHovered] = useState<
+        | { type: 'node'; index: number; x: number; y: number; value: number }
+        | { type: 'link'; index: number; x: number; y: number }
+        | null
+    >(null);
     const [selected, setSelected] = useState<{
         field: EntityFilter;
         id: GroupId;
@@ -74,9 +77,48 @@ export function ExpenseSankey({
     const data = buildSankey(pairs, vendors, destinations, field);
     const isolate = (value: Metric) =>
         setMetric((current) => (current === value ? 'comparison' : value));
-    const activeKey = data.nodes.find((node) => node.key === hoveredKey)?.key;
+    const activeLinks = new Set<number>();
+    if (hovered?.type === 'link' && data.links[hovered.index]) {
+        const flow = data.links[hovered.index];
+        const vendor = flow.source === 0 ? flow.target : flow.source;
+        data.links.forEach((link, index) => {
+            if (
+                (link.source === 0 && link.target === vendor) ||
+                (flow.source === 0
+                    ? link.source === vendor
+                    : index === hovered.index)
+            )
+                activeLinks.add(index);
+        });
+    } else if (hovered?.type === 'node' && data.nodes[hovered.index]) {
+        const node = data.nodes[hovered.index];
+        const vendors = new Set<number>();
+        if (node.field === 'vendor_id') vendors.add(hovered.index);
+        if (node.field === field) {
+            data.links.forEach((link) => {
+                if (link.target === hovered.index) vendors.add(link.source);
+            });
+        }
+        data.links.forEach((link, index) => {
+            if (
+                hovered.index === 0 ||
+                (link.source === 0 && vendors.has(link.target)) ||
+                (vendors.has(link.source) &&
+                    (node.field === 'vendor_id' ||
+                        link.target === hovered.index))
+            )
+                activeLinks.add(index);
+        });
+    }
+    const activeNodes = new Set(
+        [...activeLinks].flatMap((index) => [
+            data.links[index].source,
+            data.links[index].target,
+        ]),
+    );
     const select = (node: SankeyNode) => {
         if (node.field && node.id !== undefined && node.id !== 'others') {
+            setHovered(null);
             const selection = { field: node.field, id: node.id };
             setSelected((current) =>
                 current?.field === selection.field &&
@@ -102,6 +144,14 @@ export function ExpenseSankey({
             node.field && node.id !== undefined
                 ? getHref(node.field, node.id)
                 : undefined;
+        const explore = () =>
+            setHovered({
+                type: 'node',
+                index,
+                x: x + width / 2,
+                y: y + height / 2,
+                value: payload.value,
+            });
         const label = (
             <text
                 x={target ? x - 8 : x + width + 8}
@@ -109,6 +159,10 @@ export function ExpenseSankey({
                 textAnchor={target ? 'end' : 'start'}
                 dominantBaseline="middle"
                 fill="var(--foreground)"
+                stroke="var(--card)"
+                strokeWidth={3}
+                strokeLinejoin="round"
+                paintOrder="stroke"
                 fontSize={12}
             >
                 {node.name.length > 25
@@ -118,17 +172,20 @@ export function ExpenseSankey({
         );
         return (
             <g
-                onMouseEnter={() => setHoveredKey(node.key)}
-                onMouseLeave={() => setHoveredKey(null)}
-                onFocus={() => setHoveredKey(node.key)}
-                onBlur={() => setHoveredKey(null)}
+                onMouseEnter={explore}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={explore}
+                onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget))
+                        setHovered(null);
+                }}
             >
                 <title>
                     {node.name}: riferimento geometrico {money(payload.value)}
                 </title>
                 <rect
-                    role={actionable ? 'button' : undefined}
-                    tabIndex={actionable ? 0 : undefined}
+                    role={actionable ? 'button' : 'img'}
+                    tabIndex={0}
                     aria-label={actionable ? `Filtra ${node.name}` : node.name}
                     aria-pressed={
                         actionable
@@ -138,6 +195,7 @@ export function ExpenseSankey({
                     }
                     onClick={() => select(node)}
                     onKeyDown={(event) => {
+                        if (event.key === 'Escape') setHovered(null);
                         if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
                             select(node);
@@ -154,10 +212,12 @@ export function ExpenseSankey({
                     }
                     rx={3}
                     stroke={
-                        activeKey === node.key ? 'var(--ring)' : 'transparent'
+                        hovered && activeNodes.has(index)
+                            ? 'var(--ring)'
+                            : 'transparent'
                     }
                     strokeWidth={2}
-                    opacity={activeKey && activeKey !== node.key ? 0.7 : 1}
+                    opacity={hovered && !activeNodes.has(index) ? 0.4 : 1}
                     className={
                         actionable
                             ? 'cursor-pointer transition-[opacity,stroke] duration-200 outline-none focus:opacity-70 motion-reduce:transition-none'
@@ -188,53 +248,61 @@ export function ExpenseSankey({
         const flow = data.links[index];
         const metrics: Metric[] =
             metric === 'comparison' ? ['allocated', 'actual'] : [metric];
-        const ordered = metrics.toSorted(
-            (a, b) =>
-                Number(flow.values[`${b}_positive`]) -
-                Number(flow.values[`${a}_positive`]),
-        );
-        const d = `M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`;
-        const highlighted =
-            !activeKey ||
-            data.nodes[flow.source].key === activeKey ||
-            data.nodes[flow.target].key === activeKey;
+        // Recharts uses one global value-to-height ratio; each lane reserves half of it.
+        const laneWidth = metric === 'comparison' ? linkWidth / 2 : linkWidth;
+        const ribbon = (offset: number, width: number) => {
+            const top = offset - width / 2;
+            const bottom = offset + width / 2;
+            return `M${sourceX},${sourceY + top} C${sourceControlX},${sourceY + top} ${targetControlX},${targetY + top} ${targetX},${targetY + top} L${targetX},${targetY + bottom} C${targetControlX},${targetY + bottom} ${sourceControlX},${sourceY + bottom} ${sourceX},${sourceY + bottom} Z`;
+        };
+        const highlighted = !hovered || activeLinks.has(index);
+        const explore = () =>
+            setHovered({
+                type: 'link',
+                index,
+                x: (sourceX + targetX) / 2,
+                y: (sourceY + targetY) / 2,
+            });
+        const metricLabel = (key: Metric) =>
+            `${economicConfig[key].label} positivo: ${flow.values[key] === null ? 'Non disponibile' : money(flow.values[`${key}_positive`])}`;
         return (
-            <g>
-                {ordered.map((key, layer) => {
+            <g
+                role="img"
+                tabIndex={0}
+                aria-label={`${data.nodes[flow.source].name} → ${data.nodes[flow.target].name}. ${metricLabel('allocated')}. ${metricLabel('actual')}. Scostamento confrontabile: ${flow.values.variance === null ? 'Non determinabile' : money(flow.values.variance)}`}
+                onMouseEnter={explore}
+                onMouseLeave={() => setHovered(null)}
+                onFocus={explore}
+                onBlur={() => setHovered(null)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') setHovered(null);
+                }}
+                className="outline-none focus-visible:[&>path:first-child]:stroke-[var(--ring)]"
+            >
+                <path
+                    d={ribbon(0, linkWidth)}
+                    fill="transparent"
+                    stroke="transparent"
+                    pointerEvents="all"
+                />
+                {metrics.map((key) => {
                     const amount = Number(flow.values[`${key}_positive`]);
                     if (amount <= 0) return null;
+                    const offset =
+                        metric === 'comparison'
+                            ? ((key === 'allocated' ? -1 : 1) * linkWidth) / 4
+                            : 0;
                     return (
                         <path
                             key={key}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`${economicConfig[key].label}: ${data.nodes[flow.source].name} → ${data.nodes[flow.target].name}`}
-                            aria-pressed={metric === key}
-                            onClick={() => isolate(key)}
-                            onKeyDown={(event) => {
-                                if (
-                                    event.key === 'Enter' ||
-                                    event.key === ' '
-                                ) {
-                                    event.preventDefault();
-                                    isolate(key);
-                                }
-                            }}
-                            className="recharts-sankey-link cursor-pointer outline-none focus:stroke-[var(--ring)]"
-                            d={d}
-                            fill="none"
-                            stroke={economicConfig[key].color}
-                            strokeWidth={(linkWidth * amount) / flow.value}
-                            // Equal widths use alternating strokes to keep both colors selectable.
-                            strokeDasharray={
-                                metric === 'comparison' &&
-                                layer === 1 &&
-                                flow.values.allocated_positive ===
-                                    flow.values.actual_positive
-                                    ? '8 8'
-                                    : undefined
-                            }
-                            strokeOpacity={highlighted ? 0.65 : 0.08}
+                            className="recharts-sankey-link"
+                            d={ribbon(
+                                offset,
+                                (laneWidth * amount) / flow.value,
+                            )}
+                            fill={economicConfig[key].color}
+                            fillOpacity={highlighted ? 0.8 : 0.1}
+                            pointerEvents="none"
                         />
                     );
                 })}
@@ -249,7 +317,7 @@ export function ExpenseSankey({
                     <Select
                         value={metric}
                         onValueChange={(value) => {
-                            setHoveredKey(null);
+                            setHovered(null);
                             setMetric(value as SankeyMode);
                         }}
                     >
@@ -276,7 +344,7 @@ export function ExpenseSankey({
                     <Select
                         value={destination}
                         onValueChange={(value) => {
-                            setHoveredKey(null);
+                            setHovered(null);
                             setSelected(null);
                             setDestination(value as 'projects' | 'contracts');
                         }}
@@ -299,13 +367,19 @@ export function ExpenseSankey({
                         </SelectContent>
                     </Select>
                     {selected !== null && (
-                        <ChartReset onReset={() => setSelected(null)} />
+                        <ChartReset
+                            onReset={() => {
+                                setSelected(null);
+                                setHovered(null);
+                            }}
+                        />
                     )}
                 </div>
             }
         >
             <div
                 className="mb-3 flex flex-wrap justify-center gap-4"
+                role="group"
                 aria-label="Legenda dei flussi"
             >
                 {(['allocated', 'actual'] as const).map((key) => (
@@ -358,20 +432,44 @@ export function ExpenseSankey({
                             link={renderLink}
                         >
                             <ChartTooltip
-                                content={({ active, payload }) => {
-                                    const item = payload?.[0]?.payload as
-                                        | {
-                                              payload?: {
-                                                  name?: string;
-                                                  value?: number;
-                                                  values?: EconomicValues;
-                                                  source?: { name: string };
-                                                  target?: { name: string };
-                                              };
-                                          }
-                                        | undefined;
-                                    const flow = item?.payload;
-                                    return active && flow ? (
+                                active={hovered !== null}
+                                isAnimationActive={false}
+                                position={
+                                    hovered
+                                        ? { x: hovered.x, y: hovered.y }
+                                        : undefined
+                                }
+                                // Recharts has no mouse payload on SVG focus, so visibility follows exploration.
+                                wrapperStyle={{
+                                    visibility: hovered ? 'visible' : 'hidden',
+                                }}
+                                content={() => {
+                                    const flow =
+                                        hovered?.type === 'link' &&
+                                        data.links[hovered.index]
+                                            ? {
+                                                  ...data.links[hovered.index],
+                                                  source: data.nodes[
+                                                      data.links[hovered.index]
+                                                          .source
+                                                  ],
+                                                  target: data.nodes[
+                                                      data.links[hovered.index]
+                                                          .target
+                                                  ],
+                                              }
+                                            : hovered?.type === 'node'
+                                              ? {
+                                                    name: data.nodes[
+                                                        hovered.index
+                                                    ]?.name,
+                                                    value: hovered.value,
+                                                    values: undefined,
+                                                    source: undefined,
+                                                    target: undefined,
+                                                }
+                                              : undefined;
+                                    return flow ? (
                                         <div className="chart-tooltip">
                                             <p className="mb-1 font-medium">
                                                 {flow.source && flow.target
@@ -381,17 +479,24 @@ export function ExpenseSankey({
                                             {flow.values ? (
                                                 <>
                                                     <p>
-                                                        Allocato:{' '}
-                                                        {money(
-                                                            flow.values
-                                                                .allocated,
-                                                        )}
+                                                        Allocato positivo:{' '}
+                                                        {flow.values
+                                                            .allocated === null
+                                                            ? 'Non disponibile'
+                                                            : money(
+                                                                  flow.values
+                                                                      .allocated_positive,
+                                                              )}
                                                     </p>
                                                     <p>
-                                                        Effettivo:{' '}
-                                                        {money(
-                                                            flow.values.actual,
-                                                        )}
+                                                        Effettivo positivo:{' '}
+                                                        {flow.values.actual ===
+                                                        null
+                                                            ? 'Non disponibile'
+                                                            : money(
+                                                                  flow.values
+                                                                      .actual_positive,
+                                                              )}
                                                     </p>
                                                     <p>
                                                         Scostamento

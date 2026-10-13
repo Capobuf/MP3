@@ -47,7 +47,7 @@ import { api, ApiError, decimalInput } from './helpers';
 import { RecordSelect } from './record-select';
 import { CostCenterSelect } from './cost-center-select';
 import { CostCenterForm } from './cost-center-form';
-import { singular } from './types';
+import { singular, projectStatusLabel } from './types';
 import type { Catalog, Kind, Options, RecordData } from './types';
 
 type FormField = {
@@ -209,6 +209,7 @@ export function EntityForm({
     year: providedYear,
     options,
     contractContext,
+    projectContext,
     onClose,
     onSaved,
     onBusyChange,
@@ -220,6 +221,7 @@ export function EntityForm({
     year?: number;
     options: Options;
     contractContext?: RecordData;
+    projectContext?: RecordData;
     onClose: () => void;
     onSaved: (record: RecordData) => void;
     onBusyChange?: (busy: boolean) => void;
@@ -251,6 +253,10 @@ export function EntityForm({
                 period_ends_on: initial.values.period_ends_on,
                 year: initial.values.year,
             };
+            initial.original = snapshot(initial);
+        }
+        if (kind === 'expenses' && projectContext && !record) {
+            initial.values.project_id = String(projectContext.id);
             initial.original = snapshot(initial);
         }
         return [initial];
@@ -644,6 +650,12 @@ export function EntityForm({
                         {current.kind === 'expenses' && (
                             <h2 className="font-semibold">Dati della spesa</h2>
                         )}
+                        {current.kind === 'expenses' && projectContext && (
+                            <p className="text-sm text-muted-foreground">
+                                Progetto: {projectContext.name}. La spesa verrà
+                                collegata a questo progetto.
+                            </p>
+                        )}
                         {current.kind === 'expenses' && contractContext && (
                             <p className="text-sm text-muted-foreground">
                                 Contratto: {contractContext.name}. Date di
@@ -712,6 +724,11 @@ export function EntityForm({
                                             'allocated_amount',
                                             'actual_amount',
                                         ].includes(field.key)
+                                    )
+                                        return null;
+                                    if (
+                                        projectContext &&
+                                        field.key === 'project_id'
                                     )
                                         return null;
                                     if (
@@ -856,7 +873,9 @@ export function EntityForm({
                                                                 key={status}
                                                                 value={status}
                                                             >
-                                                                {status}
+                                                                {projectStatusLabel(
+                                                                    status,
+                                                                )}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectGroup>

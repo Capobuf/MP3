@@ -110,6 +110,16 @@ export const labels: Record<Kind, string> = {
     projects: 'Progetti',
     expenses: 'Spese',
 };
+const projectStatusLabels: Record<string, string> = {
+    pianificato: 'Pianificato',
+    attivo: 'Attivo',
+    completato: 'Completato',
+};
+
+export function projectStatusLabel(status: string | null | undefined) {
+    return status ? (projectStatusLabels[status] ?? status) : 'Non indicato';
+}
+
 export const singular: Record<Kind, string> = {
     vendors: 'fornitore',
     contracts: 'contratto',

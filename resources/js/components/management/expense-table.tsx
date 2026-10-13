@@ -69,6 +69,7 @@ export function ExpenseTable({
     onSort,
     onBusyChange,
     toolbar,
+    projectId,
 }: {
     rows: Expense[];
     loading?: boolean;
@@ -81,6 +82,7 @@ export function ExpenseTable({
     onSort?: (field: string) => void;
     onBusyChange?: (busy: boolean) => void;
     toolbar?: ReactNode;
+    projectId?: number;
 }) {
     'use no memo'; // TanStack v8 exposes mutable table and column instances.
 
@@ -89,6 +91,7 @@ export function ExpenseTable({
     const [previousScope, setPreviousScope] = useState(scope);
     const [selected, setSelected] = useState<number[]>([]);
     const [deleting, setDeleting] = useState<number[]>([]);
+    const [unlinking, setUnlinking] = useState<number[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const lock = useRef(false);
@@ -97,6 +100,7 @@ export function ExpenseTable({
         setPreviousScope(scope);
         setSelected([]);
         setDeleting([]);
+        setUnlinking([]);
         setError('');
     }
 
@@ -121,20 +125,30 @@ export function ExpenseTable({
         };
     }, []);
 
-    async function mutate() {
+    async function mutate(unlink = false) {
         if (lock.current) return;
+        const ids = unlink ? unlinking : deleting;
         lock.current = true;
         setBusy(true);
         onBusyChange?.(true);
         setError('');
         let persisted = false;
         try {
-            const result = await api<DeletionResult>(
-                `/t/${slug}/expenses/batch`,
-                'DELETE',
-                { ids: deleting },
-            );
+            const result = unlink
+                ? await api<DeletionResult>(
+                      `/t/${slug}/expenses/batch`,
+                      'PATCH',
+                      {
+                          updates: ids.map((id) => ({ id, project_id: null })),
+                      },
+                  )
+                : await api<DeletionResult>(
+                      `/t/${slug}/expenses/batch`,
+                      'DELETE',
+                      { ids },
+                  );
             setDeleting([]);
+            setUnlinking([]);
             setSelected([]);
             persisted = true;
             refreshing.current = true;
@@ -145,7 +159,8 @@ export function ExpenseTable({
             await new Promise<void>((resolve, reject) => {
                 let refreshed = false;
                 router.reload({
-                    ...(deleting.length === rows.length && pageNumber > 1
+                    ...(rows.every((row) => ids.includes(row.id)) &&
+                    pageNumber > 1
                         ? { data: { page: pageNumber - 1 } }
                         : {}),
                     onSuccess: () => {
@@ -167,7 +182,10 @@ export function ExpenseTable({
             if (result.cleanup_failed) {
                 setError(result.message);
                 toast.error(result.message);
-            } else toast.success(result.message);
+            } else
+                toast.success(
+                    unlink ? 'Spese scollegate dal progetto.' : result.message,
+                );
         } catch (failure) {
             const message =
                 failure instanceof Error
@@ -175,7 +193,7 @@ export function ExpenseTable({
                     : 'Operazione non riuscita.';
             const detail = persisted
                 ? 'Operazione completata sul server, ma i dati visualizzati non sono aggiornati. Ricarica la pagina prima di continuare.'
-                : `${message} Eliminazione non confermata. La selezione è conservata.`;
+                : `${message} ${unlink ? 'Scollegamento' : 'Eliminazione'} non confermato. La selezione è conservata.`;
             setError(detail);
             toast.error(detail);
         } finally {
@@ -375,6 +393,16 @@ export function ExpenseTable({
                     >
                         Elimina selezionate
                     </Button>
+                    {projectId && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => setUnlinking([...selected])}
+                        >
+                            Scollega dal progetto
+                        </Button>
+                    )}
                 </div>
             )}
             {(busy || loading) && (
@@ -450,7 +478,7 @@ export function ExpenseTable({
                                             key="title"
                                             className="min-w-56 whitespace-normal"
                                         >
-                                            <div className="flex items-start gap-2">
+                                            <div className="flex items-center gap-2">
                                                 <InlineEdit
                                                     value={expense.title}
                                                     label={`Titolo di ${expense.title}`}
@@ -757,6 +785,20 @@ export function ExpenseTable({
                                                             </Link>
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
+                                                        {projectId && (
+                                                            <DropdownMenuItem
+                                                                onSelect={() =>
+                                                                    setUnlinking(
+                                                                        [
+                                                                            expense.id,
+                                                                        ],
+                                                                    )
+                                                                }
+                                                            >
+                                                                Scollega dal
+                                                                progetto
+                                                            </DropdownMenuItem>
+                                                        )}
                                                         <DropdownMenuItem
                                                             variant="destructive"
                                                             onSelect={() =>
@@ -818,6 +860,51 @@ export function ExpenseTable({
                             }}
                         >
                             {busy ? 'Eliminazione…' : 'Elimina'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog
+                open={unlinking.length > 0}
+                onOpenChange={(open) => {
+                    if (!open && !busy) {
+                        setUnlinking([]);
+                        setError('');
+                    }
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Scollegare{' '}
+                            {unlinking.length === 1
+                                ? 'questa spesa'
+                                : `${unlinking.length} spese`}{' '}
+                            dal progetto?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Le spese resteranno disponibili nella pagina Spese,
+                            con i loro importi e allegati. Puoi annullare lo
+                            scollegamento con Ctrl+Z.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {error && (
+                        <p role="alert" className="text-sm text-destructive">
+                            {error}
+                        </p>
+                    )}
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={busy}>
+                            Annulla
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={busy}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void mutate(true);
+                            }}
+                        >
+                            {busy ? 'Scollegamento…' : 'Scollega'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

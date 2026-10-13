@@ -47,6 +47,7 @@ class CreationOptionsController extends Controller
     {
         $data = $request->validate([
             'contract_id' => ['nullable', 'integer', Rule::exists('contracts', 'id')->where('tenant_id', $tenant->id)],
+            'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('tenant_id', $tenant->id)],
             'parent_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)->whereNull('parent_id')],
         ]);
         $contract = $kind === 'expenses' && isset($data['contract_id'])
@@ -56,6 +57,12 @@ class CreationOptionsController extends Controller
             abort_if($record instanceof Expense && $record->contract_id !== $contract->id, 404);
             $contract->setAttribute('has_period_expenses', $contract->expenses()->whereNotNull('period_starts_on')->exists());
         }
+        $project = $kind === 'expenses' && isset($data['project_id'])
+            ? $tenant->projects()->whereKey((int) $data['project_id'])->firstOrFail()
+            : null;
+        if ($project) {
+            abort_if($record instanceof Expense && $record->project_id !== $project->id, 404);
+        }
 
         return Inertia::render('tenants/create', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
@@ -64,6 +71,7 @@ class CreationOptionsController extends Controller
             'year' => $record instanceof Expense ? $record->year : EconomicYearContext::year($tenant, $request),
             'options' => ExpenseOverview::options($tenant),
             'contractContext' => $contract,
+            'projectContext' => $project,
             'parentId' => $kind === 'cost-centers' && isset($data['parent_id']) ? (int) $data['parent_id'] : null,
         ]);
     }

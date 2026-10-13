@@ -77,6 +77,7 @@ Route::middleware('auth')->group(function () {
             Route::post('copy', [BudgetController::class, 'copy'])->name('budget.copy');
         });
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('expenses/options', [ExpenseController::class, 'options'])->name('expenses.options');
         Route::post('expenses', [ExpenseController::class, 'store'])->name('expenses.store');
         Route::patch('expenses/batch', [ExpenseController::class, 'batch'])->name('expenses.batch');
         Route::delete('expenses/batch', [ExpenseController::class, 'destroyBatch'])->name('expenses.destroy-batch');

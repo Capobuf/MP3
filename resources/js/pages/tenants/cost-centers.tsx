@@ -1,11 +1,10 @@
-import { RecordMoreActions } from '@/components/management/record-more-actions';
 import {
     InlineEdit,
     saveInlineRecord,
 } from '@/components/management/inline-edit';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
-import { Head, router } from '@inertiajs/react';
-import { CornerDownRight, Plus, Trash2 } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { CornerDownRight, Plus, Ellipsis } from 'lucide-react';
 import { useState } from 'react';
 import {
     useTableView,
@@ -38,6 +37,14 @@ import { Field, FieldLabel, FieldDescription } from '@/components/ui/field';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuGroup,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     Empty,
     EmptyHeader,
@@ -114,12 +121,27 @@ export default function CostCenters({
                 value: (center) => center.name,
                 canHide: false,
             },
-            { id: 'associations', label: 'Associazioni' },
+            {
+                id: 'expenses_count',
+                label: 'Spese collegate',
+                className: 'text-right',
+            },
+            {
+                id: 'projects_count',
+                label: 'Progetti collegati',
+                className: 'text-right',
+            },
+            {
+                id: 'contracts_count',
+                label: 'Contratti collegati',
+                className: 'text-right',
+            },
             {
                 id: 'actions',
                 label: 'Azioni',
                 canHide: false,
-                className: 'text-right',
+                className: 'w-12 text-right',
+                header: <span className="sr-only">Azioni</span>,
             },
         ],
     });
@@ -151,49 +173,66 @@ export default function CostCenters({
                             />
                         </div>
                     </TableCell>
-                    <TableCell
-                        key="associations"
-                        className="text-sm text-muted-foreground"
-                    >
-                        {center.expenses_count ?? 0} spese ·{' '}
-                        {center.projects_count ?? 0} progetti ·{' '}
-                        {center.contracts_count ?? 0} contratti
-                    </TableCell>
-                    <TableCell key="actions">
-                        <div className="flex justify-end gap-1">
-                            {!child && (
+                    {(
+                        [
+                            'expenses_count',
+                            'projects_count',
+                            'contracts_count',
+                        ] as const
+                    ).map((field) => (
+                        <TableCell
+                            key={field}
+                            className="text-right tabular-nums"
+                        >
+                            {center[field] ?? 0}
+                        </TableCell>
+                    ))}
+                    <TableCell key="actions" className="text-right">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                                 <Button
-                                    type="button"
                                     variant="ghost"
                                     size="icon"
-                                    aria-label={`Aggiungi un figlio a ${center.name}`}
-                                    onClick={() =>
-                                        router.visit(
-                                            `${path}/create?parent_id=${center.id}`,
-                                        )
-                                    }
+                                    disabled={busy}
+                                    aria-label={`Azioni per ${center.name}`}
                                 >
-                                    <Plus />
+                                    <Ellipsis />
                                 </Button>
-                            )}
-                            <RecordMoreActions
-                                href={`${path}/${center.id}/edit`}
-                                disabled={busy}
-                            />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Elimina ${center.name}`}
-                                onClick={() => {
-                                    setDeleting(center);
-                                    setDeleteChildren(false);
-                                    setConfirmCascade(false);
-                                }}
-                            >
-                                <Trash2 />
-                            </Button>
-                        </div>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuGroup>
+                                    {!child && (
+                                        <DropdownMenuItem
+                                            onSelect={() =>
+                                                router.visit(
+                                                    `${path}/create?parent_id=${center.id}`,
+                                                )
+                                            }
+                                        >
+                                            Aggiungi un figlio
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem asChild>
+                                        <Link
+                                            href={`${path}/${center.id}/edit`}
+                                        >
+                                            Altri dati e collegamenti
+                                        </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onSelect={() => {
+                                            setDeleting(center);
+                                            setDeleteChildren(false);
+                                            setConfirmCascade(false);
+                                        }}
+                                    >
+                                        Elimina
+                                    </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </TableCell>
                 </TableViewCells>
             </TableRow>
