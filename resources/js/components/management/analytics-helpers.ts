@@ -100,22 +100,46 @@ export function buildSankey(
     pairs: SankeyPair[],
     vendors: EconomicGroup[],
     destinations: EconomicGroup[],
-    metric: Metric,
     destination: EntityFilter,
 ): SankeyData {
-    const key = `${metric}_positive` as const;
-    const vendorGroups = topGroups(vendors, 6, metric, true).filter(
-        (row) => cents(row[key]) > 0,
-    );
-    const destinationGroups = topGroups(destinations, 6, metric, true).filter(
-        (row) => cents(row[key]) > 0,
-    );
+    // Sum pairwise maxima, rather than adding the two accounting metrics.
+    const reference = (pair: SankeyPair) =>
+        Math.max(cents(pair.allocated_positive), cents(pair.actual_positive));
+    const groups = (
+        rows: EconomicGroup[],
+        field: 'vendor_id' | 'destination_id',
+    ) => {
+        const ranked = rows
+            .map((row) => ({
+                ...row,
+                reference: pairs
+                    .filter((pair) => pair[field] === row.id)
+                    .reduce((sum, pair) => sum + reference(pair), 0),
+            }))
+            .filter((row) => row.reference > 0);
+        const associated = ranked
+            .filter((row) => row.id !== 'none')
+            .toSorted(
+                (a, b) =>
+                    b.reference - a.reference ||
+                    String(a.id).localeCompare(String(b.id)),
+            );
+        return [
+            ...associated.slice(0, 6),
+            ...(associated.length > 6
+                ? [{ id: 'others' as const, name: 'Altri' }]
+                : []),
+            ...ranked.filter((row) => row.id === 'none'),
+        ];
+    };
+    const vendorGroups = groups(vendors, 'vendor_id');
+    const destinationGroups = groups(destinations, 'destination_id');
     const nodes: SankeyData['nodes'] = [{ key: 'origin', name: 'Spese' }];
     const index = new Map<string, number>([['origin', 0]]);
-    const add = (row: EconomicGroup, field: EntityFilter) => {
-        const nodeKey = `${field}:${row.id}`;
-        index.set(nodeKey, nodes.length);
-        nodes.push({ key: nodeKey, name: row.name, id: row.id, field });
+    const add = (row: { id: GroupId; name: string }, field: EntityFilter) => {
+        const key = `${field}:${row.id}`;
+        index.set(key, nodes.length);
+        nodes.push({ key, name: row.name, id: row.id, field });
     };
     vendorGroups.forEach((row) => add(row, 'vendor_id'));
     destinationGroups.forEach((row) => add(row, destination));
@@ -125,37 +149,38 @@ export function buildSankey(
     );
     const links = new Map<
         string,
-        { source: number; target: number; cents: number }
+        { source: number; target: number; cents: number; pairs: SankeyPair[] }
     >();
-    const link = (source: number, target: number, value: number) => {
+    const link = (source: number, target: number, pair: SankeyPair) => {
         const key = `${source}:${target}`;
         const previous = links.get(key);
         links.set(key, {
             source,
             target,
-            cents: (previous?.cents ?? 0) + value,
+            cents: (previous?.cents ?? 0) + reference(pair),
+            pairs: [...(previous?.pairs ?? []), pair],
         });
     };
     for (const pair of pairs) {
-        const value = cents(pair[key]);
-        if (value <= 0) continue;
         const vendor = keptVendors.has(pair.vendor_id)
             ? pair.vendor_id
             : 'others';
         const target = keptDestinations.has(pair.destination_id)
             ? pair.destination_id
             : 'others';
-        const vendorIndex = index.get(`vendor_id:${vendor}`)!;
-        const destinationIndex = index.get(`${destination}:${target}`)!;
-        link(0, vendorIndex, value);
-        link(vendorIndex, destinationIndex, value);
+        const vendorIndex = index.get(`vendor_id:${vendor}`);
+        const destinationIndex = index.get(`${destination}:${target}`);
+        if (vendorIndex !== undefined) link(0, vendorIndex, pair);
+        if (vendorIndex !== undefined && destinationIndex !== undefined)
+            link(vendorIndex, destinationIndex, pair);
     }
-    return {
-        nodes: links.size ? nodes : [],
-        links: [...links.values()].map(({ source, target, cents }) => ({
+    const flows = [...links.values()]
+        .filter((link) => link.cents > 0)
+        .map(({ source, target, cents, pairs }) => ({
             source,
             target,
             value: cents / 100,
-        })),
-    };
+            values: sumGroups(pairs),
+        }));
+    return { nodes: flows.length ? nodes : [], links: flows };
 }

@@ -11,19 +11,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { buildSankey, sumGroups } from './analytics-helpers';
+import { buildSankey, economicConfig, sumGroups } from './analytics-helpers';
 import type {
     EntityFilter,
     ExpenseAnalytics,
     GroupId,
     Metric,
     SankeyNode,
+    SankeyMode,
+    EconomicValues,
 } from './analytics-types';
 import {
     AnalyticsCard,
     ChartReset,
     EmptyChart,
-    MetricSelect,
     Reconciliation,
 } from './analytics-ui';
 import { money } from './helpers';
@@ -35,7 +36,7 @@ export function ExpenseSankey({
     analytics: ExpenseAnalytics;
     getHref: (field: EntityFilter, id: GroupId) => string | undefined;
 }) {
-    const [metric, setMetric] = useState<Metric>('actual');
+    const [metric, setMetric] = useState<SankeyMode>('comparison');
     const [destination, setDestination] = useState<'projects' | 'contracts'>(
         'projects',
     );
@@ -70,7 +71,9 @@ export function ExpenseSankey({
                       pairs.filter((pair) => pair.destination_id === row.id),
                   ),
               }));
-    const data = buildSankey(pairs, vendors, destinations, metric, field);
+    const data = buildSankey(pairs, vendors, destinations, field);
+    const isolate = (value: Metric) =>
+        setMetric((current) => (current === value ? 'comparison' : value));
     const activeKey = data.nodes.find((node) => node.key === hoveredKey)?.key;
     const select = (node: SankeyNode) => {
         if (node.field && node.id !== undefined && node.id !== 'others') {
@@ -121,7 +124,7 @@ export function ExpenseSankey({
                 onBlur={() => setHoveredKey(null)}
             >
                 <title>
-                    {node.name}: {money(payload.value)}
+                    {node.name}: riferimento geometrico {money(payload.value)}
                 </title>
                 <rect
                     role={actionable ? 'button' : undefined}
@@ -181,35 +184,95 @@ export function ExpenseSankey({
         targetControlX,
         linkWidth,
         index,
-    }: SankeyLinkProps) => (
-        <path
-            className="recharts-sankey-link transition-[stroke-opacity] duration-200 motion-reduce:transition-none"
-            d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
-            fill="none"
-            stroke="var(--chart-1)"
-            strokeWidth={linkWidth}
-            strokeOpacity={
-                activeKey
-                    ? data.nodes[data.links[index].source].key === activeKey ||
-                      data.nodes[data.links[index].target].key === activeKey
-                        ? 0.5
-                        : 0.08
-                    : 0.25
-            }
-        />
-    );
+    }: SankeyLinkProps) => {
+        const flow = data.links[index];
+        const metrics: Metric[] =
+            metric === 'comparison' ? ['allocated', 'actual'] : [metric];
+        const ordered = metrics.toSorted(
+            (a, b) =>
+                Number(flow.values[`${b}_positive`]) -
+                Number(flow.values[`${a}_positive`]),
+        );
+        const d = `M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`;
+        const highlighted =
+            !activeKey ||
+            data.nodes[flow.source].key === activeKey ||
+            data.nodes[flow.target].key === activeKey;
+        return (
+            <g>
+                {ordered.map((key, layer) => {
+                    const amount = Number(flow.values[`${key}_positive`]);
+                    if (amount <= 0) return null;
+                    return (
+                        <path
+                            key={key}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`${economicConfig[key].label}: ${data.nodes[flow.source].name} → ${data.nodes[flow.target].name}`}
+                            aria-pressed={metric === key}
+                            onClick={() => isolate(key)}
+                            onKeyDown={(event) => {
+                                if (
+                                    event.key === 'Enter' ||
+                                    event.key === ' '
+                                ) {
+                                    event.preventDefault();
+                                    isolate(key);
+                                }
+                            }}
+                            className="recharts-sankey-link cursor-pointer outline-none focus:stroke-[var(--ring)]"
+                            d={d}
+                            fill="none"
+                            stroke={economicConfig[key].color}
+                            strokeWidth={(linkWidth * amount) / flow.value}
+                            // Equal widths use alternating strokes to keep both colors selectable.
+                            strokeDasharray={
+                                metric === 'comparison' &&
+                                layer === 1 &&
+                                flow.values.allocated_positive ===
+                                    flow.values.actual_positive
+                                    ? '8 8'
+                                    : undefined
+                            }
+                            strokeOpacity={highlighted ? 0.65 : 0.08}
+                        />
+                    );
+                })}
+            </g>
+        );
+    };
     return (
         <AnalyticsCard
             title="Flussi economici"
             controls={
                 <div className="flex flex-wrap items-center gap-2">
-                    <MetricSelect
+                    <Select
                         value={metric}
-                        onChange={(value) => {
+                        onValueChange={(value) => {
                             setHoveredKey(null);
-                            setMetric(value);
+                            setMetric(value as SankeyMode);
                         }}
-                    />
+                    >
+                        <SelectTrigger
+                            className="w-32"
+                            aria-label="Modalità dei flussi"
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectItem value="comparison">
+                                    Confronto
+                                </SelectItem>
+                                <SelectItem value="allocated">
+                                    Allocato
+                                </SelectItem>
+                                <SelectItem value="actual">
+                                    Effettivo
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
                     <Select
                         value={destination}
                         onValueChange={(value) => {
@@ -241,7 +304,37 @@ export function ExpenseSankey({
                 </div>
             }
         >
-            {data.links.length === 0 ? (
+            <div
+                className="mb-3 flex flex-wrap justify-center gap-4"
+                aria-label="Legenda dei flussi"
+            >
+                {(['allocated', 'actual'] as const).map((key) => (
+                    <button
+                        key={key}
+                        type="button"
+                        aria-pressed={metric === key}
+                        className="flex items-center gap-2 rounded px-2 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => isolate(key)}
+                    >
+                        <span
+                            className="size-3 rounded-sm"
+                            style={{
+                                background: economicConfig[key].color,
+                                opacity:
+                                    metric === 'comparison' || metric === key
+                                        ? 1
+                                        : 0.3,
+                            }}
+                        />
+                        {economicConfig[key].label}
+                    </button>
+                ))}
+            </div>
+            {data.links.length === 0 ||
+            (metric !== 'comparison' &&
+                !data.links.some(
+                    (link) => Number(link.values[`${metric}_positive`]) > 0,
+                )) ? (
                 <EmptyChart>
                     Nessun flusso positivo nel perimetro selezionato.
                 </EmptyChart>
@@ -249,12 +342,7 @@ export function ExpenseSankey({
                 <div className="max-w-full overflow-x-auto">
                     <ChartContainer
                         className="h-[420px] w-full min-w-[820px]"
-                        config={{
-                            value: {
-                                label: 'Volume positivo',
-                                color: 'var(--chart-1)',
-                            },
-                        }}
+                        config={economicConfig}
                     >
                         <Sankey
                             data={data}
@@ -276,6 +364,7 @@ export function ExpenseSankey({
                                               payload?: {
                                                   name?: string;
                                                   value?: number;
+                                                  values?: EconomicValues;
                                                   source?: { name: string };
                                                   target?: { name: string };
                                               };
@@ -289,7 +378,39 @@ export function ExpenseSankey({
                                                     ? `${flow.source.name} → ${flow.target.name}`
                                                     : flow.name}
                                             </p>
-                                            <p>{money(flow.value)}</p>
+                                            {flow.values ? (
+                                                <>
+                                                    <p>
+                                                        Allocato:{' '}
+                                                        {money(
+                                                            flow.values
+                                                                .allocated,
+                                                        )}
+                                                    </p>
+                                                    <p>
+                                                        Effettivo:{' '}
+                                                        {money(
+                                                            flow.values.actual,
+                                                        )}
+                                                    </p>
+                                                    <p>
+                                                        Scostamento
+                                                        confrontabile:{' '}
+                                                        {flow.values
+                                                            .variance === null
+                                                            ? 'Non determinabile'
+                                                            : money(
+                                                                  flow.values
+                                                                      .variance,
+                                                              )}
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <p>
+                                                    Riferimento geometrico:{' '}
+                                                    {money(flow.value)}
+                                                </p>
+                                            )}
                                         </div>
                                     ) : null;
                                 }}

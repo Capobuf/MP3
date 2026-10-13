@@ -23,6 +23,7 @@ export function InlineEdit({
     type = 'text',
     options,
     choices,
+    renderEditor,
     disabled = false,
     className,
     onSave,
@@ -35,6 +36,12 @@ export function InlineEdit({
     type?: 'text' | 'email' | 'date';
     options?: { value: string; label: string }[];
     choices?: { value: string; label: string }[];
+    renderEditor?: (props: {
+        value: string;
+        onChange: (value: string) => void;
+        disabled: boolean;
+        invalid: boolean;
+    }) => ReactNode;
     disabled?: boolean;
     className?: string;
     onSave: (value: string) => Promise<void>;
@@ -92,7 +99,17 @@ export function InlineEdit({
             className={cn('min-w-28', className)}
         >
             <div className="flex min-w-0 flex-col gap-2 [&>[data-slot=native-select-wrapper]]:w-full">
-                {choices ? (
+                {renderEditor ? (
+                    renderEditor({
+                        value: draft,
+                        onChange: (value) => {
+                            setDraft(value);
+                            setError('');
+                        },
+                        disabled: saving,
+                        invalid: !!error,
+                    })
+                ) : choices ? (
                     <NativeSelect
                         autoFocus
                         value={draft}
@@ -201,6 +218,7 @@ export function InlineEdit({
                     className={cn(
                         'flex justify-end gap-1',
                         !multiline &&
+                            !renderEditor &&
                             !options &&
                             !choices &&
                             '[@media(hover:hover)_and_(pointer:fine)]:hidden',

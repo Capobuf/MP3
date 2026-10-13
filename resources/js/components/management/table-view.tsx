@@ -35,6 +35,17 @@ export type ViewColumn<T> = {
     canHide?: boolean;
 };
 type Preferences = { order: ColumnOrderState; visibility: VisibilityState };
+function completeOrder(saved: string[], ids: string[]) {
+    const order = saved.filter((id) => ids.includes(id));
+    for (const id of ids) {
+        if (order.includes(id)) continue;
+        const next = ids
+            .slice(ids.indexOf(id) + 1)
+            .find((candidate) => order.includes(candidate));
+        order.splice(next ? order.indexOf(next) : order.length, 0, id);
+    }
+    return order;
+}
 function readPreferences(key: string, ids: string[]): Preferences {
     try {
         const saved: unknown = JSON.parse(localStorage.getItem(key) ?? 'null');
@@ -50,17 +61,15 @@ function readPreferences(key: string, ids: string[]): Preferences {
             const order = [
                 ...new Set(
                     saved.order.filter(
-                        (id): id is string =>
-                            typeof id === 'string' && ids.includes(id),
+                        (id): id is string => typeof id === 'string',
                     ),
                 ),
             ];
             return {
-                order: [...order, ...ids.filter((id) => !order.includes(id))],
+                order,
                 visibility: Object.fromEntries(
                     Object.entries(saved.visibility).filter(
-                        ([id, value]) =>
-                            ids.includes(id) && typeof value === 'boolean',
+                        ([, value]) => typeof value === 'boolean',
                     ),
                 ),
             };
@@ -94,10 +103,7 @@ export function useTableView<T>({
     const [sorting, setSorting] = useState<SortingState>([]);
     if (stored.key !== storageKey)
         setStored({ key: storageKey, ...readPreferences(storageKey, ids) });
-    const order = [
-        ...stored.order.filter((id) => ids.includes(id)),
-        ...ids.filter((id) => !stored.order.includes(id)),
-    ];
+    const order = completeOrder(stored.order, ids);
     const visibility = Object.fromEntries(
         columns.map((column) => [
             column.id,
@@ -105,7 +111,16 @@ export function useTableView<T>({
         ]),
     );
     function change(patch: Partial<Preferences>) {
-        const next = { ...stored, ...patch };
+        // Retain preferences for relation columns omitted in a detail context.
+        const next = {
+            ...stored,
+            order: patch.order
+                ? completeOrder(patch.order, [
+                      ...new Set([...stored.order, ...ids]),
+                  ])
+                : stored.order,
+            visibility: { ...stored.visibility, ...patch.visibility },
+        };
         setStored(next);
         try {
             localStorage.setItem(
@@ -164,7 +179,10 @@ export function useTableView<T>({
         table,
         columns,
         reset: () => {
-            change({ order: ids, visibility: {} });
+            change({
+                order: ids,
+                visibility: Object.fromEntries(ids.map((id) => [id, true])),
+            });
             if (!onSortingChange) setSorting([]);
         },
     };

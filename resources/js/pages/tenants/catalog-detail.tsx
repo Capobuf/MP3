@@ -174,6 +174,8 @@ export default function CatalogDetail({
                     }
                     rows={expenses.data}
                     slug={tenant.slug}
+                    options={options}
+                    hideRelations={[catalog]}
                     showYear
                     contractMode={catalog === 'contracts'}
                     onBusyChange={setTableBusy}

@@ -33,7 +33,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { CostCenterTags } from './cost-center-tags';
+import { costCenterLabel } from './cost-center-tags';
+import { CostCenterSelect } from './cost-center-select';
+import { RecordSelect } from './record-select';
 import {
     api,
     dateLabel,
@@ -41,7 +43,13 @@ import {
     money,
     varianceTextClass,
 } from './helpers';
-import type { DeletionResult, Expense, Filters } from './types';
+import type {
+    DeletionResult,
+    Expense,
+    Filters,
+    Options,
+    Catalog,
+} from './types';
 
 type AmountField = 'allocated_amount' | 'actual_amount';
 const amountLabels = {
@@ -54,6 +62,8 @@ export function ExpenseTable({
     loading = false,
     slug,
     showYear = false,
+    options,
+    hideRelations = [],
     contractMode = false,
     filters,
     onSort,
@@ -64,6 +74,8 @@ export function ExpenseTable({
     loading?: boolean;
     slug: string;
     showYear?: boolean;
+    options: Options;
+    hideRelations?: Catalog[];
     contractMode?: boolean;
     filters?: Filters;
     onSort?: (field: string) => void;
@@ -250,6 +262,16 @@ export function ExpenseTable({
                 canHide: false,
                 value: (row) => row.title,
             },
+            ...(!hideRelations.includes('vendors')
+                ? [{ id: 'vendor_id', label: 'Fornitore' }]
+                : []),
+            { id: 'cost_center_ids', label: 'Centro di costo' },
+            ...(!hideRelations.includes('projects')
+                ? [{ id: 'project_id', label: 'Progetto' }]
+                : []),
+            ...(!hideRelations.includes('contracts')
+                ? [{ id: 'contract_id', label: 'Contratto' }]
+                : []),
             ...(contractMode
                 ? [
                       {
@@ -263,7 +285,15 @@ export function ExpenseTable({
                           value: (row: Expense) => row.year,
                       },
                   ]
-                : []),
+                : showYear
+                  ? [
+                        {
+                            id: 'year',
+                            label: 'Anno di imputazione',
+                            value: (row: Expense) => row.year,
+                        },
+                    ]
+                  : []),
             {
                 id: 'allocated_amount',
                 label: contractMode ? 'Previsto' : 'Allocato',
@@ -447,26 +477,178 @@ export function ExpenseTable({
                                                     </Link>
                                                 </Button>
                                             </div>
-                                            <p
-                                                className="mt-1 line-clamp-2 text-sm text-muted-foreground"
-                                                title={`${expense.vendor?.name ?? 'Senza fornitore'} · ${expense.project?.name ?? 'Senza progetto'}`}
-                                            >
-                                                {expense.vendor?.name ??
-                                                    'Senza fornitore'}{' '}
-                                                ·{' '}
-                                                {expense.project?.name ??
-                                                    'Senza progetto'}
-                                                {showYear &&
-                                                    !contractMode &&
-                                                    ` · ${expense.year}`}
-                                                {contractMode &&
-                                                    !!expense.lines?.length &&
-                                                    ` · ${expense.lines.length} ${expense.lines.length === 1 ? 'condizione economica' : 'condizioni economiche'}`}
-                                            </p>
-                                            <CostCenterTags
-                                                centers={expense.cost_centers}
-                                            />
                                         </TableCell>
+                                        {(
+                                            [
+                                                'vendors',
+                                                'cost_centers',
+                                                'projects',
+                                                'contracts',
+                                            ] as const
+                                        ).map((catalog) => {
+                                            if (
+                                                catalog !== 'cost_centers' &&
+                                                hideRelations.includes(catalog)
+                                            )
+                                                return null;
+                                            const relation =
+                                                catalog === 'vendors'
+                                                    ? 'vendor'
+                                                    : catalog === 'projects'
+                                                      ? 'project'
+                                                      : 'contract';
+                                            const multiple =
+                                                catalog === 'cost_centers';
+                                            const key = multiple
+                                                ? 'cost_center_ids'
+                                                : (`${relation}_id` as const);
+                                            const current = expense[relation];
+                                            const display = multiple
+                                                ? expense.cost_centers
+                                                      ?.map(costCenterLabel)
+                                                      .join(', ')
+                                                : current?.name;
+                                            const label = multiple
+                                                ? 'Centro di costo'
+                                                : catalog === 'vendors'
+                                                  ? 'Fornitore'
+                                                  : catalog === 'projects'
+                                                    ? 'Progetto'
+                                                    : 'Contratto';
+                                            return (
+                                                <TableCell
+                                                    key={key}
+                                                    className="min-w-40 whitespace-normal"
+                                                >
+                                                    <InlineEdit
+                                                        value={
+                                                            multiple
+                                                                ? JSON.stringify(
+                                                                      expense.cost_centers?.map(
+                                                                          (
+                                                                              center,
+                                                                          ) =>
+                                                                              center.id,
+                                                                      ) ?? [],
+                                                                  )
+                                                                : expense[
+                                                                        `${relation}_id`
+                                                                    ] == null
+                                                                  ? ''
+                                                                  : String(
+                                                                        expense[
+                                                                            `${relation}_id`
+                                                                        ],
+                                                                    )
+                                                        }
+                                                        label={`${label} di ${expense.title}`}
+                                                        disabled={
+                                                            busy || loading
+                                                        }
+                                                        display={
+                                                            <span
+                                                                className={
+                                                                    !display
+                                                                        ? 'text-muted-foreground'
+                                                                        : undefined
+                                                                }
+                                                            >
+                                                                {display ||
+                                                                    'Non assegnato'}
+                                                            </span>
+                                                        }
+                                                        renderEditor={({
+                                                            value,
+                                                            onChange,
+                                                            disabled,
+                                                            invalid,
+                                                        }) =>
+                                                            multiple ? (
+                                                                <CostCenterSelect
+                                                                    id={`expense-${expense.id}-${expense.year}-centers`}
+                                                                    options={
+                                                                        options.cost_centers
+                                                                    }
+                                                                    value={
+                                                                        JSON.parse(
+                                                                            value,
+                                                                        ) as number[]
+                                                                    }
+                                                                    onChange={(
+                                                                        ids,
+                                                                    ) =>
+                                                                        onChange(
+                                                                            JSON.stringify(
+                                                                                ids,
+                                                                            ),
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        disabled
+                                                                    }
+                                                                    invalid={
+                                                                        invalid
+                                                                    }
+                                                                />
+                                                            ) : (
+                                                                <RecordSelect
+                                                                    slug={slug}
+                                                                    catalog={
+                                                                        catalog as Catalog
+                                                                    }
+                                                                    value={
+                                                                        value
+                                                                    }
+                                                                    onChange={
+                                                                        onChange
+                                                                    }
+                                                                    options={[
+                                                                        ...options[
+                                                                            catalog as Catalog
+                                                                        ],
+                                                                        ...(current
+                                                                            ? [
+                                                                                  current,
+                                                                              ]
+                                                                            : []),
+                                                                    ]}
+                                                                    label={
+                                                                        label
+                                                                    }
+                                                                    disabled={
+                                                                        disabled
+                                                                    }
+                                                                    aria-invalid={
+                                                                        invalid
+                                                                    }
+                                                                />
+                                                            )
+                                                        }
+                                                        onSave={(value) =>
+                                                            saveInlineRecord(
+                                                                `/t/${slug}/expenses/${expense.id}`,
+                                                                {
+                                                                    [key]: multiple
+                                                                        ? (JSON.parse(
+                                                                              value,
+                                                                          ) as number[])
+                                                                        : value
+                                                                          ? Number(
+                                                                                value,
+                                                                            )
+                                                                          : null,
+                                                                },
+                                                            )
+                                                        }
+                                                    />
+                                                </TableCell>
+                                            );
+                                        })}
+                                        {showYear && !contractMode && (
+                                            <TableCell key="year">
+                                                {expense.year}
+                                            </TableCell>
+                                        )}
                                         {contractMode && (
                                             <>
                                                 <TableCell

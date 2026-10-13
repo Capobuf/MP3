@@ -13,7 +13,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty';
 import { money } from './helpers';
-import type { EconomicValues, Metric } from './analytics-types';
+import type { EconomicValues, Metric, SankeyMode } from './analytics-types';
 
 export const AnalyticsLoadingContext = createContext(false);
 
@@ -116,15 +116,24 @@ export function Reconciliation({
     metric,
 }: {
     values: EconomicValues;
-    metric: Metric;
+    metric: SankeyMode;
 }) {
     return (
         <dl className="mt-4 grid gap-2 border-t pt-3 text-sm sm:grid-cols-3">
-            {[
-                ['Importi positivi', values[`${metric}_positive`]],
-                ['Rettifiche negative', values[`${metric}_negative`]],
-                ['Totale netto', values[metric]],
-            ].map(([label, value]) => (
+            {(metric === 'comparison'
+                ? [
+                      ['Totale netto allocato', values.allocated],
+                      ['Totale netto effettivo', values.actual],
+                      ['Scostamento confrontabile', values.variance],
+                      ['Rettifiche allocate', values.allocated_negative],
+                      ['Rettifiche effettive', values.actual_negative],
+                  ]
+                : [
+                      ['Importi positivi', values[`${metric}_positive`]],
+                      ['Rettifiche negative', values[`${metric}_negative`]],
+                      ['Totale netto', values[metric]],
+                  ]
+            ).map(([label, value]) => (
                 <div key={label}>
                     <dt className="text-muted-foreground">{label}</dt>
                     <dd className="mt-1 font-medium tracking-normal break-words tabular-nums">

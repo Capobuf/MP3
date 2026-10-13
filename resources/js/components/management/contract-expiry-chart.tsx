@@ -117,15 +117,17 @@ export function ContractExpiryChart({
                     </BarChart>
                 </ChartContainer>
             )}
-            <Button
-                className="mt-3 max-w-full whitespace-normal"
-                variant="outline"
-                asChild
-            >
-                <Link href={`/t/${slug}/contracts?expiring=1`}>
-                    {expiry.upcoming} contratti in scadenza entro 90 giorni
-                </Link>
-            </Button>
+            {expiry.upcoming > 0 && (
+                <Button
+                    className="mt-3 max-w-full whitespace-normal"
+                    variant="outline"
+                    asChild
+                >
+                    <Link href={`/t/${slug}/contracts?expiring=1`}>
+                        {expiry.upcoming} contratti in scadenza entro 90 giorni
+                    </Link>
+                </Button>
+            )}
         </AnalyticsCard>
     );
 }

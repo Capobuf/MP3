@@ -33,7 +33,7 @@ export function CostCenterSelect({
     options: CostCenter[];
     value: number[];
     onChange: (value: number[]) => void;
-    onCreate: (name: string) => void;
+    onCreate?: (name: string) => void;
     disabled?: boolean;
     invalid?: boolean;
     describedBy?: string;
@@ -112,7 +112,7 @@ export function CostCenterSelect({
                                     </CommandItem>
                                 ))}
                             </CommandGroup>
-                            {query && results.length === 0 && (
+                            {onCreate && query && results.length === 0 && (
                                 <CommandGroup heading="Nessun Centro di Costo trovato">
                                     <CommandItem
                                         value={`create-${query}`}

@@ -66,6 +66,7 @@ export type Pagination<T> = {
     to: number | null;
     prev_page_url: string | null;
     next_page_url: string | null;
+    links: { url: string | null; label: string; active: boolean }[];
 };
 export type Totals = {
     allocated: string;

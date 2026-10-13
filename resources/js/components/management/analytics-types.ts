@@ -1,4 +1,5 @@
 export type Metric = 'actual' | 'allocated';
+export type SankeyMode = Metric | 'comparison';
 export type GroupId =
     | number
     | 'none'
@@ -49,7 +50,12 @@ export type SankeyNode = {
 };
 export type SankeyData = {
     nodes: SankeyNode[];
-    links: { source: number; target: number; value: number }[];
+    links: {
+        source: number;
+        target: number;
+        value: number;
+        values: EconomicValues;
+    }[];
 };
 export type VarianceRow = {
     id: number;

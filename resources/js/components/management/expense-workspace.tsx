@@ -61,6 +61,7 @@ export function ExpenseWorkspace({
                 loading={refresh.visible}
                 rows={expenses.data}
                 slug={tenant.slug}
+                options={options}
                 filters={filters}
                 onSort={(sort) =>
                     applyFilters(path, {
