@@ -9,8 +9,8 @@ import type {
 } from './analytics-types';
 
 export const economicConfig = {
-    allocated: { label: 'Allocato', color: 'var(--chart-2)' },
-    actual: { label: 'Effettivo', color: 'var(--chart-1)' },
+    allocated: { label: 'Allocato', color: 'var(--economic-allocated)' },
+    actual: { label: 'Effettivo', color: 'var(--economic-actual)' },
 };
 export const palette = [
     'var(--chart-1)',

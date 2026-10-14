@@ -1,20 +1,13 @@
-import { Check, ChevronsUpDown } from 'lucide-react';
 import type { AriaAttributes } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useDelayedBusy } from '@/hooks/use-delayed-busy';
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import {
-    Command,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from '@/components/ui/command';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
+    Combobox,
+    ComboboxContent,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxList,
+} from '@/components/ui/combobox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from './helpers';
 import type { Catalog, Option } from './types';
@@ -50,6 +43,14 @@ export function RecordSelect({
     const [error, setError] = useState('');
     const showLoading = useDelayedBusy(loading);
     const [chosen, setChosen] = useState<Option | null>(null);
+    const [popupContainer, setPopupContainer] = useState<HTMLElement | null>(
+        null,
+    );
+    const setContainer = useCallback((node: HTMLDivElement | null) => {
+        setPopupContainer(
+            node?.closest<HTMLElement>('[role="dialog"]') ?? null,
+        );
+    }, []);
     useEffect(() => {
         if (!open) return;
         let active = true;
@@ -76,125 +77,125 @@ export function RecordSelect({
         };
     }, [search, open, slug, catalog, excludeProjectId]);
     const allOptions = [...options, ...results, ...(chosen ? [chosen] : [])];
-    const selected = allOptions.find((option) => String(option.id) === value);
+    const itemLabel = (id: string) =>
+        id === 'none'
+            ? 'Solo senza collegamento'
+            : (allOptions.find((option) => String(option.id) === id)?.name ??
+              `Elemento #${id}`);
+    const items = [
+        ...(includeNone ? ['none'] : []),
+        ...results.map((option) => String(option.id)),
+    ];
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
+        <div
+            ref={setContainer}
+            className="w-full min-w-0"
+            onKeyDown={(event) => {
+                if (
+                    (event.key === 'Enter' || event.key === ' ') &&
+                    event.target instanceof Element &&
+                    event.target.closest('[data-slot="combobox-clear"]')
+                )
+                    event.stopPropagation();
+            }}
+        >
+            <Combobox
+                items={items}
+                value={value || null}
+                filter={null}
+                itemToStringLabel={itemLabel}
+                disabled={disabled}
+                open={open}
+                onOpenChange={(nextOpen, details) => {
+                    setOpen(nextOpen);
+                    if (nextOpen && details.reason !== 'input-change')
+                        setSearch('');
+                }}
+                onInputValueChange={(nextSearch, details) => {
+                    if (details.reason === 'escape-key') {
+                        details.cancel();
+                        return;
+                    }
+                    if (details.reason === 'input-change')
+                        setSearch(nextSearch);
+                }}
+                onValueChange={(nextValue, details) => {
+                    if (details.reason === 'escape-key') {
+                        details.cancel();
+                        details.allowPropagation();
+                        return;
+                    }
+                    setChosen(
+                        allOptions.find(
+                            (option) => String(option.id) === nextValue,
+                        ) ?? null,
+                    );
+                    onChange(nextValue ?? '');
+                    if (details.reason !== 'input-clear') {
+                        setSearch('');
+                        setOpen(false);
+                    }
+                }}
+            >
+                <ComboboxInput
                     id={id}
                     {...aria}
-                    type="button"
-                    variant="outline"
-                    disabled={disabled}
-                    role="combobox"
                     aria-label={label}
-                    aria-expanded={open}
-                    className="w-full min-w-0 justify-between font-normal"
-                >
-                    <span className="truncate">
-                        {selected?.name ??
-                            (value === 'none'
-                                ? 'Senza collegamento'
-                                : value
-                                  ? `Elemento #${value}`
-                                  : label)}
-                    </span>
-                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                className="w-[var(--radix-popover-trigger-width)] p-0"
-                align="start"
-            >
-                <Command shouldFilter={false}>
-                    <CommandInput
-                        placeholder="Cerca per nome…"
-                        value={search}
-                        onValueChange={setSearch}
-                    />
-                    <CommandList
-                        aria-busy={loading}
-                        className="max-h-[min(300px,calc(var(--radix-popover-content-available-height)-2.5rem))]"
-                    >
-                        {showLoading && results.length === 0 && (
-                            <div
-                                className="flex flex-col gap-2 p-3"
-                                role="status"
+                    placeholder={label}
+                    disabled={disabled}
+                    className="w-full min-w-0"
+                    showClear
+                />
+                <ComboboxContent container={popupContainer ?? undefined}>
+                    {showLoading && results.length === 0 && (
+                        <div className="flex flex-col gap-2 p-3" role="status">
+                            <span className="sr-only">Ricerca in corso…</span>
+                            <Skeleton className="h-8" />
+                            <Skeleton className="h-8" />
+                            <Skeleton className="h-8" />
+                        </div>
+                    )}
+                    {showLoading && results.length > 0 && (
+                        <p
+                            role="status"
+                            className="px-3 py-2 text-sm text-muted-foreground"
+                        >
+                            Aggiornamento risultati…
+                        </p>
+                    )}
+                    {error && (
+                        <p
+                            role="alert"
+                            className="p-3 text-sm text-destructive"
+                        >
+                            {error}
+                        </p>
+                    )}
+                    {!loading && !error && results.length === 0 && (
+                        <p
+                            role="status"
+                            className="p-3 text-sm text-muted-foreground"
+                        >
+                            Nessun risultato.
+                        </p>
+                    )}
+                    <ComboboxList aria-busy={loading}>
+                        {(item: string) => (
+                            <ComboboxItem
+                                key={item}
+                                value={item}
+                                disabled={
+                                    item !== 'none' && (loading || !!error)
+                                }
                             >
-                                <span className="sr-only">
-                                    Ricerca in corso…
+                                <span className="min-w-0 break-words">
+                                    {itemLabel(item)}
                                 </span>
-                                <Skeleton className="h-8" />
-                                <Skeleton className="h-8" />
-                                <Skeleton className="h-8" />
-                            </div>
+                            </ComboboxItem>
                         )}
-                        {showLoading && results.length > 0 && (
-                            <p
-                                role="status"
-                                className="px-3 py-2 text-sm text-muted-foreground"
-                            >
-                                Aggiornamento risultati…
-                            </p>
-                        )}
-                        {error && (
-                            <p
-                                role="alert"
-                                className="p-3 text-sm text-destructive"
-                            >
-                                {error}
-                            </p>
-                        )}
-                        <CommandGroup>
-                            <CommandItem
-                                onSelect={() => {
-                                    onChange('');
-                                    setOpen(false);
-                                }}
-                            >
-                                Nessuno / tutti
-                            </CommandItem>
-                            {includeNone && (
-                                <CommandItem
-                                    onSelect={() => {
-                                        onChange('none');
-                                        setOpen(false);
-                                    }}
-                                >
-                                    Solo senza collegamento
-                                </CommandItem>
-                            )}
-                            {!loading && !error && results.length === 0 && (
-                                <p
-                                    role="status"
-                                    className="p-3 text-sm text-muted-foreground"
-                                >
-                                    Nessun risultato.
-                                </p>
-                            )}
-                            {results.map((option) => (
-                                <CommandItem
-                                    disabled={loading || !!error}
-                                    key={option.id}
-                                    value={String(option.id)}
-                                    onSelect={() => {
-                                        setChosen(option);
-                                        onChange(String(option.id));
-                                        setOpen(false);
-                                    }}
-                                >
-                                    <Check
-                                        className={`mr-2 size-4 ${value === String(option.id) ? 'opacity-100' : 'opacity-0'}`}
-                                    />
-                                    <span className="min-w-0 break-words">
-                                        {option.name}
-                                    </span>
-                                </CommandItem>
-                            ))}
-                        </CommandGroup>
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+                    </ComboboxList>
+                </ComboboxContent>
+            </Combobox>
+        </div>
     );
 }

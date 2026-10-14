@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ExpenseLine;
+use App\Models\ProjectStatus;
 use App\Models\Tenant;
 use App\Support\Money;
 use App\Support\Transfers\SpreadsheetValues as Values;
@@ -52,7 +53,7 @@ class TenantCsvTransfer
     public function write(Tenant $tenant, $stream): void
     {
         fputcsv($stream, ['record_type', 'record_ref', 'payload_json'], ',', '"', '');
-        $this->row($stream, 'meta', 'tenant', ['format' => 'mp3-tenant', 'version' => 1, 'name' => $tenant->name, 'slug' => $tenant->slug]);
+        $this->row($stream, 'meta', 'tenant', ['format' => 'mp3-tenant', 'version' => 1, 'name' => $tenant->name, 'slug' => $tenant->slug, 'project_statuses' => $tenant->projectStatuses()->orderBy('id')->get(['key', 'name'])->toArray()]);
         foreach (self::TYPES as $type => $definition) {
             $query = $type === 'expense-line' ? ExpenseLine::whereHas('expense', fn ($q) => $q->where('tenant_id', $tenant->id)) : $tenant->{$this->tenantRelation($type)}()->getQuery();
             if (in_array($type, self::PIVOTS, true)) {
@@ -127,8 +128,19 @@ class TenantCsvTransfer
                     }
                     $data = (array) $object;
                     if ($type === 'meta') {
-                        if ($line !== 2 || $meta !== null || $ref !== 'tenant' || array_diff(array_keys($data), ['format', 'version', 'name', 'slug']) !== [] || count($data) !== 4 || ($data['format'] ?? null) !== 'mp3-tenant' || ($data['version'] ?? null) !== 1 || ! is_string($data['name'] ?? null) || ! is_string($data['slug'] ?? null)) {
+                        if ($line !== 2 || $meta !== null || $ref !== 'tenant' || array_diff(array_keys($data), ['format', 'version', 'name', 'slug', 'project_statuses']) !== [] || array_diff(['format', 'version', 'name', 'slug'], array_keys($data)) !== [] || ($data['format'] ?? null) !== 'mp3-tenant' || ($data['version'] ?? null) !== 1 || ! is_string($data['name'] ?? null) || ! is_string($data['slug'] ?? null)) {
                             Values::invalid('meta', 'Formato o versione CSV incompatibile.');
+                        }
+                        if (isset($data['project_statuses']) && is_array($data['project_statuses'])) {
+                            $data['project_statuses'] = array_map(fn ($status) => $status instanceof \stdClass ? (array) $status : $status, $data['project_statuses']);
+                        }
+                        if (array_key_exists('project_statuses', $data)) {
+                            Validator::make($data, [
+                                'project_statuses' => ['present', 'array', 'list'],
+                                'project_statuses.*' => ['required', 'array:key,name'],
+                                'project_statuses.*.key' => ['required', 'string', 'max:255', 'distinct', 'not_in:none,no-status,all'],
+                                'project_statuses.*.name' => ['required', 'string', 'max:255', 'distinct'],
+                            ])->validate();
                         }
                         $meta = $data;
 
@@ -164,6 +176,11 @@ class TenantCsvTransfer
             try {
                 $type = $record['type'];
                 $data = $record['data'];
+                $statusKeys = array_key_exists('project_statuses', $meta)
+                    ? array_column($meta['project_statuses'], 'key') : array_keys(ProjectStatus::DEFAULTS);
+                if ($type === 'project' && $data['status'] !== null && ! in_array($data['status'], $statusKeys, true)) {
+                    Values::invalid('status', 'Lo stato non è definito nel CSV.');
+                }
                 foreach (self::TYPES[$type]['refs'] as $field => [$column, $target]) {
                     $this->reference($records, $data[$field], $target, $field);
                 }
@@ -265,7 +282,7 @@ class TenantCsvTransfer
                 $field === 'position' => ['required', 'integer', 'min:0', 'max:4294967295'],
                 in_array($field, ['included', 'structure_copied'], true) => ['required', 'boolean'],
                 $field === 'type' => ['required', 'in:'.($type === 'expense-line' ? 'allocated,actual' : 'manual,contract,project,expense')],
-                $field === 'status' => ['required', 'in:pianificato,attivo,completato'],
+                $field === 'status' => ['nullable', 'string', 'max:255'],
                 in_array($field, ['name', 'title'], true) => ['required', 'string', 'max:255'],
                 default => ['nullable', 'string', 'max:'.(in_array($field, ['notes', 'description'], true) && $type !== 'expense-line' && $type !== 'budget-entry' ? '10000' : '255')],
             };
@@ -351,6 +368,11 @@ class TenantCsvTransfer
         }
         if ($plan['error_count'] > 0) {
             Values::invalid('file', 'Correggi gli errori nel CSV prima di importare.');
+        }
+        $statuses = $plan['meta']['project_statuses'] ?? array_map(fn ($key, $name) => compact('key', 'name'), array_keys(ProjectStatus::DEFAULTS), array_values(ProjectStatus::DEFAULTS));
+        $tenant->projectStatuses()->delete();
+        foreach ($statuses as $status) {
+            $tenant->projectStatuses()->create($status);
         }
         /** @var array<string, Model> $map */
         $map = [];

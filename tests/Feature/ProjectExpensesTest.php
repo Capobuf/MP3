@@ -147,4 +147,53 @@ class ProjectExpensesTest extends TestCase
         ]])->assertUnprocessable()->assertJsonValidationErrors('updates.1.id');
         $this->assertSame($project->id, $expense->refresh()->project_id);
     }
+
+    public function test_project_kpis_compare_linked_totals_even_when_estimates_and_actuals_are_separate_expenses(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Aggiornamento PC', 'status' => 'attivo']);
+        foreach ([
+            ['title' => 'Preventivo complessivo', 'allocated_amount' => '9988.00'],
+            ['title' => 'Acquisto Lenovo', 'actual_amount' => '7090.14'],
+            ['title' => 'RAM', 'actual_amount' => '316.40'],
+            ['title' => 'Acquisto Dell', 'actual_amount' => '1694.87'],
+        ] as $expense) {
+            $this->tenant->expenses()->create(['project_id' => $project->id, 'year' => 2026, ...$expense]);
+        }
+        $this->tenant->expenses()->create(['title' => 'Preventivo precedente', 'project_id' => $project->id, 'year' => 2025, 'allocated_amount' => '100.00']);
+        $this->tenant->expenses()->create(['title' => 'Acquisto precedente', 'project_id' => $project->id, 'year' => 2025, 'actual_amount' => '90.00']);
+        $this->tenant->expenses()->create(['title' => 'Senza progetto', 'year' => 2026, 'allocated_amount' => '99999.00', 'actual_amount' => '1.00']);
+        $foreign = $this->other->projects()->create(['name' => 'Progetto esterno', 'status' => 'attivo']);
+        $this->other->expenses()->create(['title' => 'Spesa esterna', 'project_id' => $foreign->id, 'year' => 2026, 'actual_amount' => '99999.00']);
+
+        foreach (['', '&search=Preventivo', '&history=1'] as $filters) {
+            $this->get('/t/alfa/projects/'.$project->id.'?year=2026'.$filters)->assertInertia(fn (Assert $page) => $page
+                ->where('analytics.current.count', 4)
+                ->where('analytics.current.allocated', '9988.00')
+                ->where('analytics.current.actual', '9101.41')
+                ->where('analytics.current.variance', '-886.59')
+                ->where('analytics.previous.variance', '-10.00')
+                ->where('analytics.comparisons.variance.difference', '-876.59')
+                ->where('analytics.annual.1.variance', '-886.59'));
+        }
+
+        $this->get('/t/alfa/dashboard?year=2026&project_id='.$project->id)->assertInertia(fn (Assert $page) => $page
+            ->where('analytics.current.allocated', '9988.00')->where('analytics.current.actual', '9101.41')
+            ->where('analytics.current.variance', null));
+    }
+
+    public function test_project_variance_preserves_missing_values_and_handles_zero_and_adjustments(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
+        $path = '/t/alfa/projects/'.$project->id.'?year=2026';
+        $this->get($path)->assertInertia(fn (Assert $page) => $page
+            ->where('analytics.current.allocated', null)->where('analytics.current.actual', null)->where('analytics.current.variance', null));
+        $this->tenant->expenses()->create(['title' => 'Effettivo zero', 'project_id' => $project->id, 'year' => 2026, 'actual_amount' => '0.00']);
+        $this->get($path)->assertInertia(fn (Assert $page) => $page
+            ->where('analytics.current.allocated', null)->where('analytics.current.actual', '0.00')->where('analytics.current.variance', null));
+        $this->tenant->expenses()->create(['title' => 'Preventivo', 'project_id' => $project->id, 'year' => 2026, 'allocated_amount' => '10.01']);
+        $this->get($path)->assertInertia(fn (Assert $page) => $page->where('analytics.current.variance', '-10.01'));
+        $this->tenant->expenses()->create(['title' => 'Rettifica', 'project_id' => $project->id, 'year' => 2026, 'actual_amount' => '-2.34']);
+        $this->get($path)->assertInertia(fn (Assert $page) => $page
+            ->where('analytics.current.allocated', '10.01')->where('analytics.current.actual', '-2.34')->where('analytics.current.variance', '-12.35'));
+    }
 }

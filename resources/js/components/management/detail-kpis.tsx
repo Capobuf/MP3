@@ -22,7 +22,7 @@ export function DetailKpis({
 }) {
     const cards = [
         {
-            label: aggregate ? 'Totale previsto' : 'Allocato / Previsto',
+            label: aggregate ? 'Totale allocato' : 'Allocato',
             value: money(allocated),
         },
         {

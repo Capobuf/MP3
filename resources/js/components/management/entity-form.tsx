@@ -25,14 +25,6 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import type { Tenant } from '@/types';
 import { AttachmentsSection } from './attachments-section';
@@ -47,7 +39,8 @@ import { api, ApiError, decimalInput } from './helpers';
 import { RecordSelect } from './record-select';
 import { CostCenterSelect } from './cost-center-select';
 import { CostCenterForm } from './cost-center-form';
-import { singular, projectStatusLabel } from './types';
+import { singular } from './types';
+import { ProjectStatusSelect } from './project-status-select';
 import type { Catalog, Kind, Options, RecordData } from './types';
 
 type FormField = {
@@ -78,7 +71,7 @@ const fields: Record<Kind, FormField[]> = {
     projects: [
         { key: 'name', label: 'Nome', required: true },
         { key: 'description', label: 'Descrizione', type: 'textarea' },
-        { key: 'status', label: 'Stato', type: 'status', required: true },
+        { key: 'status', label: 'Stato', type: 'status' },
         { key: 'starts_on', label: 'Data iniziale', type: 'date' },
         { key: 'ends_on', label: 'Data finale', type: 'date' },
     ],
@@ -92,7 +85,7 @@ const fields: Record<Kind, FormField[]> = {
             type: 'number',
             required: true,
         },
-        { key: 'allocated_amount', label: 'Previsto', type: 'money' },
+        { key: 'allocated_amount', label: 'Allocato', type: 'money' },
         { key: 'actual_amount', label: 'Effettivo', type: 'money' },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
         { key: 'contract_id', label: 'Contratto', catalog: 'contracts' },
@@ -153,14 +146,7 @@ function frame(
     const values = Object.fromEntries(
         fields[kind].map((field) => [
             field.key,
-            String(
-                record?.[field.key] ??
-                    (field.key === 'year'
-                        ? year
-                        : field.key === 'status'
-                          ? 'pianificato'
-                          : ''),
-            ),
+            String(record?.[field.key] ?? (field.key === 'year' ? year : '')),
         ]),
     );
     const lines = kind === 'expenses' ? draftLines(record) : [];
@@ -603,7 +589,7 @@ export function EntityForm({
                                 ? contractLines
                                     ? `${current.record ? 'Modifica' : 'Inserisci'} i dati della spesa e le condizioni economiche.`
                                     : `${current.record ? 'Modifica' : 'Inserisci'} i dati generali e le righe economiche della spesa.`
-                                : 'Inserisci il previsto, l’effettivo oppure entrambi. Un campo vuoto indica un importo non disponibile; zero è un importo valorizzato.'
+                                : 'Inserisci il allocato, l’effettivo oppure entrambi. Un campo vuoto indica un importo non disponibile; zero è un importo valorizzato.'
                             : current.kind === 'contracts'
                               ? current.record
                                   ? 'Modifica i dati del contratto. Le condizioni economiche sono nelle spese collegate.'
@@ -842,45 +828,23 @@ export function EntityForm({
                                                 )}
                                             </div>
                                         ) : field.type === 'status' ? (
-                                            <Select
+                                            <ProjectStatusSelect
+                                                id={id}
+                                                statuses={
+                                                    options.project_statuses
+                                                }
                                                 value={value}
-                                                onValueChange={(selected) =>
+                                                onChange={(selected) =>
                                                     change(field.key, selected)
                                                 }
                                                 disabled={formBusy}
-                                            >
-                                                <SelectTrigger
-                                                    id={id}
-                                                    aria-invalid={
-                                                        !!errors[field.key]
-                                                    }
-                                                    aria-describedby={
-                                                        errors[field.key]
-                                                            ? `${id}-error`
-                                                            : undefined
-                                                    }
-                                                >
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectGroup>
-                                                        {[
-                                                            'pianificato',
-                                                            'attivo',
-                                                            'completato',
-                                                        ].map((status) => (
-                                                            <SelectItem
-                                                                key={status}
-                                                                value={status}
-                                                            >
-                                                                {projectStatusLabel(
-                                                                    status,
-                                                                )}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectGroup>
-                                                </SelectContent>
-                                            </Select>
+                                                invalid={!!errors[field.key]}
+                                                describedBy={
+                                                    errors[field.key]
+                                                        ? `${id}-error`
+                                                        : undefined
+                                                }
+                                            />
                                         ) : field.type === 'textarea' ? (
                                             <Textarea
                                                 aria-invalid={

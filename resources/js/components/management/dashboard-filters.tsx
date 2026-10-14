@@ -164,12 +164,7 @@ export function DashboardFilters({
                                     <SelectGroup>
                                         {[
                                             ['title', 'Descrizione'],
-                                            [
-                                                'allocated_amount',
-                                                contractMode
-                                                    ? 'Previsto'
-                                                    : 'Allocato',
-                                            ],
+                                            ['allocated_amount', 'Allocato'],
                                             ['actual_amount', 'Effettivo'],
                                             ['updated_at', 'Ultima modifica'],
                                             ...(hideRelations.length

@@ -168,7 +168,7 @@ export function ExpenseLines({
         totals.allocated === null || totals.actual === null
             ? null
             : totals.actual - totals.allocated;
-    const allocatedLabel = contractMode ? 'Previsto' : 'Allocato';
+    const allocatedLabel = 'Allocato';
     const view = useTableView<DraftLine>({
         rows: visible,
         storageKey: `mp3:table:v1:${currentTenant?.slug}:expense-lines:${contractMode ? 'contract' : 'ordinary'}:${readOnly ? 'read' : 'edit'}`,
@@ -478,7 +478,7 @@ export function ExpenseLines({
                                 Tutti i tipi
                             </NativeSelectOption>
                             <NativeSelectOption value="allocated">
-                                {contractMode ? 'Previste' : 'Allocati'}
+                                Allocati
                             </NativeSelectOption>
                             <NativeSelectOption value="actual">
                                 Effettivi
@@ -585,7 +585,7 @@ export function ExpenseLines({
                             )
                         }
                     >
-                        {contractMode ? 'Imposta previste' : 'Imposta allocati'}
+                        Imposta allocati
                     </Button>
                     <Button
                         type="button"
@@ -1211,7 +1211,7 @@ export function ExpenseLines({
                             [
                                 [
                                     contractMode
-                                        ? 'Totale previsto'
+                                        ? 'Totale allocato'
                                         : allocatedLabel,
                                     totals.allocated,
                                 ],

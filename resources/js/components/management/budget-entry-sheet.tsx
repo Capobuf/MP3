@@ -169,7 +169,7 @@ export function BudgetManualForm({
                         )}
                     >
                         <FieldLabel htmlFor={`allocated-${entry?.id ?? 'new'}`}>
-                            Previsto facoltativo
+                            Allocato facoltativo
                         </FieldLabel>
                         <MoneyField
                             id={`allocated-${entry?.id ?? 'new'}`}
@@ -708,7 +708,7 @@ export function BudgetMissingSheet({
                                                             spese mancanti
                                                         </span>
                                                         <span className="financial-value text-sm">
-                                                            Previsto:{' '}
+                                                            Allocato:{' '}
                                                             {money(
                                                                 row.allocated,
                                                             )}{' '}

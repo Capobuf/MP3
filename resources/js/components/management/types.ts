@@ -11,8 +11,10 @@ export type CostCenter = Option & {
     projects_count?: number;
     contracts_count?: number;
 };
+export type ProjectStatus = Option & { key: string; projects_count?: number };
 export type Options = Record<Catalog, Option[]> & {
     cost_centers: CostCenter[];
+    project_statuses: ProjectStatus[];
 };
 export type ExpenseLine = {
     id?: number;
@@ -42,7 +44,7 @@ export type RecordData = {
     phone?: string | null;
     notes?: string | null;
     description?: string | null;
-    status?: string;
+    status?: string | null;
     reference_amount?: string | null;
     allocated_amount?: string | null;
     actual_amount?: string | null;
@@ -93,7 +95,7 @@ export type Filters = {
     project_id?: string;
     sort?: string;
     direction?: string;
-    status?: string;
+    status?: string | null;
     expiring?: string;
     linked?: string;
 };
@@ -110,14 +112,11 @@ export const labels: Record<Kind, string> = {
     projects: 'Progetti',
     expenses: 'Spese',
 };
-const projectStatusLabels: Record<string, string> = {
-    pianificato: 'Pianificato',
-    attivo: 'Attivo',
-    completato: 'Completato',
-};
-
-export function projectStatusLabel(status: string | null | undefined) {
-    return status ? (projectStatusLabels[status] ?? status) : 'Non indicato';
+export function projectStatusLabel(
+    status: string | null | undefined,
+    statuses: ProjectStatus[],
+) {
+    return statuses.find((item) => item.key === status)?.name ?? 'Senza stato';
 }
 
 export const singular: Record<Kind, string> = {

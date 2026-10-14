@@ -33,7 +33,9 @@ final class CatalogQuery
             }
         }
         if ($catalog === 'projects' && $request->filled('status')) {
-            $query->where('status', $request->input('status'));
+            $request->input('status') === 'none'
+                ? $query->whereNull('status')
+                : $query->where('status', $request->input('status'));
         }
         if ($catalog === 'vendors' && $request->input('linked') === '1') {
             $query->whereHas('expenses');

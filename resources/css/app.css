@@ -103,6 +103,8 @@
     --ring: oklch(0.708 0 0);
     --chart-1: oklch(0.81 0.1 252);
     --chart-2: oklch(0.62 0.19 260);
+    --economic-actual: oklch(0.7751 0.1286 56.0062);
+    --economic-allocated: oklch(0.6753 0.0668 122.8535);
     --chart-3: oklch(0.55 0.22 263);
     --chart-4: oklch(0.49 0.22 264);
     --chart-5: oklch(0.42 0.18 266);
@@ -198,6 +200,12 @@
     [data-slot='chart'] .recharts-surface [tabindex]:focus:not(:focus-visible) {
         outline: none;
     }
+}
+
+/* Regola comune, anche negli stati hover e focus e nei contenuti dei controlli. */
+:is(a, button, [role='link'], [role='button'], summary),
+:is(a, button, [role='link'], [role='button'], summary) * {
+    text-decoration-line: none;
 }
 
 @utility page-shell {

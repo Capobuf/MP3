@@ -175,6 +175,7 @@ final class ExpenseOverview
     public static function options(Tenant $tenant): array
     {
         return [
+            'project_statuses' => $tenant->projectStatuses()->orderBy('id')->get(['id', 'key', 'name']),
             'vendors' => $tenant->vendors()->orderBy('name')->limit(100)->get(['id', 'name']),
             'cost_centers' => $tenant->costCenters()->with('parent:id,name')->orderBy('name')->get(['id', 'name', 'parent_id']),
             'contracts' => $tenant->contracts()->orderBy('name')->limit(100)->get(['id', 'name']),

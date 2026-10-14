@@ -130,15 +130,15 @@ const columnNames: Record<string, string> = {
     type: 'Tipo',
     vendor: 'Fornitore',
     center: 'Centro di costo',
-    allocated: 'Previsto',
+    allocated: 'Allocato',
     actual: 'Effettivo',
     variance: 'Scostamento',
     actions: 'Azioni',
 };
 const defaultOrder = Object.keys(columnNames);
 function missingAmounts(allocated: boolean, actual: boolean) {
-    if (allocated && actual) return 'Previsto ed effettivo mancanti';
-    if (allocated) return 'Importo previsto mancante';
+    if (allocated && actual) return 'Allocato ed effettivo mancanti';
+    if (allocated) return 'Importo allocato mancante';
     if (actual) return 'Importo effettivo mancante';
     return null;
 }
@@ -260,6 +260,10 @@ function InlineAmount({
     async function save() {
         if (submitting.current) return;
         submitting.current = true;
+        if (draft === (value ?? '')) {
+            setEditing(false);
+            return;
+        }
         setSaving(true);
         const ok = await onSave(decimalInput(draft));
         setSaving(false);
@@ -321,7 +325,7 @@ function InlineAmount({
                 setEditing(true);
             }}
         >
-            {money(value)}
+            {money(value, '')}
         </Button>
     );
 }
@@ -372,12 +376,7 @@ function ExpenseAmount({
     onRecordSave: SaveRecord;
     onExpenseEdit: (id: number) => void;
 }) {
-    const display =
-        value == null
-            ? field === 'allocated_amount'
-                ? 'Previsto mancante'
-                : 'Effettivo mancante'
-            : money(value);
+    const display = money(value, '');
     return (
         <div
             tabIndex={-1}
@@ -406,7 +405,7 @@ function ExpenseAmount({
                     display={display}
                     label={label.replace(/^Modifica /, '')}
                     disabled={busy}
-                    className="text-right financial-value"
+                    className="min-h-5 text-right financial-value"
                     onSave={(value) =>
                         onRecordSave('expenses', expense.id, {
                             [field]: decimalInput(value),
@@ -1212,9 +1211,7 @@ export function BudgetTable({
                                             )
                                         }
                                     >
-                                        {row.original[field] === null
-                                            ? `${columnNames[field]} mancante`
-                                            : money(row.original[field])}
+                                        {money(row.original[field], '')}
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -1600,7 +1597,7 @@ export function BudgetTable({
                                         !table
                                             .getColumn('actual')
                                             ?.getIsVisible()) &&
-                                        ` · Previsto ${money(totals.allocated)} · Effettivo ${money(totals.actual)}`}
+                                        ` · Allocato ${money(totals.allocated)} · Effettivo ${money(totals.actual)}`}
                                 </span>
                             </span>
                         ) : ['allocated', 'actual', 'variance'].includes(

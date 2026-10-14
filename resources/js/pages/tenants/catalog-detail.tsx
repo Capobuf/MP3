@@ -1,3 +1,4 @@
+import { ProjectStatusSelect } from '@/components/management/project-status-select';
 import { ArrowUpRight, CalendarDays, ChevronDown } from 'lucide-react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
 import {
@@ -18,11 +19,7 @@ import { ExpenseTable } from '@/components/management/expense-table';
 import { LinkProjectExpense } from '@/components/management/link-project-expense';
 import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
 import { DetailNotes } from '@/components/management/detail-notes';
-import {
-    dateLabel,
-    decimalInput,
-    money,
-} from '@/components/management/helpers';
+import { dateLabel } from '@/components/management/helpers';
 import { Pagination } from '@/components/management/pagination';
 import { DashboardSummary } from '@/components/management/dashboard-summary';
 import type { SummaryAnalytics } from '@/components/management/dashboard-summary';
@@ -47,6 +44,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { Tenant } from '@/types';
+import { cn } from '@/lib/utils';
 
 export default function CatalogDetail({
     tenant,
@@ -101,7 +99,11 @@ export default function CatalogDetail({
                         Totali delle spese collegate · {year}
                     </h2>
                 </div>
-                <DashboardSummary analytics={analytics} year={year} />
+                <DashboardSummary
+                    analytics={analytics}
+                    year={year}
+                    scope={catalog === 'projects' ? 'project' : 'expenses'}
+                />
             </div>
             {breakdown && (
                 <DetailBreakdownChart
@@ -259,9 +261,41 @@ export default function CatalogDetail({
                         />
                         {catalog === 'projects' && (
                             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                <Badge variant="secondary">
-                                    {projectStatusLabel(record.status)}
-                                </Badge>
+                                <InlineEdit
+                                    value={record.status}
+                                    label="Stato del progetto"
+                                    activation="click"
+                                    disabled={tableBusy}
+                                    className="w-auto"
+                                    display={
+                                        <Badge variant="secondary">
+                                            {projectStatusLabel(
+                                                record.status,
+                                                options.project_statuses,
+                                            )}
+                                        </Badge>
+                                    }
+                                    renderEditor={({
+                                        value,
+                                        onChange,
+                                        disabled,
+                                        invalid,
+                                        onCancel,
+                                    }) => (
+                                        <ProjectStatusSelect
+                                            statuses={options.project_statuses}
+                                            value={value}
+                                            onChange={onChange}
+                                            disabled={disabled}
+                                            invalid={invalid}
+                                            autoFocus
+                                            onCancel={onCancel}
+                                        />
+                                    )}
+                                    onSave={(value) =>
+                                        save('status', value || null)
+                                    }
+                                />
                                 <span>{year}</span>
                             </div>
                         )}
@@ -390,21 +424,37 @@ export default function CatalogDetail({
                                                     : field === 'status'
                                                       ? projectStatusLabel(
                                                             value,
+                                                            options.project_statuses,
                                                         )
                                                       : value || 'Da inserire'
                                             }
-                                            options={
+                                            renderEditor={
                                                 field === 'status'
-                                                    ? [
-                                                          'pianificato',
-                                                          'attivo',
-                                                          'completato',
-                                                      ].map((value) => ({
+                                                    ? ({
                                                           value,
-                                                          label: projectStatusLabel(
-                                                              value,
-                                                          ),
-                                                      }))
+                                                          onChange,
+                                                          disabled,
+                                                          invalid,
+                                                          onCancel,
+                                                      }) => (
+                                                          <ProjectStatusSelect
+                                                              statuses={
+                                                                  options.project_statuses
+                                                              }
+                                                              value={value}
+                                                              onChange={
+                                                                  onChange
+                                                              }
+                                                              disabled={
+                                                                  disabled
+                                                              }
+                                                              invalid={invalid}
+                                                              autoFocus
+                                                              onCancel={
+                                                                  onCancel
+                                                              }
+                                                          />
+                                                      )
                                                     : undefined
                                             }
                                             onSave={(value) =>
@@ -472,48 +522,27 @@ export default function CatalogDetail({
                                     </dd>
                                 </div>
                             )}
-                            {catalog === 'contracts' && (
-                                <div>
-                                    <dt className="text-sm text-muted-foreground">
-                                        Valore di riferimento
-                                    </dt>
-                                    <dd className="mt-1 financial-value text-sm">
-                                        <InlineEdit
-                                            value={record.reference_amount}
-                                            label="Valore di riferimento"
-                                            disabled={tableBusy}
-                                            display={money(
-                                                record.reference_amount,
-                                            )}
-                                            onSave={(value) =>
-                                                save(
-                                                    'reference_amount',
-                                                    decimalInput(value),
-                                                )
-                                            }
-                                        />
-                                    </dd>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        Autonomo rispetto alle spese collegate
-                                    </p>
-                                </div>
-                            )}
+                            {catalog !== 'vendors' &&
+                                !!record.cost_centers?.length && (
+                                    <div
+                                        className={cn(
+                                            'min-w-0',
+                                            catalog === 'contracts'
+                                                ? 'sm:col-span-2'
+                                                : 'sm:col-span-3',
+                                        )}
+                                    >
+                                        <dt className="text-sm text-muted-foreground">
+                                            Centri di Costo
+                                        </dt>
+                                        <dd className="mt-2">
+                                            <CostCenterTags
+                                                centers={record.cost_centers}
+                                            />
+                                        </dd>
+                                    </div>
+                                )}
                         </dl>
-                        {catalog !== 'vendors' &&
-                            !!record.cost_centers?.length && (
-                                <div className="mt-6 flex flex-col gap-2">
-                                    <p className="text-sm text-muted-foreground">
-                                        Centri di Costo
-                                    </p>
-                                    {record.cost_centers?.length ? (
-                                        <CostCenterTags
-                                            centers={record.cost_centers}
-                                        />
-                                    ) : (
-                                        <p className="text-sm">Nessuno</p>
-                                    )}
-                                </div>
-                            )}
                         {catalog === 'projects' && (
                             <p className="mt-4 text-sm text-muted-foreground">
                                 Gli importi allocati ed effettivi del progetto

@@ -15,7 +15,7 @@ use RuntimeException;
 class UndoHistory
 {
     // Parents precede children so restoration preserves all foreign keys.
-    private const TABLES = ['vendors', 'cost_centers', 'contracts', 'projects', 'expenses', 'expense_lines', 'budget_years', 'budget_entries', 'contract_cost_center', 'cost_center_project', 'cost_center_expense', 'attachments'];
+    private const TABLES = ['vendors', 'cost_centers', 'contracts', 'project_statuses', 'projects', 'expenses', 'expense_lines', 'budget_years', 'budget_entries', 'contract_cost_center', 'cost_center_project', 'cost_center_expense', 'attachments'];
 
     private bool $recording = false;
 

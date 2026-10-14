@@ -183,4 +183,62 @@ class TenantCsvTransferTest extends TestCase
             Vendor::flushEventListeners();
         }
     }
+
+    public function test_project_status_configuration_and_unassigned_projects_round_trip(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $source->projectStatuses()->delete();
+        $status = $source->projectStatuses()->create(['name' => 'In revisione']);
+        $source->projects()->create(['name' => 'Con stato', 'status' => $status->key]);
+        $source->projects()->create(['name' => 'Senza stato', 'status' => null]);
+        $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->streamedContent());
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+        $this->assertSame([$status->key => 'In revisione'], $target->projectStatuses()->pluck('name', 'key')->all());
+        $this->assertSame($status->key, $target->projects()->where('name', 'Con stato')->firstOrFail()->status);
+        $this->assertNull($target->projects()->where('name', 'Senza stato')->firstOrFail()->status);
+    }
+
+    public function test_csv_preserves_an_empty_status_configuration(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $source->projectStatuses()->delete();
+        $source->projects()->create(['name' => 'Nessuno stato', 'status' => null]);
+        $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->streamedContent());
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+        $this->assertSame(0, $target->projectStatuses()->count());
+        $this->assertNull($target->projects()->firstOrFail()->status);
+    }
+
+    public function test_legacy_csv_without_status_configuration_remains_importable(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $source->projects()->create(['name' => 'Legacy', 'status' => 'attivo']);
+        $target->projectStatuses()->delete();
+        $stream = fopen('php://temp', 'w+');
+        fwrite($stream, $this->get('/t/origine/settings/data/export.csv')->streamedContent());
+        rewind($stream);
+        $rows = [];
+        while (($row = fgetcsv($stream, null, ',', '"', '')) !== false) {
+            if ($row[0] === 'meta') {
+                $meta = json_decode($row[2], true);
+                unset($meta['project_statuses']);
+                $row[2] = json_encode($meta);
+            }
+            $rows[] = $row;
+        }
+        ftruncate($stream, 0);
+        rewind($stream);
+        foreach ($rows as $row) {
+            fputcsv($stream, $row, ',', '"', '');
+        }
+        rewind($stream);
+        $file = $this->csv(stream_get_contents($stream));
+        fclose($stream);
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+        $this->assertSame('attivo', $target->projects()->firstOrFail()->status);
+        $this->assertSame(3, $target->projectStatuses()->count());
+    }
 }

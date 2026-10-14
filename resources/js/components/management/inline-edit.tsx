@@ -1,8 +1,7 @@
 import { router } from '@inertiajs/react';
+import { DismissableLayer } from '@radix-ui/react-dismissable-layer';
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Check, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Field, FieldError } from '@/components/ui/field';
 import {
     NativeSelect,
@@ -25,6 +24,7 @@ export function InlineEdit({
     choices,
     renderEditor,
     disabled = false,
+    activation = 'doubleClick',
     className,
     onSave,
 }: {
@@ -41,8 +41,10 @@ export function InlineEdit({
         onChange: (value: string) => void;
         disabled: boolean;
         invalid: boolean;
+        onCancel: () => void;
     }) => ReactNode;
     disabled?: boolean;
+    activation?: 'click' | 'doubleClick';
     className?: string;
     onSave: (value: string) => Promise<void>;
 }) {
@@ -62,25 +64,26 @@ export function InlineEdit({
         setError('');
         setEditing(true);
     }
-    function cancel() {
+    function cancel(restoreFocus = true) {
         if (lock.current) return;
         setEditing(false);
         setError('');
-        requestAnimationFrame(() => trigger.current?.focus());
+        if (restoreFocus) requestAnimationFrame(() => trigger.current?.focus());
     }
-    async function save() {
+    async function save(nextValue = draft, restoreFocus = true) {
         if (lock.current) return;
-        if (draft === (value ?? '')) {
-            cancel();
+        if (nextValue === (value ?? '')) {
+            cancel(restoreFocus);
             return;
         }
         lock.current = true;
         setSaving(true);
         setError('');
         try {
-            await onSave(draft);
+            await onSave(nextValue);
             setEditing(false);
-            requestAnimationFrame(() => trigger.current?.focus());
+            if (restoreFocus)
+                requestAnimationFrame(() => trigger.current?.focus());
         } catch (failure) {
             setError(
                 failure instanceof Error
@@ -93,163 +96,152 @@ export function InlineEdit({
         }
     }
     return editing ? (
-        <Field
-            data-invalid={!!error}
-            data-disabled={saving}
-            className={cn('min-w-28', className)}
+        <DismissableLayer
+            asChild
+            onPointerDownOutside={() => {
+                void save(draft, false);
+            }}
         >
-            <div className="flex min-w-0 flex-col gap-2 [&>[data-slot=native-select-wrapper]]:w-full">
-                {renderEditor ? (
-                    renderEditor({
-                        value: draft,
-                        onChange: (value) => {
-                            setDraft(value);
-                            setError('');
-                        },
-                        disabled: saving,
-                        invalid: !!error,
-                    })
-                ) : choices ? (
-                    <NativeSelect
-                        autoFocus
-                        value={draft}
-                        disabled={saving}
-                        aria-label={label}
-                        aria-invalid={!!error}
-                        onChange={(event) => {
-                            setDraft(event.target.value);
-                            setError('');
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Escape') {
-                                event.preventDefault();
-                                cancel();
-                            }
-                        }}
-                    >
-                        {choices.map((choice) => (
-                            <NativeSelectOption
-                                key={choice.value}
-                                value={choice.value}
-                            >
-                                {choice.label}
-                            </NativeSelectOption>
-                        ))}
-                    </NativeSelect>
-                ) : options ? (
-                    <ToggleGroup
-                        type="single"
-                        variant="outline"
-                        value={draft}
-                        disabled={saving}
-                        aria-label={label}
-                        className="flex-wrap"
-                        onValueChange={(value) => {
-                            if (value) {
+            <Field
+                data-invalid={!!error}
+                data-disabled={saving}
+                className={cn('min-w-28', className)}
+                onKeyDown={(event) => {
+                    if (event.defaultPrevented || event.nativeEvent.isComposing)
+                        return;
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancel();
+                    } else if (
+                        event.key === 'Enter' &&
+                        (!multiline || event.ctrlKey || event.metaKey)
+                    ) {
+                        event.preventDefault();
+                        void save();
+                    }
+                }}
+            >
+                <div className="flex min-w-0 flex-col gap-2 [&>[data-slot=native-select-wrapper]]:w-full">
+                    {renderEditor ? (
+                        renderEditor({
+                            value: draft,
+                            onChange: (value) => {
                                 setDraft(value);
                                 setError('');
-                            }
-                        }}
-                    >
-                        {options.map((option) => (
-                            <ToggleGroupItem
-                                key={option.value}
-                                value={option.value}
-                            >
-                                {option.label}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
-                ) : multiline ? (
-                    <Textarea
-                        autoFocus
-                        aria-label={label}
-                        aria-description={keyboardHint}
-                        title={keyboardHint}
-                        aria-invalid={!!error}
-                        value={draft}
-                        disabled={saving}
-                        rows={5}
-                        onChange={(event) => {
-                            setDraft(event.target.value);
-                            setError('');
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Escape') {
-                                event.preventDefault();
-                                cancel();
-                            }
-                            if (
-                                event.key === 'Enter' &&
-                                (event.ctrlKey || event.metaKey)
-                            ) {
-                                event.preventDefault();
-                                void save();
-                            }
-                        }}
-                    />
-                ) : (
-                    <Input
-                        autoFocus
-                        type={type}
-                        aria-label={label}
-                        aria-description={keyboardHint}
-                        title={keyboardHint}
-                        aria-invalid={!!error}
-                        value={draft}
-                        disabled={saving}
-                        onChange={(event) => {
-                            setDraft(event.target.value);
-                            setError('');
-                        }}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Escape') {
-                                event.preventDefault();
-                                cancel();
-                            }
-                            if (event.key === 'Enter') {
-                                event.preventDefault();
-                                void save();
-                            }
-                        }}
-                    />
-                )}
-                <div
-                    className={cn(
-                        'flex justify-end gap-1',
-                        !multiline &&
-                            !renderEditor &&
-                            !options &&
-                            !choices &&
-                            '[@media(hover:hover)_and_(pointer:fine)]:hidden',
+                            },
+                            disabled: saving,
+                            invalid: !!error,
+                            onCancel: cancel,
+                        })
+                    ) : choices ? (
+                        <NativeSelect
+                            autoFocus
+                            value={draft}
+                            disabled={saving}
+                            aria-label={label}
+                            aria-invalid={!!error}
+                            onChange={(event) => {
+                                setDraft(event.target.value);
+                                setError('');
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    cancel();
+                                }
+                            }}
+                        >
+                            {choices.map((choice) => (
+                                <NativeSelectOption
+                                    key={choice.value}
+                                    value={choice.value}
+                                >
+                                    {choice.label}
+                                </NativeSelectOption>
+                            ))}
+                        </NativeSelect>
+                    ) : options ? (
+                        <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            value={draft}
+                            disabled={saving}
+                            aria-label={label}
+                            className="flex-wrap"
+                            onValueChange={(value) => {
+                                if (value) {
+                                    setDraft(value);
+                                    setError('');
+                                }
+                            }}
+                        >
+                            {options.map((option) => (
+                                <ToggleGroupItem
+                                    key={option.value}
+                                    value={option.value}
+                                >
+                                    {option.label}
+                                </ToggleGroupItem>
+                            ))}
+                        </ToggleGroup>
+                    ) : multiline ? (
+                        <Textarea
+                            autoFocus
+                            aria-label={label}
+                            aria-description={keyboardHint}
+                            title={keyboardHint}
+                            aria-invalid={!!error}
+                            value={draft}
+                            disabled={saving}
+                            rows={5}
+                            onChange={(event) => {
+                                setDraft(event.target.value);
+                                setError('');
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    cancel();
+                                }
+                                if (
+                                    event.key === 'Enter' &&
+                                    (event.ctrlKey || event.metaKey)
+                                ) {
+                                    event.preventDefault();
+                                    void save();
+                                }
+                            }}
+                        />
+                    ) : (
+                        <Input
+                            autoFocus
+                            type={type}
+                            aria-label={label}
+                            aria-description={keyboardHint}
+                            title={keyboardHint}
+                            aria-invalid={!!error}
+                            value={draft}
+                            disabled={saving}
+                            onChange={(event) => {
+                                setDraft(event.target.value);
+                                setError('');
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    cancel();
+                                }
+                                if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    void save();
+                                }
+                            }}
+                        />
                     )}
-                >
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        disabled={saving}
-                        aria-label={`Salva ${label.toLowerCase()}`}
-                        title="Salva"
-                        onClick={() => void save()}
-                    >
-                        <Check />
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        disabled={saving}
-                        aria-label={`Annulla modifica ${label.toLowerCase()}`}
-                        title="Annulla"
-                        onClick={cancel}
-                    >
-                        <X />
-                    </Button>
                 </div>
-            </div>
-            {error && <FieldError role="alert">{error}</FieldError>}
-        </Field>
+                {error && <FieldError role="alert">{error}</FieldError>}
+            </Field>
+        </DismissableLayer>
     ) : (
         <Tag
             ref={(node) => {
@@ -261,13 +253,16 @@ export function InlineEdit({
             aria-label={
                 as === 'h1' ? undefined : `Modifica ${label.toLowerCase()}`
             }
-            title="Doppio clic per modificare · Invio o F2 da tastiera"
+            title={`${activation === 'click' ? 'Clic' : 'Doppio clic'} per modificare · Invio o F2 da tastiera`}
             className={cn(
                 'min-w-0 touch-manipulation rounded focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                !disabled && 'cursor-text hover:bg-accent/40',
+                !disabled && 'hover:bg-accent/40',
+                !disabled &&
+                    (activation === 'click' ? 'cursor-pointer' : 'cursor-text'),
                 className,
             )}
-            onDoubleClick={start}
+            onClick={activation === 'click' ? start : undefined}
+            onDoubleClick={activation === 'doubleClick' ? start : undefined}
             onKeyDown={(event) => {
                 if (
                     event.key === 'Enter' ||

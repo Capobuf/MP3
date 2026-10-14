@@ -109,7 +109,7 @@ class CatalogController extends Controller
             'history' => $history,
             'expenseFilters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $year, 'history' => $history ? '1' : '', 'sort' => $sort ?? ($item instanceof Contract ? 'period_starts_on' : 'year'), 'direction' => $sort !== null ? $direction : ($item instanceof Contract ? 'asc' : 'desc')],
             'totals' => ExpenseOverview::totals($annual),
-            'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id])),
+            'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id]), aggregateVariance: $catalog === 'projects'),
             'breakdown' => ExpenseOverview::breakdown($annual),
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
@@ -141,7 +141,7 @@ class CatalogController extends Controller
             ],
             'projects' => [
                 'description' => ['nullable', 'string', 'max:10000'],
-                'status' => [...$required, Rule::in(['pianificato', 'attivo', 'completato'])],
+                'status' => ['sometimes', 'nullable', 'string', Rule::exists('project_statuses', 'key')->where('tenant_id', $tenant->id)],
                 'starts_on' => ['nullable', 'date_format:Y-m-d'],
                 'ends_on' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:starts_on'],
             ],
@@ -221,11 +221,11 @@ class CatalogController extends Controller
     public function update(Request $request, Tenant $tenant, string $catalog, int $record): JsonResponse
     {
         $item = $this->records($tenant, $catalog)->findOrFail($record);
-        if ($request->isMethod('patch') && $catalog !== 'vendors' &&
+        if ($request->isMethod('patch') && ($item instanceof Contract || $item instanceof Project) &&
             ($request->exists('starts_on') || $request->exists('ends_on'))) {
             $request->mergeIfMissing([
-                'starts_on' => $item->starts_on?->toDateString(),
-                'ends_on' => $item->ends_on?->toDateString(),
+                'starts_on' => $item->getRawOriginal('starts_on'),
+                'ends_on' => $item->getRawOriginal('ends_on'),
             ]);
         }
         $data = $this->validated($request, $tenant, $catalog);

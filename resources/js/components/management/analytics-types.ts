@@ -1,11 +1,5 @@
 export type Metric = 'actual' | 'allocated';
-export type GroupId =
-    | number
-    | 'none'
-    | 'others'
-    | 'pianificato'
-    | 'attivo'
-    | 'completato';
+export type GroupId = number | string;
 export type EconomicValues = {
     allocated: string | null;
     actual: string | null;
@@ -20,7 +14,7 @@ export type EconomicValues = {
 export type EconomicGroup = EconomicValues & {
     id: GroupId;
     name: string;
-    status?: string;
+    status?: string | null;
 };
 export type Completeness = {
     id: 'complete' | 'allocated_only' | 'actual_only' | 'missing';

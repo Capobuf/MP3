@@ -102,16 +102,35 @@ La tabella usa i componenti shadcn/ui già presenti, con selezione limitata alla
 pagina corrente e cancellazione confermata dell’intera selezione in una
 transazione. Filtri, ordinamento e paginazione restano gestiti da Laravel.
 
-Allocato ed effettivo si modificano con un clic: Invio salva, Esc annulla; i
-pulsanti nell’input consentono le stesse azioni su touch screen. Un valore vuoto
-indica un importo da inserire, distinto da zero. Gli altri campi si modificano
-nel pannello esistente. Dopo il salvataggio o la cancellazione vengono
+Le celle modificabili usano Invio per salvare ed Esc per annullare, senza
+pulsanti di conferma o annullamento. Nelle combobox, un clic fuori dalla modifica
+la chiude: se il valore è cambiato viene salvato, altrimenti viene annullata.
+Un valore vuoto indica un importo da
+inserire, distinto da zero. Dopo il salvataggio o la cancellazione vengono
 ricaricati anche riepiloghi e grafici.
+
+Nel dettaglio di un progetto, i KPI sommano le spese collegate nell’anno
+selezionato. Lo scostamento del progetto è il totale effettivo meno il totale
+allocato, anche quando preventivo e acquisti sono registrati in spese distinte.
 
 Glide è stato rimosso: non sono più disponibili copia/incolla di intervalli e
 modifica delle altre colonne nella griglia. Il riordino tramite trascinamento
 è escluso perché non esiste un ordine manuale persistente e la lista è filtrata
 e paginata sul server.
+
+## Stati dei progetti
+
+Gli stati si gestiscono in **Impostazioni ambiente → Stati dei progetti**, con
+accesso amministratore e configurazione separata per ambiente. È possibile
+crearli, rinominarli ed eliminarli. Prima dell’eliminazione va scelto un altro
+stato oppure **Nessuno stato**: l’operazione aggiorna i progetti e rimuove lo
+stato nella stessa transazione. Gli stati iniziali e le assegnazioni esistenti
+sono conservati dalla migration.
+
+Lo stato si sceglie da una combobox con ricerca, anche nella tabella e nel
+dettaglio del progetto. Gli editor delle tabelle usano **Invio** per salvare e
+**Esc** per annullare, senza pulsanti ✓ e ×. Filtri, grafici e trasferimenti
+CSV/XLSX utilizzano gli stati configurati.
 
 ## Allegati di contratti, spese e progetti
 

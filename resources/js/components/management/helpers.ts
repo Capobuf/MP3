@@ -6,9 +6,12 @@ const euro = new Intl.NumberFormat('it-IT', {
     currency: 'EUR',
 });
 
-export function money(value: string | number | null | undefined): string {
+export function money(
+    value: string | number | null | undefined,
+    emptyValue = 'Da inserire',
+): string {
     return value === null || value === undefined
-        ? 'Da inserire'
+        ? emptyValue
         : euro.format(Number(value) === 0 ? 0 : Number(value));
 }
 

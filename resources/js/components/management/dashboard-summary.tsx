@@ -75,7 +75,7 @@ export function DashboardSummary({
     analytics: SummaryAnalytics;
     year: number;
     loading?: boolean;
-    scope?: 'expenses' | 'budget';
+    scope?: 'expenses' | 'budget' | 'project';
 }) {
     const { current, previous, comparisons } = analytics;
     const previousYear = previous?.year ?? year - 1;
@@ -104,13 +104,15 @@ export function DashboardSummary({
                                         {
                                             {
                                                 allocated: isBudget
-                                                    ? 'Budget previsto'
+                                                    ? 'Budget allocato'
                                                     : 'Totale allocato',
                                                 actual: isBudget
                                                     ? 'Spesa effettiva'
                                                     : 'Totale effettivo',
                                                 variance:
-                                                    'Scostamento confrontabile',
+                                                    scope === 'project'
+                                                        ? 'Scostamento progetto'
+                                                        : 'Scostamento confrontabile',
                                             }[metric]
                                         }
                                     </CardDescription>

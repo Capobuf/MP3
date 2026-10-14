@@ -11,6 +11,7 @@ import {
     CardContent,
 } from '@/components/ui/card';
 import type { Tenant } from '@/types';
+import { TenantSettingsNav } from '@/components/management/tenant-settings-nav';
 
 export default function TenantData({
     tenant,
@@ -39,6 +40,7 @@ export default function TenantData({
                         dati
                     </h1>
                 </header>
+                <TenantSettingsNav slug={tenant.slug} />
                 <Alert>
                     <AlertTitle>Trasferimento dati strutturati</AlertTitle>
                     <AlertDescription>

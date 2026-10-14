@@ -11,12 +11,14 @@ use App\Http\Controllers\Tenant\CatalogController;
 use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
+use App\Http\Controllers\Tenant\ProjectStatusController;
 use App\Http\Controllers\Tenant\SpreadsheetController;
 use App\Http\Controllers\Tenant\TenantDataTransferController;
 use App\Http\Controllers\Tenant\UndoController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\RecordUndo;
+use App\Models\Tenant;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -41,6 +43,13 @@ Route::middleware('auth')->group(function () {
             Route::get('import-template.xlsx', [SpreadsheetController::class, 'template'])->name('spreadsheet.template');
             Route::post('import/preview', [SpreadsheetController::class, 'preview'])->name('spreadsheet.preview');
             Route::post('import/commit', [SpreadsheetController::class, 'commit'])->name('spreadsheet.commit');
+        });
+        Route::middleware(EnsureSuperAdmin::class)->group(function () {
+            Route::get('settings', fn (Tenant $tenant) => to_route('tenant.project-statuses.index', $tenant));
+            Route::get('settings/project-statuses', [ProjectStatusController::class, 'index'])->name('project-statuses.index');
+            Route::post('settings/project-statuses', [ProjectStatusController::class, 'store'])->name('project-statuses.store');
+            Route::patch('settings/project-statuses/{status}', [ProjectStatusController::class, 'update'])->whereNumber('status')->name('project-statuses.update');
+            Route::delete('settings/project-statuses/{status}', [ProjectStatusController::class, 'destroy'])->whereNumber('status')->name('project-statuses.destroy');
         });
         Route::prefix('settings/data')->middleware(EnsureSuperAdmin::class)->withoutMiddleware(RecordUndo::class)->group(function () {
             Route::get('/', [TenantDataTransferController::class, 'index'])->name('data.index');

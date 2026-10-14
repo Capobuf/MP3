@@ -35,6 +35,7 @@ class RecordUndo
                     $area = match (true) {
                         $request->routeIs('tenant.budget.*') => 'Budget',
                         $request->routeIs('tenant.cost-centers.*') => 'Centro di costo',
+                        $request->routeIs('tenant.project-statuses.*') => 'Stato progetto',
                         $request->routeIs('tenant.attachments.*') => 'Allegato',
                         $request->routeIs('tenant.expenses.*') => 'Spesa',
                         default => match ($request->route('catalog')) {

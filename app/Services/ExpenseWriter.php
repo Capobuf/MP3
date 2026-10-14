@@ -52,7 +52,7 @@ class ExpenseWriter
         unset($data['cost_center_ids']);
         if (! array_key_exists('lines', $data)) {
             if ($contractEntry && $expense->allocated_amount === null && $expense->actual_amount === null) {
-                throw ValidationException::withMessages(['allocated_amount' => 'Nel contratto indica almeno un importo previsto o effettivo, anche zero.']);
+                throw ValidationException::withMessages(['allocated_amount' => 'Nel contratto indica almeno un importo allocato o effettivo, anche zero.']);
             }
             if ($hasLines &&
                 (array_key_exists('allocated_amount', $data) || array_key_exists('actual_amount', $data))) {

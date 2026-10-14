@@ -182,7 +182,7 @@ export function DistributionChart({
                                         {href ? (
                                             <Link
                                                 href={href}
-                                                className="min-w-0 rounded text-left break-words hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                                                className="min-w-0 rounded text-left break-words focus-visible:ring-2 focus-visible:ring-ring"
                                             >
                                                 {row.name}
                                             </Link>

@@ -10,6 +10,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable(['name', 'slug'])]
 class Tenant extends Model
 {
+    protected static function booted(): void
+    {
+        static::created(function (Tenant $tenant): void {
+            foreach (ProjectStatus::DEFAULTS as $key => $name) {
+                $tenant->projectStatuses()->create(['key' => $key, 'name' => $name]);
+            }
+        });
+    }
+
+    /** @return HasMany<ProjectStatus, $this> */
+    public function projectStatuses(): HasMany
+    {
+        return $this->hasMany(ProjectStatus::class);
+    }
+
     /** @return HasMany<BudgetYear, $this> */
     public function budgetYears(): HasMany
     {

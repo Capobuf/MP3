@@ -133,6 +133,13 @@ class SpreadsheetImport
         if (array_key_exists('cost_center_ids', $data)) {
             $data['cost_center_ids'] = $data['cost_center_ids'] === null ? [] : array_map(fn ($name) => $this->resolve($tenant, 'cost-centers', trim($name), 'cost_center_ids'), explode(';', (string) $data['cost_center_ids']));
         }
+        if ($resource === 'projects' && ! empty($data['status'])) {
+            $matches = $tenant->projectStatuses()->where(fn ($query) => $query->where('key', $data['status'])->orWhere('name', $data['status']))->get();
+            if ($matches->count() !== 1) {
+                Values::invalid('status', 'Seleziona uno stato definito nelle impostazioni di questo ambiente.');
+            }
+            $data['status'] = $matches->first()->key;
+        }
         if (in_array($resource, ['vendors', 'contracts', 'projects'], true)) {
             return app(CatalogController::class)->validated(Request::create('/', 'POST', $data), $tenant, $resource);
         }

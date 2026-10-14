@@ -76,6 +76,8 @@ class SpreadsheetTransferTest extends TestCase
             ['description' => 'Anno due', 'type' => 'allocated', 'unit_price' => '123.45', 'quantity' => '1', 'year' => 2027, 'period_starts_on' => '2027-01-01', 'period_ends_on' => '2027-12-31'],
         ]]);
         $book = $this->workbook('/t/ambiente/expenses/export.xlsx?year=2026');
+        $this->assertSame('Importo allocato', $book->getSheet(0)->getCell('I1')->getValue());
+        $this->assertSame('Allocato', $book->getSheet(1)->getCell('C2')->getValue());
         $this->assertSame(0.0, $book->getSheet(0)->getCell('I2')->getValue());
         $this->assertNull($book->getSheet(0)->getCell('J2')->getValue());
         $this->assertSame(2, $book->getSheet(1)->getHighestDataRow());
@@ -87,6 +89,34 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertSame(2, $contracts->getSheet(1)->getHighestDataRow());
         $this->assertEquals(2027, $contracts->getSheet(1)->getCell('B2')->getValue());
         $this->assertSame(2, $expense->lines()->count());
+    }
+
+    public function test_allocated_templates_accept_previous_heading_without_losing_amounts(): void
+    {
+        $tenant = $this->tenant();
+        $tenant->budgetYears()->create(['year' => 2026]);
+        foreach ([
+            'expenses' => ['allocated_amount', ['Spesa', 2026, null, null, null, null, null, null, '12.34', '0.00', null]],
+            'budget' => ['manual_allocated', [2026, 'manual', null, 'Voce', '12.34', '0.00', null]],
+        ] as $resource => [$field, $row]) {
+            $book = $this->workbook('/t/ambiente/'.$resource.'/import-template.xlsx');
+            $headers = $book->getSheet(0)->rangeToArray('A1:'.$book->getSheet(0)->getHighestDataColumn().'1')[0];
+            $this->assertContains('Importo allocato', $headers);
+            $this->assertNotContains('Importo previsto', $headers);
+            $legacy = array_map(fn ($header) => $header === 'Importo allocato' ? 'Importo previsto' : $header, $headers);
+            $raw = Excel::raw(new SectionWorkbook([new ReportSheet('Dati', $legacy, [$row])]), \Maatwebsite\Excel\Excel::XLSX);
+            $file = UploadedFile::fake()->createWithContent('modello-precedente.xlsx', $raw);
+            $preview = $this->postJson('/t/ambiente/'.$resource.'/import/preview', ['file' => $file])->assertOk()
+                ->assertJsonPath('new', 1)->assertJsonPath('error_count', 0)->assertJsonPath('preview.0.values.'.$field, '12.34');
+            $this->postJson('/t/ambiente/'.$resource.'/import/commit', ['file' => $file, 'token' => $preview->json('token')])
+                ->assertOk()->assertJsonPath('created', 1);
+        }
+        $this->assertSame('12.34', $tenant->expenses()->sole()->allocated_amount);
+        $this->assertSame('0.00', $tenant->expenses()->sole()->actual_amount);
+        $this->assertSame('12.34', $tenant->budgetYears()->sole()->entries()->sole()->manual_allocated);
+        $budget = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
+        $this->assertSame('Allocato', $budget->getSheet(0)->getCell('F1')->getValue());
+        $this->assertSame('Allocato', $budget->getSheet(1)->getCell('C1')->getValue());
     }
 
     public function test_preview_does_not_write_and_commit_creates_simple_expenses_and_skips_exact_duplicates(): void

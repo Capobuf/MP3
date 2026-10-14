@@ -65,7 +65,7 @@ export function getAdministrativeNavItems(tenant: Tenant | null): NavItem[] {
             ? [
                   {
                       title: 'Impostazioni ambiente',
-                      href: `/t/${tenant.slug}/settings/data`,
+                      href: `/t/${tenant.slug}/settings`,
                       icon: Settings,
                   },
               ]

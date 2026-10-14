@@ -1,3 +1,4 @@
+import { ProjectStatusSelect } from '@/components/management/project-status-select';
 import {
     InlineEdit,
     saveInlineRecord,
@@ -261,20 +262,21 @@ export default function CatalogPage({
                                                     <SelectItem value="all">
                                                         Tutti gli stati
                                                     </SelectItem>
-                                                    {[
-                                                        'pianificato',
-                                                        'attivo',
-                                                        'completato',
-                                                    ].map((status) => (
-                                                        <SelectItem
-                                                            value={status}
-                                                            key={status}
-                                                        >
-                                                            {projectStatusLabel(
-                                                                status,
-                                                            )}
-                                                        </SelectItem>
-                                                    ))}
+                                                    <SelectItem value="none">
+                                                        Nessuno stato
+                                                    </SelectItem>
+                                                    {options.project_statuses.map(
+                                                        (status) => (
+                                                            <SelectItem
+                                                                value={
+                                                                    status.key
+                                                                }
+                                                                key={status.key}
+                                                            >
+                                                                {status.name}
+                                                            </SelectItem>
+                                                        ),
+                                                    )}
                                                 </SelectGroup>
                                             </SelectContent>
                                         </Select>
@@ -400,41 +402,54 @@ export default function CatalogPage({
                                                                 key="name"
                                                                 className="max-w-80 min-w-48 font-medium break-words whitespace-normal"
                                                             >
-                                                                <div className="flex items-center gap-2">
-                                                                    <InlineEdit
-                                                                        value={
+                                                                {catalog ===
+                                                                'vendors' ? (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <InlineEdit
+                                                                            value={
+                                                                                record.name
+                                                                            }
+                                                                            label={`Nome di ${record.name}`}
+                                                                            disabled={
+                                                                                deleting !==
+                                                                                null
+                                                                            }
+                                                                            className="flex-1"
+                                                                            onSave={(
+                                                                                value,
+                                                                            ) =>
+                                                                                saveInlineRecord(
+                                                                                    `${path}/${record.id}`,
+                                                                                    {
+                                                                                        name: value,
+                                                                                    },
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                        <Button
+                                                                            asChild
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                        >
+                                                                            <Link
+                                                                                href={`${path}/${record.id}`}
+                                                                                aria-label={`Apri ${record.name}`}
+                                                                            >
+                                                                                <ArrowUpRight />
+                                                                            </Link>
+                                                                        </Button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <Link
+                                                                        href={`${path}/${record.id}`}
+                                                                        aria-label={`Apri ${record.name}`}
+                                                                        className="rounded focus-visible:ring-2 focus-visible:ring-ring"
+                                                                    >
+                                                                        {
                                                                             record.name
                                                                         }
-                                                                        label={`Nome di ${record.name}`}
-                                                                        disabled={
-                                                                            deleting !==
-                                                                            null
-                                                                        }
-                                                                        className="flex-1"
-                                                                        onSave={(
-                                                                            value,
-                                                                        ) =>
-                                                                            saveInlineRecord(
-                                                                                `${path}/${record.id}`,
-                                                                                {
-                                                                                    name: value,
-                                                                                },
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <Button
-                                                                        asChild
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                    >
-                                                                        <Link
-                                                                            href={`${path}/${record.id}`}
-                                                                            aria-label={`Apri ${record.name}`}
-                                                                        >
-                                                                            <ArrowUpRight />
-                                                                        </Link>
-                                                                    </Button>
-                                                                </div>
+                                                                    </Link>
+                                                                )}
                                                             </TableCell>
                                                             {catalog !==
                                                             'vendors' ? (
@@ -531,22 +546,38 @@ export default function CatalogPage({
                                                                                     <Badge variant="secondary">
                                                                                         {projectStatusLabel(
                                                                                             record.status,
+                                                                                            options.project_statuses,
                                                                                         )}
                                                                                     </Badge>
                                                                                 }
-                                                                                options={[
-                                                                                    'pianificato',
-                                                                                    'attivo',
-                                                                                    'completato',
-                                                                                ].map(
-                                                                                    (
-                                                                                        value,
-                                                                                    ) => ({
-                                                                                        value,
-                                                                                        label: projectStatusLabel(
-                                                                                            value,
-                                                                                        ),
-                                                                                    }),
+                                                                                renderEditor={({
+                                                                                    value,
+                                                                                    onChange,
+                                                                                    disabled,
+                                                                                    invalid,
+                                                                                    onCancel,
+                                                                                }) => (
+                                                                                    <ProjectStatusSelect
+                                                                                        statuses={
+                                                                                            options.project_statuses
+                                                                                        }
+                                                                                        value={
+                                                                                            value
+                                                                                        }
+                                                                                        onChange={
+                                                                                            onChange
+                                                                                        }
+                                                                                        disabled={
+                                                                                            disabled
+                                                                                        }
+                                                                                        invalid={
+                                                                                            invalid
+                                                                                        }
+                                                                                        autoFocus
+                                                                                        onCancel={
+                                                                                            onCancel
+                                                                                        }
+                                                                                    />
                                                                                 )}
                                                                                 onSave={(
                                                                                     value,
@@ -554,7 +585,9 @@ export default function CatalogPage({
                                                                                     saveInlineRecord(
                                                                                         `${path}/${record.id}`,
                                                                                         {
-                                                                                            status: value,
+                                                                                            status:
+                                                                                                value ||
+                                                                                                null,
                                                                                         },
                                                                                     )
                                                                                 }

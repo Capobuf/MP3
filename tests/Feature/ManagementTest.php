@@ -61,7 +61,7 @@ class ManagementTest extends TestCase
         $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
         $foreignVendor = $this->other->vendors()->create(['name' => 'Altro fornitore']);
         $this->patchJson('/t/alfa/projects/'.$project->id, ['name' => ''])->assertUnprocessable()->assertJsonValidationErrors('name');
-        $this->patchJson('/t/alfa/projects/'.$project->id, ['status' => ''])->assertUnprocessable()->assertJsonValidationErrors('status');
+        $this->patchJson('/t/alfa/projects/'.$project->id, ['status' => 'inesistente'])->assertUnprocessable()->assertJsonValidationErrors('status');
         $this->patchJson('/t/alfa/contracts/'.$contract->id, ['vendor_id' => $foreignVendor->id])->assertUnprocessable()->assertJsonValidationErrors('vendor_id');
         $this->assertSame('Progetto', $project->refresh()->name);
         $this->assertSame('attivo', $project->status);

@@ -14,9 +14,11 @@ import { money } from './helpers';
 import { budgetLabels, budgetTypes } from './budget-types';
 import type { BudgetSnapshot, BudgetType } from './budget-types';
 import { ChartReset } from './analytics-ui';
+import { economicConfig } from './analytics-helpers';
 
 export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
     const [metric, setMetric] = useState<'allocated' | 'actual'>('allocated');
+    const color = economicConfig[metric].color;
     const [selected, setSelected] = useState<BudgetType | null>(null);
     const onSelect = (type: BudgetType) =>
         setSelected((current) => (current === type ? null : type));
@@ -72,7 +74,7 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
                     width={width}
                     height={height}
                     rx={3}
-                    fill={`var(--chart-${index + 1})`}
+                    fill={color}
                 />
                 <text
                     x={index === 0 ? x + width + 8 : x - 8}
@@ -95,12 +97,11 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
         targetY,
         targetControlX,
         linkWidth,
-        index,
     }: SankeyLinkProps) => (
         <path
             d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
             fill="none"
-            stroke={`var(--chart-${index + 2})`}
+            stroke={color}
             strokeOpacity={0.35}
             strokeWidth={linkWidth}
         />
@@ -120,7 +121,7 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
                         aria-label="Importi del Sankey"
                     >
                         <ToggleGroupItem value="allocated">
-                            Previsto
+                            Allocato
                         </ToggleGroupItem>
                         <ToggleGroupItem value="actual">
                             Effettivo
@@ -138,7 +139,7 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
                         config={{
                             value: {
                                 label: 'Flusso positivo',
-                                color: 'var(--chart-1)',
+                                color,
                             },
                         }}
                     >

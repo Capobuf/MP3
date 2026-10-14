@@ -209,17 +209,22 @@ export function ExpenseTable({
             <Link
                 href={`/t/${slug}/expenses/${expense.id}`}
                 title="Importo calcolato dalle righe economiche"
-                className="financial-value"
+                className="block min-h-5 financial-value"
+                aria-label={
+                    expense[field] == null
+                        ? `${amountLabels[field]} per ${expense.title}`
+                        : undefined
+                }
             >
-                {money(expense[field])}
+                {money(expense[field], '')}
             </Link>
         ) : (
             <InlineEdit
                 value={expense[field]}
                 label={`${amountLabels[field]} per ${expense.title}`}
                 disabled={busy}
-                className="text-right financial-value"
-                display={money(expense[field])}
+                className="min-h-5 text-right financial-value"
+                display={money(expense[field], '')}
                 onSave={(value) =>
                     saveInlineRecord(`/t/${slug}/expenses/${expense.id}`, {
                         [field]: decimalInput(value),
@@ -314,7 +319,7 @@ export function ExpenseTable({
                   : []),
             {
                 id: 'allocated_amount',
-                label: contractMode ? 'Previsto' : 'Allocato',
+                label: 'Allocato',
                 value: (row) =>
                     row.allocated_amount == null
                         ? undefined

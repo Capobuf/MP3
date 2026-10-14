@@ -10,7 +10,7 @@ use stdClass;
 final class ExpenseAnalytics
 {
     /** @return literal-string */
-    private static function columns(): string
+    private static function columns(bool $aggregateVariance = false): string
     {
         $columns = ['COUNT(*) AS count', 'SUM(CASE WHEN allocated_amount IS NULL OR actual_amount IS NULL THEN 1 ELSE 0 END) AS incomplete'];
         foreach (['allocated', 'actual'] as $metric) {
@@ -20,7 +20,9 @@ final class ExpenseAnalytics
             $columns[] = "SUM(CASE WHEN $amount > 0 THEN $cents ELSE 0 END) AS {$metric}_positive_cents";
             $columns[] = "SUM(CASE WHEN $amount < 0 THEN $cents ELSE 0 END) AS {$metric}_negative_cents";
         }
-        $columns[] = 'SUM(CASE WHEN allocated_amount IS NOT NULL AND actual_amount IS NOT NULL THEN CAST(ROUND(actual_amount * 100, 0) AS SIGNED) - CAST(ROUND(allocated_amount * 100, 0) AS SIGNED) END) AS variance_cents';
+        $columns[] = $aggregateVariance
+            ? 'SUM(CAST(ROUND(actual_amount * 100, 0) AS SIGNED)) - SUM(CAST(ROUND(allocated_amount * 100, 0) AS SIGNED)) AS variance_cents'
+            : 'SUM(CASE WHEN allocated_amount IS NOT NULL AND actual_amount IS NOT NULL THEN CAST(ROUND(actual_amount * 100, 0) AS SIGNED) - CAST(ROUND(allocated_amount * 100, 0) AS SIGNED) END) AS variance_cents';
         foreach (['complete' => 'allocated_amount IS NOT NULL AND actual_amount IS NOT NULL', 'allocated_only' => 'allocated_amount IS NOT NULL AND actual_amount IS NULL', 'actual_only' => 'allocated_amount IS NULL AND actual_amount IS NOT NULL', 'missing' => 'allocated_amount IS NULL AND actual_amount IS NULL'] as $key => $condition) {
             $columns[] = "SUM(CASE WHEN $condition THEN 1 ELSE 0 END) AS $key";
         }
@@ -59,13 +61,13 @@ final class ExpenseAnalytics
     }
 
     /** @return array<string, mixed> */
-    public static function kpis(Tenant $tenant, Request $request): array
+    public static function kpis(Tenant $tenant, Request $request, bool $aggregateVariance = false): array
     {
         $year = EconomicYearContext::year($tenant, $request);
         $allYears = ExpenseOverview::query($tenant, $request, false)->toBase();
         $selected = (clone $allYears)->where('year', $year);
-        $current = self::summary((clone $selected)->selectRaw(self::columns())->sole());
-        $annual = (clone $allYears)->where('year', '<=', $year)->select('year')->selectRaw(self::columns())->groupBy('year')->orderByDesc('year')->limit(6)->get()
+        $current = self::summary((clone $selected)->selectRaw(self::columns($aggregateVariance))->sole());
+        $annual = (clone $allYears)->where('year', '<=', $year)->select('year')->selectRaw(self::columns($aggregateVariance))->groupBy('year')->orderByDesc('year')->limit(6)->get()
             ->map(fn (stdClass $row) => ['year' => (int) $row->year, ...self::summary($row)])->reverse()->values()->all();
         $previous = collect($annual)->firstWhere('year', $year - 1);
         $comparisons = [];
@@ -98,12 +100,12 @@ final class ExpenseAnalytics
                 ...self::economic($row),
             ])->all();
         }
-        $statuses = ['pianificato' => 'Pianificato', 'attivo' => 'Attivo', 'completato' => 'Completato', 'none' => 'Senza progetto'];
+        $statuses = [...$tenant->projectStatuses()->pluck('name', 'key')->all(), 'none' => 'Senza progetto', 'no-status' => 'Senza stato'];
         $projectStatuses = [];
         foreach ($groups['projects'] as $project) {
-            $status = $project['status'];
+            $status = $project['status'] ?? 'no-status';
             if (! isset($projectStatuses[$status])) {
-                $projectStatuses[$status] = ['id' => $status, 'name' => $statuses[$status], 'count' => 0, 'incomplete' => 0, 'allocated' => null, 'actual' => null, 'variance' => null, 'allocated_positive' => '0.00', 'actual_positive' => '0.00', 'allocated_negative' => '0.00', 'actual_negative' => '0.00'];
+                $projectStatuses[$status] = ['id' => $status, 'name' => $statuses[$status] ?? 'Stato non disponibile', 'count' => 0, 'incomplete' => 0, 'allocated' => null, 'actual' => null, 'variance' => null, 'allocated_positive' => '0.00', 'actual_positive' => '0.00', 'allocated_negative' => '0.00', 'actual_negative' => '0.00'];
             }
             foreach (['allocated', 'actual', 'variance', 'allocated_positive', 'actual_positive', 'allocated_negative', 'actual_negative'] as $metric) {
                 if ($project[$metric] !== null) {

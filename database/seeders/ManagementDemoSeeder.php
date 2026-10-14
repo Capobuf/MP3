@@ -88,7 +88,7 @@ class ManagementDemoSeeder extends Seeder
                             default => null,
                         },
                         'lines' => $lines,
-                        'notes' => $contractId === null ? 'Spesa dimostrativa con righe previste ed effettive.' : 'Condizioni economiche dimostrative per il periodo coperto.',
+                        'notes' => $contractId === null ? 'Spesa dimostrativa con righe allocate ed effettive.' : 'Condizioni economiche dimostrative per il periodo coperto.',
                     ]);
                 }
             });

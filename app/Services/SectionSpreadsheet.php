@@ -33,9 +33,9 @@ class SectionSpreadsheet
             'vendors' => ['Nome' => 'name', 'Partita IVA' => 'vat_number', 'Email' => 'email', 'Telefono' => 'phone', 'Note' => 'notes'],
             'contracts' => ['Nome' => 'name', 'Fornitore' => 'vendor_id', 'Data iniziale' => 'starts_on', 'Data finale' => 'ends_on', 'Importo di riferimento' => 'reference_amount', 'Centri di costo' => 'cost_center_ids', 'Note' => 'notes'],
             'projects' => ['Nome' => 'name', 'Descrizione' => 'description', 'Stato' => 'status', 'Data iniziale' => 'starts_on', 'Data finale' => 'ends_on', 'Centri di costo' => 'cost_center_ids'],
-            'expenses' => ['Descrizione' => 'title', 'Anno' => 'year', 'Fornitore' => 'vendor_id', 'Contratto' => 'contract_id', 'Progetto' => 'project_id', 'Centri di costo' => 'cost_center_ids', 'Periodo iniziale' => 'period_starts_on', 'Periodo finale' => 'period_ends_on', 'Importo previsto' => 'allocated_amount', 'Importo effettivo' => 'actual_amount', 'Note' => 'notes'],
+            'expenses' => ['Descrizione' => 'title', 'Anno' => 'year', 'Fornitore' => 'vendor_id', 'Contratto' => 'contract_id', 'Progetto' => 'project_id', 'Centri di costo' => 'cost_center_ids', 'Periodo iniziale' => 'period_starts_on', 'Periodo finale' => 'period_ends_on', 'Importo allocato' => 'allocated_amount', 'Importo effettivo' => 'actual_amount', 'Note' => 'notes'],
             'cost-centers' => ['Nome' => 'name', 'Centro padre' => 'parent_id'],
-            'budget' => ['Anno' => 'year', 'Tipo' => 'type', 'Sorgente' => 'source_id', 'Descrizione' => 'description', 'Importo previsto' => 'manual_allocated', 'Importo effettivo' => 'manual_actual', 'Centro di costo' => 'cost_center_id'],
+            'budget' => ['Anno' => 'year', 'Tipo' => 'type', 'Sorgente' => 'source_id', 'Descrizione' => 'description', 'Importo allocato' => 'manual_allocated', 'Importo effettivo' => 'manual_actual', 'Centro di costo' => 'cost_center_id'],
             default => abort(404),
         };
     }
@@ -61,7 +61,7 @@ class SectionSpreadsheet
                 'Importi: celle numeriche oppure testo come 1234,56, 1.234,56 o 1234.56. Massimo due decimali. Vuoto significa non specificato; zero significa 0,00.',
                 'Riferimenti: nome esatto del record esistente. Per il fornitore puoi usare anche la partita IVA. Le corrispondenze ambigue bloccano la riga.',
                 'Centri di costo: nome univoco o percorso Padre / Figlio. Separa più centri con punto e virgola. Importa prima i centri padre, poi i figli.',
-                'Progetti: stato pianificato, attivo o completato.',
+                'Progetti: usa il nome esatto di uno stato definito nelle impostazioni ambiente. Vuoto significa nessuno stato.',
                 'Budget: anno già creato, tipo manual, contract, project o expense. Per manual usa descrizione e importi; per gli altri usa una sorgente esistente e lascia descrizione e importi vuoti.',
                 'Spese: una riga rappresenta una spesa semplice. Le condizioni avanzate si gestiscono in MP3 o si trasferiscono con il CSV tecnico.',
                 'Non inserire formule. Correggi gli errori nel file e caricalo nuovamente. Nessuna modifica viene salvata prima della conferma.',
@@ -121,7 +121,8 @@ class SectionSpreadsheet
         }
         $sort = in_array($request->input('sort'), ['name', 'updated_at'], true) ? $request->input('sort') : 'name';
         $items = $query->orderBy($sort, $request->input('direction') === 'desc' ? 'desc' : 'asc')->orderBy('id')->get();
-        $rows = $items->map(function ($item): array {
+        $statusNames = $tenant->projectStatuses()->pluck('name', 'key');
+        $rows = $items->map(function ($item) use ($statusNames): array {
             if ($item instanceof Vendor) {
                 return [$item->name, $item->vat_number, $item->email, $item->phone, $item->notes];
             }
@@ -129,7 +130,7 @@ class SectionSpreadsheet
                 return [$item->name, $item->vendor?->name, self::excelDate($item->starts_on), self::excelDate($item->ends_on), self::amount($item->reference_amount), self::centers($item->costCenters), $item->notes];
             }
 
-            return [$item->name, $item->description, $item->status, self::excelDate($item->starts_on), self::excelDate($item->ends_on), self::centers($item->costCenters)];
+            return [$item->name, $item->description, $statusNames[$item->status] ?? null, self::excelDate($item->starts_on), self::excelDate($item->ends_on), self::centers($item->costCenters)];
         })->all();
         $formats = match ($resource) {
             'contracts' => ['C' => self::DATE, 'D' => self::DATE, 'E' => self::EUR], 'projects' => ['D' => self::DATE, 'E' => self::DATE], default => []
@@ -172,7 +173,7 @@ class SectionSpreadsheet
                     continue;
                 }
                 $seen[$line->id] = true;
-                $rows[] = [$expense->title, $line->description, $line->type === 'allocated' ? 'Previsto' : 'Effettivo', self::amount($line->quantity), self::amount($line->unit_price), self::amount($line->total), self::excelDate($line->period_starts_on), self::excelDate($line->period_ends_on), $line->year ?? $expense->year];
+                $rows[] = [$expense->title, $line->description, $line->type === 'allocated' ? 'Allocato' : 'Effettivo', self::amount($line->quantity), self::amount($line->unit_price), self::amount($line->total), self::excelDate($line->period_starts_on), self::excelDate($line->period_ends_on), $line->year ?? $expense->year];
             }
         }
 
@@ -194,8 +195,8 @@ class SectionSpreadsheet
         }
 
         return new SectionWorkbook([
-            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Previsto', 'Effettivo', 'Scostamento', 'Completezza', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::EUR, 'K' => self::DATE, 'L' => self::DATE]),
-            new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Previsto', 'Effettivo', 'Scostamento', 'Voci incomplete'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::EUR]),
+            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Allocato', 'Effettivo', 'Scostamento', 'Completezza', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::EUR, 'K' => self::DATE, 'L' => self::DATE]),
+            new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Allocato', 'Effettivo', 'Scostamento', 'Voci incomplete'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::EUR]),
             $this->periodSheet($selected),
         ]);
     }

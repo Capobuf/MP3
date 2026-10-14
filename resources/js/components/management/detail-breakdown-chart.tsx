@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/empty';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ChartReset } from './analytics-ui';
+import { economicConfig } from './analytics-helpers';
 import { detailCents, detailDecimal } from './detail-breakdown';
 import { money } from './helpers';
 import type { DetailBreakdown } from './types';
@@ -20,7 +21,6 @@ const percentage = new Intl.NumberFormat('it-IT', {
     style: 'percent',
     maximumFractionDigits: 1,
 });
-const color = (index: number) => `var(--chart-${(index % 5) + 1})`;
 
 export function DetailBreakdownChart({
     breakdown,
@@ -40,12 +40,11 @@ export function DetailBreakdownChart({
         : available('actual')
           ? 'actual'
           : 'allocated';
+    const color = economicConfig[metric].color;
     const current = breakdown[metric];
     const items = current.items.filter(
         (item) => selectedItem === null || item.id === selectedItem,
     );
-    const itemColor = (id: string) =>
-        color(current.items.findIndex((item) => item.id === id));
     const gross = detailCents(current.positive);
     const negative = detailCents(current.negative);
     const showFlows =
@@ -59,7 +58,7 @@ export function DetailBreakdownChart({
     const source =
         negative < 0n
             ? 'Totale lordo positivo'
-            : `Totale ${metric === 'actual' ? 'effettivo' : 'previsto'}`;
+            : `Totale ${metric === 'actual' ? 'effettivo' : 'allocato'}`;
     const data = {
         nodes: [
             {
@@ -107,7 +106,7 @@ export function DetailBreakdownChart({
                     width={width}
                     height={height}
                     rx={3}
-                    fill={item ? itemColor(item.id) : color(0)}
+                    fill={color}
                     className={item ? 'cursor-pointer' : undefined}
                     role={item ? 'button' : undefined}
                     tabIndex={item ? 0 : undefined}
@@ -155,7 +154,7 @@ export function DetailBreakdownChart({
             }}
             d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
             fill="none"
-            stroke={items[index] ? itemColor(items[index].id) : color(index)}
+            stroke={color}
             strokeOpacity={0.35}
             strokeWidth={linkWidth}
         />
@@ -183,7 +182,7 @@ export function DetailBreakdownChart({
                             value="allocated"
                             disabled={!available('allocated')}
                         >
-                            Previsto
+                            Allocato
                         </ToggleGroupItem>
                         <ToggleGroupItem
                             value="actual"
@@ -218,7 +217,7 @@ export function DetailBreakdownChart({
                             config={{
                                 value: {
                                     label: source,
-                                    color: 'var(--chart-1)',
+                                    color,
                                 },
                             }}
                         >
@@ -304,7 +303,7 @@ export function DetailBreakdownChart({
                                     <div className="flex items-start justify-between gap-3 text-sm">
                                         {href ? (
                                             <Link
-                                                className="min-w-0 rounded break-words text-primary focus-visible:ring-2 focus-visible:ring-ring"
+                                                className="min-w-0 rounded break-words text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                                                 href={href}
                                                 title={item.name}
                                                 aria-label={`Apri ${item.name}`}
@@ -344,9 +343,7 @@ export function DetailBreakdownChart({
                                             className="h-full rounded-full transition-[width] duration-300"
                                             style={{
                                                 width: `${(Number(detailCents(item.amount)) / Number(gross)) * 100}%`,
-                                                backgroundColor: itemColor(
-                                                    item.id,
-                                                ),
+                                                backgroundColor: color,
                                             }}
                                         />
                                     </button>

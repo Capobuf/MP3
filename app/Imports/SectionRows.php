@@ -32,6 +32,7 @@ class SectionRows implements Import, OnEachRow, WithEvents, WithHeadingRow, With
         return [BeforeSheet::class => function (BeforeSheet $event): void {
             $sheet = $event->sheet->getDelegate();
             $headers = $sheet->rangeToArray('A1:'.$sheet->getHighestDataColumn().'1', null, false, false)[0];
+            $headers = array_map(fn ($heading) => $heading === 'Importo previsto' ? 'Importo allocato' : $heading, $headers);
             if ($headers !== array_keys(SectionSpreadsheet::columns($this->resource))) {
                 throw ValidationException::withMessages(['file' => 'Le intestazioni del foglio Dati non corrispondono al modello della sezione.']);
             }
@@ -47,7 +48,8 @@ class SectionRows implements Import, OnEachRow, WithEvents, WithHeadingRow, With
         $mapped = [];
         $formulas = [];
         foreach (SectionSpreadsheet::columns($this->resource) as $heading => $field) {
-            $mapped[$field] = $values[Str::slug($heading, '_')] ?? null;
+            $mapped[$field] = $values[Str::slug($heading, '_')]
+                ?? (in_array($field, ['allocated_amount', 'manual_allocated'], true) ? ($values['importo_previsto'] ?? null) : null);
         }
         foreach ($row->getDelegate()->getCellIterator() as $cell) {
             if ($cell->getDataType() === DataType::TYPE_FORMULA) {
