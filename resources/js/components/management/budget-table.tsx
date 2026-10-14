@@ -52,7 +52,6 @@ import {
     ChevronDown,
     ChevronRight,
     GripVertical,
-    Info,
     Ellipsis,
     TriangleAlert,
 } from 'lucide-react';
@@ -1991,31 +1990,6 @@ export function BudgetTable({
                                                             .header,
                                                         header.getContext(),
                                                     )
-                                                )}
-                                                {header.column.id ===
-                                                    'variance' && (
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                size="icon"
-                                                                variant="ghost"
-                                                                aria-label="Come viene calcolato lo scostamento"
-                                                            >
-                                                                <Info />
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent className="max-w-72">
-                                                            Differenza fra
-                                                            Effettivo e Previsto
-                                                            sulle sole
-                                                            componenti con
-                                                            entrambi gli
-                                                            importi. I dati
-                                                            senza uno dei due
-                                                            importi sono esclusi
-                                                            dal confronto.
-                                                        </TooltipContent>
-                                                    </Tooltip>
                                                 )}
                                             </div>
                                         </TableHead>

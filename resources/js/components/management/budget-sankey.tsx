@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { Sankey } from 'recharts';
 import type { SankeyNodeProps, SankeyLinkProps } from 'recharts';
-import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardContent,
-    CardFooter,
-} from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
@@ -26,9 +20,7 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
     const [selected, setSelected] = useState<BudgetType | null>(null);
     const onSelect = (type: BudgetType) =>
         setSelected((current) => (current === type ? null : type));
-    const values = selected === null ? budget.totals : budget.groups[selected];
     const positive = `${metric}_positive` as const;
-    const negative = `${metric}_negative` as const;
     const categories = budgetTypes.filter(
         (type) =>
             Number(budget.groups[type][positive]) > 0 &&
@@ -195,13 +187,6 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
                     </Empty>
                 )}
             </CardContent>
-            <CardFooter className="flex flex-col items-start gap-3">
-                <p className="flex flex-wrap gap-x-5 gap-y-1 financial-value text-sm">
-                    <span>Positivi lordi: {money(values[positive])}</span>
-                    <span>Rettifiche: {money(values[negative])}</span>
-                    <span>Totale netto: {money(values[metric])}</span>
-                </p>
-            </CardFooter>
         </Card>
     );
 }

@@ -34,12 +34,14 @@ export function DistributionChart({
     rows,
     values,
     vendorConcentration = false,
+    showReconciliation = true,
     getHref,
 }: {
     title: string;
     rows: EconomicGroup[];
     values: EconomicValues;
     vendorConcentration?: boolean;
+    showReconciliation?: boolean;
     getHref?: (id: GroupId) => string | undefined;
 }) {
     const [metric, setMetric] = useState<Metric>('actual');
@@ -205,7 +207,9 @@ export function DistributionChart({
                     </dl>
                 </div>
             )}
-            <Reconciliation values={displayedValues} metric={metric} />
+            {showReconciliation && (
+                <Reconciliation values={displayedValues} metric={metric} />
+            )}
         </AnalyticsCard>
     );
 }

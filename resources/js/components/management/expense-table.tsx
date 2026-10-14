@@ -362,8 +362,8 @@ export function ExpenseTable({
             aria-busy={busy || loading}
         >
             <div className="flex flex-wrap items-center gap-2">
-                {toolbar}
                 <TableViewSettings view={view} disabled={busy || loading} />
+                {toolbar}
             </div>
             {selected.length > 0 && (
                 <div

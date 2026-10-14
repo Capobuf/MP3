@@ -167,6 +167,7 @@ export default function TenantDashboard(
                                 key={`${chartKey}:project-statuses`}
                                 title="Distribuzione per stato del progetto"
                                 rows={analytics.projectStatuses}
+                                showReconciliation={false}
                                 values={analytics.current}
                             />
                         </div>
