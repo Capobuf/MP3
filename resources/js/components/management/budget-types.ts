@@ -53,6 +53,14 @@ export type BudgetSnapshot = {
     cost_center_groups: Record<string, BudgetTotals>;
     owners: Record<string, number>;
     has_missing_entries: boolean;
+    coverage: Record<'archive' | 'included' | 'uncovered', BudgetCoverage>;
+};
+export type BudgetCoverage = {
+    count: number;
+    allocated: string | null;
+    actual: string | null;
+    allocated_missing: number;
+    actual_missing: number;
 };
 export type BudgetYear = {
     id: number;

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Ellipsis, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { BudgetSankey } from '@/components/management/budget-sankey';
+import { BudgetCoveragePanel } from '@/components/management/budget-coverage';
 import { BudgetTable } from '@/components/management/budget-table';
 import {
     BudgetEntrySheet,
@@ -261,6 +262,12 @@ function BudgetWorkspace({
                     scope="budget"
                 />
             </section>
+            <BudgetCoveragePanel
+                coverage={budget.coverage}
+                year={year.year}
+                busy={busy || loading || pending}
+                onReview={() => setMissing(true)}
+            />
             <BudgetSankey budget={budget} />
             <div className="flex flex-wrap items-center justify-end gap-3">
                 <div className="flex gap-2">

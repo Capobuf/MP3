@@ -88,9 +88,35 @@ class AnnualBudget
         return [
             'entries' => $rows, 'totals' => $this->totals($included), 'groups' => $groups,
             'cost_center_groups' => array_map(fn ($group) => $this->totals($group), $centers),
+            'coverage' => [
+                'archive' => $this->coverage($expenses),
+                'included' => $this->coverage($expenses->filter(fn (Expense $expense) => isset($owners[$expense->id]))),
+                'uncovered' => $this->coverage($expenses->reject(fn (Expense $expense) => isset($owners[$expense->id]))),
+            ],
             'owners' => $owners,
             'has_missing_entries' => $expenses->contains(fn (Expense $expense) => ! isset($owners[$expense->id])),
         ];
+    }
+
+    /**
+     * Reconcile annual archive expenses using the same ownership as the budget.
+     * Manual entries have no archive source and are deliberately not part of this comparison.
+     *
+     * @param  Collection<int, Expense>  $expenses
+     * @return array<string, string|int|null>
+     */
+    private function coverage(Collection $expenses): array
+    {
+        $result = ['count' => $expenses->count()];
+        foreach (['allocated', 'actual'] as $metric) {
+            $amounts = $expenses->pluck($metric.'_amount')->filter(fn ($amount) => $amount !== null);
+            $result[$metric] = $amounts->isEmpty() && $expenses->isNotEmpty()
+                ? null
+                : Money::decimal($amounts->sum(fn ($amount) => Money::cents($amount)));
+            $result[$metric.'_missing'] = $expenses->count() - $amounts->count();
+        }
+
+        return $result;
     }
 
     private function matches(string $type, int $id, Expense $expense): bool
