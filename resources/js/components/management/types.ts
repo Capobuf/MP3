@@ -2,7 +2,7 @@ import type { Tenant } from '@/types';
 
 export type Catalog = 'vendors' | 'contracts' | 'projects';
 export type Kind = Catalog | 'expenses';
-export type Option = { id: number; name: string };
+export type Option = { id: number; name: string; display_name?: string };
 export type CostCenter = Option & {
     parent_id: number | null;
     parent?: Option | null;
@@ -30,14 +30,15 @@ export type ExpenseLine = {
 };
 export type RecordData = {
     id: number;
-    name?: string;
+    name?: string | null;
+    display_name?: string;
     title?: string;
     year?: number;
     vendor_id?: number | null;
     contract_id?: number | null;
     project_id?: number | null;
     vendor?: Option | null;
-    contract?: Option | null;
+    contract?: (Omit<Option, 'name'> & { name: string | null }) | null;
     project?: Option | null;
     vat_number?: string | null;
     email?: string | null;

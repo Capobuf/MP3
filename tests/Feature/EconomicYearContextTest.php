@@ -122,7 +122,7 @@ class EconomicYearContextTest extends TestCase
                 $this->get('/t/alfa/'.$catalog.'/'.$records[$catalog]->id)->assertInertia(fn (Assert $page) => $page
                     ->where('year', $year)->where('totals.count', 1)
                     ->where('totals.actual', $year === 2025 ? '80.02' : '-10.04')
-                    ->where('breakdown.actual.net', $year === 2025 ? '80.02' : '-10.04')
+                    ->where($catalog === 'contracts' ? 'breakdown' : 'breakdown.actual.net', $catalog === 'contracts' ? null : ($year === 2025 ? '80.02' : '-10.04'))
                     ->where('expenses.data.0.year', $year));
             }
         }

@@ -80,7 +80,7 @@ class ExpenseController extends Controller
             return $expense;
         });
 
-        return response()->json(['record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
+        return response()->json(['warnings' => array_filter([ExpensePeriods::overlapWarning($expense)]), 'record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
     }
 
     public function update(ExpenseRequest $request, Tenant $tenant, Expense $expense): JsonResponse
@@ -91,7 +91,7 @@ class ExpenseController extends Controller
             app(ExpenseWriter::class)->persist($locked, $request->validated());
         });
 
-        return response()->json(['record' => $expense->refresh()->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
+        return response()->json(['warnings' => array_filter([ExpensePeriods::overlapWarning($expense->refresh())]), 'record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
     }
 
     public function destroy(Tenant $tenant, Expense $expense, AttachmentFiles $files): JsonResponse
@@ -142,7 +142,7 @@ class ExpenseController extends Controller
             '*.required' => 'La descrizione e l’anno non possono essere vuoti.',
         ])->validate();
 
-        DB::transaction(function () use ($tenant, $data): void {
+        $warnings = DB::transaction(function () use ($tenant, $data): array {
             $records = $tenant->expenses()->whereIn('id', array_column($data['updates'], 'id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             ExpensePeriods::lockContracts($tenant, [...$records->pluck('contract_id')->all(), ...array_column($data['updates'], 'contract_id')]);
             foreach ($data['updates'] as $update) {
@@ -164,8 +164,10 @@ class ExpenseController extends Controller
                     throw ValidationException::withMessages($errors);
                 }
             }
+
+            return $records->map(fn ($record) => ExpensePeriods::overlapWarning($record))->filter()->values()->all();
         });
 
-        return response()->json(['message' => 'Modifiche salvate.']);
+        return response()->json(['message' => 'Modifiche salvate.', 'warnings' => $warnings]);
     }
 }

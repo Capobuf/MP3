@@ -30,6 +30,30 @@ class ManagementTest extends TestCase
         $this->actingAs($user);
     }
 
+    public function test_contract_can_be_created_empty_and_its_dates_cleared_independently(): void
+    {
+        $response = $this->postJson('/t/alfa/contracts', [])->assertCreated();
+        $contract = $this->tenant->contracts()->findOrFail($response->json('record.id'));
+        $this->assertNull($contract->name);
+        $this->assertSame('Contratto senza nome', $contract->display_name);
+        $this->assertSame(0, $contract->expenses()->count());
+        $url = '/t/alfa/contracts/'.$contract->id;
+        $this->patchJson($url, ['starts_on' => '2026-06-13'])->assertOk()->assertJsonPath('record.ends_on', null);
+        $this->patchJson($url, ['ends_on' => '2027-06-13'])->assertOk()->assertJsonPath('record.starts_on', '2026-06-13');
+        $this->patchJson($url, ['ends_on' => '2026-01-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
+        $this->patchJson($url, ['starts_on' => null])->assertOk()->assertJsonPath('record.ends_on', '2027-06-13');
+        $this->patchJson($url, ['ends_on' => null, 'name' => ''])->assertOk()
+            ->assertJsonPath('record.starts_on', null)->assertJsonPath('record.name', null);
+        $this->patchJson($url, ['starts_on' => 'invalid'])->assertUnprocessable();
+        $this->patchJson($url, ['name' => str_repeat('x', 256)])->assertUnprocessable();
+        $this->get('/t/alfa/contracts')->assertInertia(fn (Assert $page) => $page->where('records.data.0.name', null));
+        $this->get($url)->assertInertia(fn (Assert $page) => $page->where('record.display_name', 'Contratto senza nome'));
+        $this->getJson('/t/alfa/contracts/options')->assertOk()->assertJsonPath('records.0.name', 'Contratto senza nome');
+        foreach (['vendors', 'projects'] as $catalog) {
+            $this->postJson('/t/alfa/'.$catalog, [])->assertUnprocessable()->assertJsonValidationErrors('name');
+        }
+    }
+
     public function test_catalog_fields_can_be_patched_without_resending_required_fields(): void
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore', 'email' => 'originale@example.com']);
@@ -84,7 +108,9 @@ class ManagementTest extends TestCase
     public function test_catalog_crud_and_required_fields(): void
     {
         foreach (['vendors', 'contracts', 'projects'] as $catalog) {
-            $this->postJson('/t/alfa/'.$catalog, [])->assertUnprocessable()->assertJsonValidationErrors('name');
+            if ($catalog !== 'contracts') {
+                $this->postJson('/t/alfa/'.$catalog, [])->assertUnprocessable()->assertJsonValidationErrors('name');
+            }
             $data = ['name' => 'Elemento '.$catalog];
             if ($catalog === 'projects') {
                 $data['status'] = 'pianificato';

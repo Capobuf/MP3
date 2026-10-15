@@ -1,5 +1,5 @@
 import { ProjectStatusSelect } from '@/components/management/project-status-select';
-import { ArrowUpRight, CalendarDays, ChevronDown } from 'lucide-react';
+import { ArrowUpRight, ChevronDown } from 'lucide-react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
 import {
     InlineEdit,
@@ -241,7 +241,9 @@ export default function CatalogDetail({
     );
     return (
         <>
-            <Head title={`${record.name} · ${tenant.name}`} />
+            <Head
+                title={`${record.display_name ?? record.name} · ${tenant.name}`}
+            />
             <div className="@container/detail page-shell">
                 <header className="flex detail-enter flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1">
@@ -253,12 +255,53 @@ export default function CatalogDetail({
                         </Link>
                         <InlineEdit
                             value={record.name}
+                            display={record.display_name ?? record.name}
                             label="Nome"
                             disabled={tableBusy}
                             as="h1"
                             className="mt-2 page-title [overflow-wrap:anywhere]"
                             onSave={(value) => save('name', value)}
                         />
+                        {catalog === 'contracts' && (
+                            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                                <span>Periodo:</span>
+                                {(['starts_on', 'ends_on'] as const).map(
+                                    (field, index) => (
+                                        <div
+                                            key={field}
+                                            className="flex min-w-0 items-center gap-2"
+                                        >
+                                            {index === 1 && (
+                                                <span aria-hidden="true">
+                                                    –
+                                                </span>
+                                            )}
+                                            <InlineEdit
+                                                value={record[field]}
+                                                label={
+                                                    field === 'starts_on'
+                                                        ? 'Inizio contratto'
+                                                        : 'Fine contratto'
+                                                }
+                                                type="date"
+                                                display={
+                                                    record[field]
+                                                        ? dateLabel(
+                                                              record[field],
+                                                          )
+                                                        : 'Non indicata'
+                                                }
+                                                className="w-auto tabular-nums"
+                                                disabled={tableBusy}
+                                                onSave={(value) =>
+                                                    save(field, value || null)
+                                                }
+                                            />
+                                        </div>
+                                    ),
+                                )}
+                            </div>
+                        )}
                         {catalog === 'projects' && (
                             <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                                 <InlineEdit
@@ -310,7 +353,7 @@ export default function CatalogDetail({
                         <DeleteRecord
                             url={`${path}/${record.id}`}
                             redirect={path}
-                            label={record.name ?? ''}
+                            label={record.display_name ?? record.name ?? ''}
                             disabled={tableBusy}
                         />
                         <SpreadsheetActions
@@ -326,74 +369,6 @@ export default function CatalogDetail({
                         />
                     </div>
                 </header>
-                {catalog === 'contracts' && (
-                    <Card
-                        role="region"
-                        aria-labelledby="contract-period-title"
-                        className="grid min-w-0 detail-enter gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:items-center"
-                    >
-                        <CardHeader>
-                            <CardTitle>
-                                <h2
-                                    id="contract-period-title"
-                                    className="flex items-center gap-2"
-                                >
-                                    <CalendarDays
-                                        aria-hidden="true"
-                                        className="size-5 shrink-0 text-muted-foreground"
-                                    />
-                                    Periodo del contratto
-                                </h2>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <dl className="grid gap-4 sm:grid-cols-2">
-                                {(['starts_on', 'ends_on'] as const).map(
-                                    (field) => {
-                                        const label =
-                                            field === 'starts_on'
-                                                ? 'Inizio contratto'
-                                                : 'Fine contratto';
-                                        return (
-                                            <div
-                                                key={field}
-                                                className="min-w-0"
-                                            >
-                                                <dt className="mb-2 text-sm text-muted-foreground">
-                                                    {label}
-                                                </dt>
-                                                <dd className="min-w-0 rounded-lg border bg-muted/30 px-3 py-2">
-                                                    <InlineEdit
-                                                        value={record[field]}
-                                                        label={label}
-                                                        type="date"
-                                                        display={
-                                                            record[field]
-                                                                ? dateLabel(
-                                                                      record[
-                                                                          field
-                                                                      ],
-                                                                  )
-                                                                : 'Da impostare'
-                                                        }
-                                                        className="min-h-9 content-center text-lg font-semibold tabular-nums"
-                                                        disabled={tableBusy}
-                                                        onSave={(value) =>
-                                                            save(
-                                                                field,
-                                                                value || null,
-                                                            )
-                                                        }
-                                                    />
-                                                </dd>
-                                            </div>
-                                        );
-                                    },
-                                )}
-                            </dl>
-                        </CardContent>
-                    </Card>
-                )}
                 {catalog !== 'vendors' && economics}
                 <Card className="min-w-0 gap-4">
                     <CardHeader>
@@ -596,7 +571,10 @@ export default function CatalogDetail({
                                             className="flex justify-between rounded-lg border p-3 text-sm hover:bg-accent"
                                             href={`/t/${tenant.slug}/contracts/${contract.id}`}
                                         >
-                                            <span>{contract.name}</span>
+                                            <span>
+                                                {contract.display_name ??
+                                                    contract.name}
+                                            </span>
                                             <Badge variant="secondary">
                                                 {dateLabel(contract.ends_on)}
                                             </Badge>

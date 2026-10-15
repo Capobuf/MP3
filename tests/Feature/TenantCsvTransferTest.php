@@ -27,6 +27,23 @@ class TenantCsvTransferTest extends TestCase
         return UploadedFile::fake()->createWithContent('tenant.csv', $content);
     }
 
+    public function test_unnamed_contracts_and_overlapping_expenses_round_trip_without_changing_values(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $contract = $source->contracts()->create([]);
+        foreach (['Canone' => '1000', 'Formazione' => '500'] as $title => $amount) {
+            $source->expenses()->create(['contract_id' => $contract->id, 'title' => $title, 'year' => 2026,
+                'period_starts_on' => '2026-06-13', 'period_ends_on' => '2027-06-13', 'allocated_amount' => $amount]);
+        }
+        $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()
+            ->assertJsonPath('error_count', 0)->assertJsonCount(1, 'warnings');
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk()->assertJsonCount(1, 'warnings');
+        $this->assertNull($target->contracts()->sole()->name);
+        $this->assertSame(2, $target->contracts()->sole()->expenses()->count());
+        $this->assertEquals(1500, $target->expenses()->sum('allocated_amount'));
+    }
+
     public function test_exported_expense_totals_match_lines_and_tampered_totals_cannot_be_imported(): void
     {
         [$source, $target] = $this->setupTenants();

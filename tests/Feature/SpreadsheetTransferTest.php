@@ -153,7 +153,20 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertDatabaseCount('expenses', 2);
     }
 
-    public function test_invalid_references_and_overlapping_periods_block_the_whole_file(): void
+    public function test_overlapping_expenses_import_with_warnings(): void
+    {
+        $this->tenant()->contracts()->create(['name' => 'Contratto']);
+        $file = $this->file('expenses', [
+            ['Canone', 2026, null, 'Contratto', null, null, '2026-01-01', '2026-12-31', 1000, null, null],
+            ['Formazione', 2026, null, 'Contratto', null, null, '2026-06-01', '2026-12-31', 500, null, null],
+        ]);
+        $preview = $this->postJson('/t/ambiente/expenses/import/preview', ['file' => $file])->assertOk()
+            ->assertJsonPath('error_count', 0)->assertJsonCount(1, 'warnings');
+        $this->postJson('/t/ambiente/expenses/import/commit', ['file' => $file, 'token' => $preview->json('token')])
+            ->assertOk()->assertJsonCount(1, 'warnings')->assertJsonPath('created', 2);
+    }
+
+    public function test_invalid_references_block_the_file_while_overlaps_only_warn(): void
     {
         $tenant = $this->tenant();
         $contract = $tenant->contracts()->create(['name' => 'Contratto']);
@@ -165,7 +178,8 @@ class SpreadsheetTransferTest extends TestCase
             ['Terza', 2026, 'Ambiguo', null, null, null, null, null, 30, null, null],
         ]);
         $preview = $this->postJson('/t/ambiente/expenses/import/preview', ['file' => $file])->assertOk();
-        $this->assertGreaterThanOrEqual(2, $preview->json('error_count'));
+        $this->assertSame(1, $preview->json('error_count'));
+        $preview->assertJsonCount(1, 'warnings');
         $this->postJson('/t/ambiente/expenses/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertUnprocessable();
         $this->assertDatabaseCount('expenses', 0);
         $this->postJson('/t/ambiente/vendors/import/preview', ['file' => UploadedFile::fake()->createWithContent('bad.xlsx', 'not xlsx')])->assertUnprocessable();

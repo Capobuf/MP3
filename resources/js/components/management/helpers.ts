@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { beginMutation, clearLocalUndo } from '@/lib/undo-state';
 
 const euro = new Intl.NumberFormat('it-IT', {
@@ -105,8 +106,7 @@ async function requestJson<T>(
             error.errors,
         );
     }
-    if (response.headers.has('X-Undo-Action')) clearLocalUndo();
-    return response.json() as Promise<T>;
+    return readJson<T>(response);
 }
 
 export function matchesExpenseFilters(
@@ -190,8 +190,7 @@ async function uploadFile<T>(
             error.errors,
         );
     }
-    if (response.headers.has('X-Undo-Action')) clearLocalUndo();
-    return response.json() as Promise<T>;
+    return readJson<T>(response);
 }
 
 export function fileSize(bytes: number): string {
@@ -199,4 +198,11 @@ export function fileSize(bytes: number): string {
     const unit = bytes < 1024 * 1024 ? 'KB' : 'MB';
     const value = bytes / (unit === 'KB' ? 1024 : 1024 * 1024);
     return `${new Intl.NumberFormat('it-IT', { maximumFractionDigits: 1 }).format(value)} ${unit}`;
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+    if (response.headers.has('X-Undo-Action')) clearLocalUndo();
+    const result = (await response.json()) as T & { warnings?: string[] };
+    result.warnings?.forEach((message) => toast.warning(message));
+    return result;
 }

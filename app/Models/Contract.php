@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasCostCenters;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,6 +13,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Contract extends Model
 {
     use HasCostCenters;
+
+    /** @var list<string> */
+    protected $appends = ['display_name'];
+
+    /** @return Attribute<non-empty-string, never> */
+    protected function displayName(): Attribute
+    {
+        return Attribute::get(fn (): string => $this->name === null || $this->name === '' ? 'Contratto senza nome' : $this->name);
+    }
 
     /** @return HasMany<Attachment, $this> */
     public function attachments(): HasMany

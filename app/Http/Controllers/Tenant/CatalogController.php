@@ -54,9 +54,11 @@ class CatalogController extends Controller
     public function options(Request $request, Tenant $tenant, string $catalog): JsonResponse
     {
         $query = $this->records($tenant, $catalog);
-        $query->where('name', 'like', '%'.$request->string('search')->trim()->toString().'%');
+        if ($search = $request->string('search')->trim()->toString()) {
+            $query->where('name', 'like', '%'.$search.'%');
+        }
 
-        return response()->json(['records' => $query->orderBy('name')->limit(50)->get(['id', 'name'])]);
+        return response()->json(['records' => $query->orderBy('name')->limit(50)->get(['id', 'name'])->map(fn ($record) => ['id' => $record->id, 'name' => $record instanceof Contract ? $record->display_name : $record->name])]);
     }
 
     public function show(Request $request, Tenant $tenant, string $catalog, int $record): Response
@@ -110,7 +112,7 @@ class CatalogController extends Controller
             'expenseFilters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $year, 'history' => $history ? '1' : '', 'sort' => $sort ?? ($item instanceof Contract ? 'period_starts_on' : 'year'), 'direction' => $sort !== null ? $direction : ($item instanceof Contract ? 'asc' : 'desc')],
             'totals' => ExpenseOverview::totals($annual),
             'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id]), aggregateVariance: $catalog === 'projects'),
-            'breakdown' => ExpenseOverview::breakdown($annual),
+            'breakdown' => $item instanceof Contract && (clone $annual)->count() < 3 ? null : ExpenseOverview::breakdown($annual),
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
         ]);
@@ -123,7 +125,7 @@ class CatalogController extends Controller
         $rules = [
             'tenant_id' => ['prohibited'],
             'initial_expense' => ['prohibited'],
-            'name' => [...$required, 'string', 'max:255'],
+            'name' => [...($catalog === 'contracts' ? ['nullable'] : $required), 'string', 'max:255'],
         ];
         $rules += match ($catalog) {
             'vendors' => [

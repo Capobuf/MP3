@@ -34,8 +34,15 @@ class ExpensePeriods
                 ? "Il periodo deve essere imputato all’anno {$start->year}."
                 : "Scegli l’anno iniziale ({$start->year}) o finale ({$end->year}) del periodo."]);
         }
-        if ($expense->contract_id === null) {
-            return;
+    }
+
+    /** @param array<int, Expense> $pending Final states of all expenses in a batch. */
+    public static function overlapWarning(Expense $expense, array $pending = []): ?string
+    {
+        $start = $expense->period_starts_on;
+        $end = $expense->period_ends_on;
+        if ($expense->contract_id === null || $start === null || $end === null) {
+            return null;
         }
 
         // A consistent read after the contract lock avoids locking unrelated expenses.
@@ -55,7 +62,10 @@ class ExpensePeriods
         }
         if ($conflict !== null) {
             $period = $conflict->period_starts_on->format('d/m/Y').' – '.$conflict->period_ends_on->format('d/m/Y');
-            throw ValidationException::withMessages(['period_starts_on' => "Il periodo si sovrappone alla spesa «{$conflict->title}» ({$period})."]);
+
+            return "Il periodo della spesa «{$expense->title}» si sovrappone a quello della spesa «{$conflict->title}» ({$period}).";
         }
+
+        return null;
     }
 }

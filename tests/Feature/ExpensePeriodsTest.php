@@ -53,15 +53,15 @@ class ExpensePeriodsTest extends TestCase
         return [...$data, 'contract_entry' => true];
     }
 
-    public function test_condition_dates_use_the_supplied_year_and_keep_overlap_validation(): void
+    public function test_condition_dates_use_the_supplied_year_and_warn_on_overlap(): void
     {
         $line = [...$this->line('allocated', '0'), 'period_starts_on' => '2027-01-01', 'period_ends_on' => '2027-12-31'];
         $data = [...$this->detailedData(), 'year' => 2027, 'lines' => [$line]];
         $this->postJson('/t/periodi/expenses', $data)->assertCreated()
             ->assertJsonPath('record.period_starts_on', '2027-01-01')->assertJsonPath('record.lines.0.year', 2027);
-        $this->postJson('/t/periodi/expenses', $data)->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
-        $this->assertDatabaseCount('expenses', 1);
-        $this->assertDatabaseCount('expense_lines', 1);
+        $this->postJson('/t/periodi/expenses', $data)->assertCreated()->assertJsonCount(1, 'warnings');
+        $this->assertDatabaseCount('expenses', 2);
+        $this->assertDatabaseCount('expense_lines', 2);
     }
 
     public function test_contract_entry_accepts_either_line_type_including_zero_without_direct_amounts(): void
@@ -159,7 +159,7 @@ class ExpensePeriodsTest extends TestCase
         }
     }
 
-    public function test_period_edits_preserve_contract_lines_and_overlap_rejections_do_not_change_them(): void
+    public function test_period_edits_preserve_contract_lines_and_overlaps_save_the_requested_lines(): void
     {
         $response = $this->postJson('/t/periodi/expenses', [...$this->detailedData(),
             'lines' => [$this->line('allocated', '100', '5'), $this->line('actual', '280')],
@@ -176,13 +176,12 @@ class ExpensePeriodsTest extends TestCase
                 ->where('totals.allocated', $year === 2027 ? '500.00' : '0.00'));
         }
         $this->postJson('/t/periodi/expenses', [...$this->detailedData(), 'lines' => [$this->line('actual', '90')]])
-            ->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
+            ->assertCreated()->assertJsonCount(1, 'warnings');
         $this->createExpense('2027-07-01', '2027-12-31', 2027);
         $this->patchJson($url, ['period_ends_on' => '2027-07-01', 'lines' => [$this->line('allocated', '999')]])
-            ->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
-        $this->assertSame($ids, $expense->lines()->pluck('id')->all());
-        $this->assertSame('500.00', $expense->refresh()->allocated_amount);
-        $this->assertSame('2027-06-30', $expense->period_ends_on->toDateString());
+            ->assertOk()->assertJsonCount(1, 'warnings');
+        $this->assertSame('999.00', $expense->refresh()->allocated_amount);
+        $this->assertSame('2027-07-01', $expense->period_ends_on->toDateString());
     }
 
     public function test_valid_period_and_independent_amounts_including_zero(): void
@@ -218,27 +217,28 @@ class ExpensePeriodsTest extends TestCase
         $this->postJson('/t/periodi/expenses', $this->data('2027-01-01', '2028-12-31', 2027))->assertCreated();
     }
 
-    public function test_all_overlap_shapes_and_inclusive_boundaries_are_rejected(): void
+    public function test_all_overlap_shapes_and_inclusive_boundaries_save_with_warnings(): void
     {
         $this->createExpense('2026-03-01', '2026-09-30');
         foreach ([['2026-01-01', '2026-03-01'], ['2026-09-30', '2026-12-31'], ['2026-05-01', '2026-06-30'],
             ['2026-01-01', '2026-12-31'], ['2026-03-01', '2026-09-30']] as [$start, $end]) {
-            $response = $this->postJson('/t/periodi/expenses', $this->data($start, $end))->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
-            $this->assertStringContainsString('01/03/2026 – 30/09/2026', $response->json('errors.period_starts_on.0'));
+            $response = $this->postJson('/t/periodi/expenses', $this->data($start, $end))->assertCreated()->assertJsonCount(1, 'warnings');
+            $this->assertStringContainsString('01/03/2026 – 30/09/2026', $response->json('warnings.0'));
+            Expense::findOrFail($response->json('record.id'))->delete();
         }
         $this->assertDatabaseCount('expenses', 1);
     }
 
-    public function test_update_excludes_itself_and_failed_partial_update_is_atomic(): void
+    public function test_update_excludes_itself_and_allows_overlapping_partial_updates(): void
     {
         $first = $this->createExpense();
         $second = $this->createExpense('2026-09-01', '2026-12-31');
         $this->patchJson('/t/periodi/expenses/'.$first->id, $this->data())->assertOk();
-        $this->patchJson('/t/periodi/expenses/'.$second->id, ['title' => 'Non salvare', 'period_starts_on' => '2026-06-30', 'actual_amount' => '800'])
-            ->assertUnprocessable()->assertJsonValidationErrors('period_starts_on');
-        $this->assertSame('Spesa', $second->refresh()->title);
-        $this->assertSame('2026-09-01', $second->period_starts_on->toDateString());
-        $this->assertNull($second->actual_amount);
+        $this->patchJson('/t/periodi/expenses/'.$second->id, ['title' => 'Salvata', 'period_starts_on' => '2026-06-30', 'actual_amount' => '800'])
+            ->assertOk()->assertJsonCount(1, 'warnings');
+        $this->assertSame('Salvata', $second->refresh()->title);
+        $this->assertSame('2026-06-30', $second->period_starts_on->toDateString());
+        $this->assertSame('800.00', $second->actual_amount);
         $this->deleteJson('/t/periodi/expenses/'.$first->id)->assertOk();
         $this->patchJson('/t/periodi/expenses/'.$second->id, ['period_starts_on' => '2026-06-30'])->assertOk();
     }
@@ -283,8 +283,8 @@ class ExpensePeriodsTest extends TestCase
         $first = $this->createExpense();
         $other = $this->tenant->contracts()->create(['name' => 'Destinazione']);
         $second = $this->tenant->expenses()->create([...$this->data(), 'contract_id' => $other->id]);
-        $this->patchJson('/t/periodi/expenses/'.$second->id, ['contract_id' => $this->contract->id])->assertUnprocessable();
-        $this->assertSame($other->id, $second->refresh()->contract_id);
+        $this->patchJson('/t/periodi/expenses/'.$second->id, ['contract_id' => $this->contract->id])->assertOk()->assertJsonCount(1, 'warnings');
+        $this->assertSame($this->contract->id, $second->refresh()->contract_id);
         $this->patchJson('/t/periodi/expenses/'.$first->id, ['contract_id' => null])->assertOk();
         $this->patchJson('/t/periodi/expenses/'.$second->id, ['contract_id' => $this->contract->id])->assertOk();
     }
@@ -307,16 +307,16 @@ class ExpensePeriodsTest extends TestCase
         $new = $this->postJson('/t/periodi/expenses', $this->data())->assertCreated();
         $this->assertNull($legacy->refresh()->period_starts_on);
         $this->patchJson('/t/periodi/expenses/'.$legacy->id, ['title' => 'Ancora storica'])->assertOk()->assertJsonPath('record.year', 2024)->assertJsonPath('record.actual_amount', null);
-        $this->patchJson('/t/periodi/expenses/'.$legacy->id, ['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-06-30', 'year' => 2026])->assertUnprocessable();
-        $this->patchJson('/t/periodi/expenses/'.$legacy->id, ['period_starts_on' => '2024-01-01', 'period_ends_on' => '2024-12-31'])->assertOk();
+        $this->patchJson('/t/periodi/expenses/'.$legacy->id, ['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-06-30', 'year' => 2026])->assertOk()->assertJsonCount(1, 'warnings');
+        $this->patchJson('/t/periodi/expenses/'.$legacy->id, ['period_starts_on' => '2024-01-01', 'period_ends_on' => '2024-12-31', 'year' => 2024])->assertOk();
         $this->assertNotSame($legacy->id, $new->json('record.id'));
     }
 
-    public function test_batch_rejects_conflicts_and_invalid_years_without_partial_saves(): void
+    public function test_batch_warns_on_conflicts_but_rejects_technical_errors_atomically(): void
     {
         $first = $this->createExpense();
         $second = $this->createExpense('2026-09-01', '2026-12-31');
-        foreach ([['period_starts_on' => '2026-06-30'], ['year' => 2027], ['period_ends_on' => null]] as $invalid) {
+        foreach ([['year' => 2027], ['period_ends_on' => null]] as $invalid) {
             $this->patchJson('/t/periodi/expenses/batch', ['updates' => [
                 ['id' => $first->id, 'title' => 'Non salvare', 'actual_amount' => '100'],
                 ['id' => $second->id, ...$invalid],
@@ -327,8 +327,8 @@ class ExpensePeriodsTest extends TestCase
         $this->patchJson('/t/periodi/expenses/batch', ['updates' => [
             ['id' => $first->id, 'period_ends_on' => '2026-07-31'],
             ['id' => $second->id, 'period_starts_on' => '2026-07-31'],
-        ]])->assertUnprocessable()->assertJsonValidationErrors('updates.0.period_starts_on');
-        $this->assertSame('2026-06-30', $first->refresh()->period_ends_on->toDateString());
+        ]])->assertOk()->assertJsonCount(2, 'warnings');
+        $this->assertSame('2026-07-31', $first->refresh()->period_ends_on->toDateString());
     }
 
     public function test_batch_allows_swapping_periods_and_checks_contract_changes(): void
@@ -341,8 +341,8 @@ class ExpensePeriodsTest extends TestCase
         ]])->assertOk();
         $destination = $this->tenant->contracts()->create(['name' => 'Altro']);
         $this->tenant->expenses()->create([...$this->data(), 'contract_id' => $destination->id]);
-        $this->patchJson('/t/periodi/expenses/batch', ['updates' => [['id' => $second->id, 'contract_id' => $destination->id]]])->assertUnprocessable();
-        $this->assertSame($this->contract->id, $second->refresh()->contract_id);
+        $this->patchJson('/t/periodi/expenses/batch', ['updates' => [['id' => $second->id, 'contract_id' => $destination->id]]])->assertOk()->assertJsonCount(1, 'warnings');
+        $this->assertSame($destination->id, $second->refresh()->contract_id);
     }
 
     public function test_detailed_lines_and_relations_survive_period_edits(): void

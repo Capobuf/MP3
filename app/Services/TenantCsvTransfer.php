@@ -250,7 +250,8 @@ class TenantCsvTransfer
                 }
             }
         }
-        // Restore preserves the original values; validation must reject overlapping contract containers without writing.
+        // Preserve overlapping periods and report them without blocking restoration.
+        $warnings = [];
         $periods = [];
         foreach ($records as $record) {
             if ($record['type'] !== 'expense') {
@@ -267,13 +268,13 @@ class TenantCsvTransfer
             $end = null;
             foreach ($group as $record) {
                 if ($end !== null && $record['data']['period_starts_on'] <= $end) {
-                    $this->errors($errors, $errorCount, $record['row'], ValidationException::withMessages(['period_starts_on' => 'Periodi sovrapposti nello stesso contratto.']));
+                    $warnings[] = 'Il periodo della spesa «'.$record['data']['title'].'» si sovrappone a quello di un’altra spesa dello stesso contratto.';
                 }
                 $end = max($end ?? '', $record['data']['period_ends_on']);
             }
         }
 
-        return ['meta' => $meta, 'records' => $records, 'counts' => $counts, 'errors' => $errors, 'error_count' => $errorCount];
+        return ['meta' => $meta, 'records' => $records, 'counts' => $counts, 'errors' => $errors, 'error_count' => $errorCount, 'warnings' => $warnings];
     }
 
     /** @param array<string, mixed> $data */
@@ -302,7 +303,7 @@ class TenantCsvTransfer
                 in_array($field, ['included', 'structure_copied'], true) => ['required', 'boolean'],
                 $field === 'type' => ['required', 'in:'.($type === 'expense-line' ? 'allocated,actual' : 'contract,project,expense')],
                 $field === 'status' => ['nullable', 'string', 'max:255'],
-                in_array($field, ['name', 'title'], true) => ['required', 'string', 'max:255'],
+                in_array($field, ['name', 'title'], true) => [$type === 'contract' ? 'nullable' : 'required', 'string', 'max:255'],
                 default => ['nullable', 'string', 'max:'.(in_array($field, ['notes', 'description'], true) && $type !== 'expense-line' && $type !== 'budget-entry' ? '10000' : '255')],
             };
             if ($field === 'year' || $field === 'position') {

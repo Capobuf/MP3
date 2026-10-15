@@ -9,6 +9,7 @@ use App\Http\Requests\ExpenseRequest;
 use App\Imports\SectionFile;
 use App\Imports\SectionRows;
 use App\Models\Tenant;
+use App\Support\ExpensePeriods;
 use App\Support\Money;
 use App\Support\Transfers\SpreadsheetValues as Values;
 use Illuminate\Http\Request;
@@ -57,7 +58,7 @@ class SpreadsheetImport
             Values::invalid('file', 'Impossibile leggere il file XLSX. Usa il modello della sezione.');
         }
 
-        $plan = ['records' => [], 'preview' => [], 'errors' => [], 'error_count' => 0, 'new' => 0, 'duplicates' => 0];
+        $plan = ['warnings' => [], 'records' => [], 'preview' => [], 'errors' => [], 'error_count' => 0, 'new' => 0, 'duplicates' => 0];
         $pending = [];
         $seen = [];
         foreach ($rows->rows as $row) {
@@ -73,6 +74,9 @@ class SpreadsheetImport
                     $expense = $tenant->expenses()->make();
                     $expense->setAttribute('id', -$row['row']);
                     app(ExpenseWriter::class)->persist($expense, $data, $pending, false, true);
+                    if ($warning = ExpensePeriods::overlapWarning($expense, $pending)) {
+                        $plan['warnings'][] = $warning;
+                    }
                     $pending[$expense->id] = $expense;
                 }
                 $seen[] = $data;
@@ -207,6 +211,9 @@ class SpreadsheetImport
      */
     private function duplicate(Tenant $tenant, string $resource, array $data, array $seen): bool
     {
+        if ($resource === 'contracts' && ($data['name'] ?? '') === '') {
+            return false;
+        }
         if ($resource === 'budget') {
             $year = $tenant->budgetYears()->where('year', $data['year'])->firstOrFail();
             $matches = $data['type'] === 'new-expense'

@@ -540,7 +540,8 @@ export function ExpenseTable({
                                                 ? expense.cost_centers
                                                       ?.map(costCenterLabel)
                                                       .join(', ')
-                                                : current?.name;
+                                                : (current?.display_name ??
+                                                  current?.name);
                                             const label = multiple
                                                 ? 'Centro di costo'
                                                 : catalog === 'vendors'

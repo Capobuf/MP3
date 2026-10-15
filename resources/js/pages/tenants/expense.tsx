@@ -178,7 +178,9 @@ export default function ExpenseDetail({
                                                 label={label}
                                                 disabled={editingLines}
                                                 display={
-                                                    related?.name ?? 'Nessuno'
+                                                    related?.display_name ??
+                                                    related?.name ??
+                                                    'Nessuno'
                                                 }
                                                 choices={[
                                                     {
@@ -206,7 +208,7 @@ export default function ExpenseDetail({
                                                     size="icon"
                                                 >
                                                     <Link
-                                                        aria-label={`Apri ${related.name}`}
+                                                        aria-label={`Apri ${related.display_name ?? related.name}`}
                                                         href={`/t/${tenant.slug}/${relation}s/${related.id}`}
                                                     >
                                                         <ArrowUpRight />

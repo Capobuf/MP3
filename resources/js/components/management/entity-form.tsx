@@ -62,7 +62,7 @@ const fields: Record<Kind, FormField[]> = {
         { key: 'notes', label: 'Note', type: 'textarea' },
     ],
     contracts: [
-        { key: 'name', label: 'Nome', required: true },
+        { key: 'name', label: 'Nome' },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
         { key: 'starts_on', label: 'Inizio contratto', type: 'date' },
         { key: 'ends_on', label: 'Fine contratto', type: 'date' },
@@ -222,7 +222,9 @@ export function EntityForm({
         const initial = frame(kind, year, record);
         if (kind === 'expenses' && contractContext && !record) {
             initial.values.title = contractContext.name ?? '';
-            initial.lines = [emptyDraftLine('allocated', contractContext.name)];
+            initial.lines = [
+                emptyDraftLine('allocated', contractContext.name ?? ''),
+            ];
             initial.values.contract_id = String(contractContext.id);
             if (
                 !contractContext.has_period_expenses &&
@@ -492,7 +494,13 @@ export function EntityForm({
                     ...previous,
                     [catalog]: [
                         ...previous[catalog],
-                        { id: data.record.id, name: data.record.name ?? '' },
+                        {
+                            id: data.record.id,
+                            name:
+                                data.record.display_name ??
+                                data.record.name ??
+                                '',
+                        },
                     ],
                 }));
                 setFrames((previous) =>
@@ -670,8 +678,10 @@ export function EntityForm({
                         )}
                         {current.kind === 'expenses' && contractContext && (
                             <p className="text-sm text-muted-foreground">
-                                Contratto: {contractContext.name}. Date di
-                                riferimento:{' '}
+                                Contratto:{' '}
+                                {contractContext.display_name ??
+                                    contractContext.name}
+                                . Date di riferimento:{' '}
                                 {dateLabel(contractContext.starts_on)} –{' '}
                                 {dateLabel(contractContext.ends_on)}. Puoi
                                 indicare anche un periodo diverso.

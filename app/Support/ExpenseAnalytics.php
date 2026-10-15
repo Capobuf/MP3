@@ -95,7 +95,7 @@ final class ExpenseAnalytics
             $records = $tenant->{$relation.'s'}()->whereIn('id', $rows->pluck($field)->filter())->get($relation === 'project' ? ['id', 'name', 'status'] : ['id', 'name'])->keyBy('id');
             $groups[$relation.'s'] = $rows->map(fn (stdClass $row) => [
                 'id' => $row->{$field} ?? 'none',
-                'name' => $row->{$field} === null ? $missing : $records[$row->{$field}]->name,
+                'name' => $row->{$field} === null ? $missing : $records[$row->{$field}]->getAttribute($relation === 'contract' ? 'display_name' : 'name'),
                 ...($relation === 'project' ? ['status' => $row->{$field} === null ? 'none' : $records[$row->{$field}]->getAttribute('status')] : []),
                 ...self::economic($row),
             ])->all();

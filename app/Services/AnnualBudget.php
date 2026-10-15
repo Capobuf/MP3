@@ -44,7 +44,7 @@ class AnnualBudget
                 }
             }
         }
-        $names = $entries->mapWithKeys(fn ($entry) => [$entry->id => $entry->{$entry->type}?->getAttribute($entry->type === 'expense' ? 'title' : 'name')])->all();
+        $names = $entries->mapWithKeys(fn ($entry) => [$entry->id => $entry->{$entry->type}?->getAttribute($entry->type === 'expense' ? 'title' : ($entry->type === 'contract' ? 'display_name' : 'name'))])->all();
         /** @var array<int, array<string, mixed>> $rows */
         $rows = [];
         foreach ($entries as $entry) {
@@ -187,7 +187,7 @@ class AnnualBudget
             }
             $suggestions[$key] ??= [
                 'key' => $key, 'type' => $type, 'source_id' => $id, 'entry_id' => $existing['id'] ?? null,
-                'description' => $type === 'expense' ? $expense->title : $expense->{$type}?->name,
+                'description' => $type === 'expense' ? $expense->title : $expense->{$type}?->getAttribute($type === 'contract' ? 'display_name' : 'name'),
                 'state' => $state, 'parts' => [], 'expense_ids' => [],
             ];
             $suggestions[$key]['parts'][] = ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount];
