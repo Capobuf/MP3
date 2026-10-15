@@ -8,6 +8,7 @@ import {
     useState,
 } from 'react';
 import { Link } from '@inertiajs/react';
+import { toast } from 'sonner';
 import {
     closestCenter,
     pointerWithin,
@@ -111,8 +112,8 @@ import { BudgetCenterSelect } from './budget-entry-sheet';
 import { TableColumnOrder } from './table-column-order';
 import { TableColumnSettings, TableFilters } from './table-view';
 import { draftLines, ExpenseLines } from './expense-lines';
-import { decimalInput, money, varianceTextClass } from './helpers';
-import { budgetLabels, budgetTypes, budgetTotals } from './budget-types';
+import { api, decimalInput, money, varianceTextClass } from './helpers';
+import { budgetLabels, budgetTypes } from './budget-types';
 import type {
     BudgetEntry,
     BudgetMutate,
@@ -142,6 +143,7 @@ function missingAmounts(allocated: boolean, actual: boolean) {
 }
 
 function completionLabel(entry: BudgetEntry, year: number) {
+    if (entry.incomplete === 0) return null;
     if (!entry.expenses.length) return `Nessuna spesa attribuita al ${year}`;
     const contributing = entry.expenses.filter(
         (expense) => expense.contributes,
@@ -345,12 +347,13 @@ function ExpenseRows({
     return entry.expenses.map((expense, index) => {
         const key = `${entry.id}:${expense.id}`;
         const expanded = expandedExpenses.includes(key);
-        const missing = expense.contributes
-            ? missingAmounts(
-                  expense.allocated_amount == null,
-                  expense.actual_amount == null,
-              )
-            : null;
+        const missing =
+            expense.contributes && entry.incomplete > 0
+                ? missingAmounts(
+                      expense.allocated_amount == null,
+                      expense.actual_amount == null,
+                  )
+                : null;
         const hiddenMissing =
             missing &&
             ((expense.allocated_amount == null &&
@@ -703,6 +706,7 @@ export function BudgetTable({
     budget,
     slug,
     year,
+    budgetYearId,
     centers,
     busy,
     loading,
@@ -717,6 +721,7 @@ export function BudgetTable({
     budget: BudgetSnapshot;
     slug: string;
     year: number;
+    budgetYearId: number;
     centers: Option[];
     busy: boolean;
     loading: boolean;
@@ -747,6 +752,40 @@ export function BudgetTable({
     const [vendor, setVendor] = useState('all');
     const [center, setCenter] = useState('all');
     const [status, setStatus] = useState('included');
+    const hasFilters =
+        !!search ||
+        typeFilter !== 'all' ||
+        vendor !== 'all' ||
+        center !== 'all' ||
+        status !== 'included';
+    const filterKey = JSON.stringify([
+        search,
+        typeFilter,
+        vendor,
+        center,
+        status,
+    ]);
+    const [filteredBudget, setFilteredBudget] = useState<{
+        source: BudgetSnapshot;
+        key: string;
+        result: BudgetSnapshot;
+    } | null>(null);
+    const summary = hasFilters
+        ? filteredBudget?.source === budget && filteredBudget.key === filterKey
+            ? filteredBudget.result
+            : null
+        : budget;
+    const groupTotal = useCallback(
+        (entry?: BudgetEntry) => {
+            if (!entry || !summary) return undefined;
+            return preferences.group === 'type'
+                ? summary.groups[entry.type]
+                : summary.cost_center_groups[
+                      String(entry.cost_center_id ?? 'none')
+                  ];
+        },
+        [summary, preferences.group],
+    );
     const [removing, setRemoving] = useState<number[]>([]);
     const [excluding, setExcluding] = useState<{ ids: number[] } | null>(null);
     const [dragging, setDragging] = useState(false);
@@ -1000,12 +1039,10 @@ export function BudgetTable({
                     accessorFn: (row) =>
                         row[field] === null ? undefined : Number(row[field]),
                     sortUndefined: 'last',
-                    aggregationFn: (_column, rows) =>
-                        Number(
-                            budgetTotals(rows.map((row) => row.original))[
-                                field
-                            ],
-                        ),
+                    aggregationFn: (_column, rows) => {
+                        const value = groupTotal(rows[0]?.original)?.[field];
+                        return value == null ? undefined : Number(value);
+                    },
                     header: columnNames[field],
                     cell: ({ row }) =>
                         row.original.type === 'expense' &&
@@ -1077,10 +1114,10 @@ export function BudgetTable({
                     row.variance === null ? undefined : Number(row.variance),
                 sortUndefined: 'last',
                 header: 'Scostamento',
-                aggregationFn: (_column, rows) =>
-                    Number(
-                        budgetTotals(rows.map((row) => row.original)).variance,
-                    ),
+                aggregationFn: (_column, rows) => {
+                    const value = groupTotal(rows[0]?.original)?.variance;
+                    return value == null ? undefined : Number(value);
+                },
                 cell: ({ row }) => (
                     <span
                         className={cn(
@@ -1173,6 +1210,7 @@ export function BudgetTable({
             slug,
             preferences.group,
             preferences.visibility.type,
+            groupTotal,
             batch,
             toggleDetail,
             openCompletion,
@@ -1384,9 +1422,39 @@ export function BudgetTable({
         .filter((entry) => selection[String(entry.id)])
         .map((entry) => entry.id);
     const visibleColumns = table.getVisibleLeafColumns();
-    const filteredTotals = budgetTotals(
-        table.getFilteredRowModel().flatRows.map((row) => row.original),
-    );
+    const entryIds = table
+        .getFilteredRowModel()
+        .flatRows.map((row) => row.original.id)
+        .join(',');
+    useEffect(() => {
+        if (!hasFilters) return;
+        let current = true;
+        const timer = setTimeout(() => {
+            void api<{ budget: BudgetSnapshot }>(
+                `/t/${slug}/budget/years/${budgetYearId}?entry_ids=${entryIds}`,
+            )
+                .then((result) => {
+                    if (current)
+                        setFilteredBudget({
+                            source: budget,
+                            key: filterKey,
+                            result: result.budget,
+                        });
+                })
+                .catch((error: unknown) => {
+                    if (current)
+                        toast.error(
+                            error instanceof Error
+                                ? error.message
+                                : 'Totali filtrati non disponibili.',
+                        );
+                });
+        }, 150);
+        return () => {
+            current = false;
+            clearTimeout(timer);
+        };
+    }, [budget, budgetYearId, entryIds, filterKey, hasFilters, slug]);
     const activeFilterCount = [
         !!search,
         typeFilter !== 'all',
@@ -1394,7 +1462,6 @@ export function BudgetTable({
         center !== 'all',
         status !== 'included',
     ].filter(Boolean).length;
-    const hasFilters = activeFilterCount > 0;
     const vendors = [
         ...new Map(
             budget.entries
@@ -1436,7 +1503,7 @@ export function BudgetTable({
                               column.id,
                           ) ? (
                             column.id === 'variance' &&
-                            totals.comparable_count === 0 ? (
+                            totals.variance === null ? (
                                 'Non confrontabile'
                             ) : (
                                 money(
@@ -1871,10 +1938,8 @@ export function BudgetTable({
                                                           value,
                                                   )?.name ??
                                                   'Senza centro di costo');
-                                        const totals = budgetTotals(
-                                            row
-                                                .getLeafRows()
-                                                .map((leaf) => leaf.original),
+                                        const totals = groupTotal(
+                                            row.getLeafRows()[0]?.original,
                                         );
                                         return (
                                             <Fragment key={row.id}>
@@ -1908,80 +1973,82 @@ export function BudgetTable({
                                                                     }
                                                                 </span>
                                                             </Button>
-                                                            <div className="flex flex-wrap items-center gap-3">
-                                                                {totals.incomplete >
-                                                                    0 && (
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {
-                                                                            totals.incomplete
-                                                                        }{' '}
-                                                                        {totals.incomplete ===
-                                                                        1
-                                                                            ? 'voce con dati incompleti'
-                                                                            : 'voci con dati incompleti'}
-                                                                    </span>
-                                                                )}
-                                                                <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-                                                                    {(
-                                                                        [
-                                                                            'allocated',
-                                                                            'actual',
-                                                                            'variance',
-                                                                        ] as const
-                                                                    )
-                                                                        .filter(
-                                                                            (
-                                                                                id,
-                                                                            ) =>
-                                                                                table
-                                                                                    .getColumn(
-                                                                                        id,
-                                                                                    )
-                                                                                    ?.getIsVisible(),
+                                                            {totals && (
+                                                                <div className="flex flex-wrap items-center gap-3">
+                                                                    {totals.incomplete >
+                                                                        0 && (
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {
+                                                                                totals.incomplete
+                                                                            }{' '}
+                                                                            {totals.incomplete ===
+                                                                            1
+                                                                                ? 'voce con dati incompleti'
+                                                                                : 'voci con dati incompleti'}
+                                                                        </span>
+                                                                    )}
+                                                                    <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+                                                                        {(
+                                                                            [
+                                                                                'allocated',
+                                                                                'actual',
+                                                                                'variance',
+                                                                            ] as const
                                                                         )
-                                                                        .map(
-                                                                            (
-                                                                                id,
-                                                                            ) => (
-                                                                                <div
-                                                                                    key={
-                                                                                        id
-                                                                                    }
-                                                                                    className="flex items-baseline gap-2"
-                                                                                >
-                                                                                    <dt className="text-xs text-muted-foreground">
-                                                                                        {
-                                                                                            columnNames[
-                                                                                                id
-                                                                                            ]
+                                                                            .filter(
+                                                                                (
+                                                                                    id,
+                                                                                ) =>
+                                                                                    table
+                                                                                        .getColumn(
+                                                                                            id,
+                                                                                        )
+                                                                                        ?.getIsVisible(),
+                                                                            )
+                                                                            .map(
+                                                                                (
+                                                                                    id,
+                                                                                ) => (
+                                                                                    <div
+                                                                                        key={
+                                                                                            id
                                                                                         }
-                                                                                    </dt>
-                                                                                    <dd
-                                                                                        className={cn(
-                                                                                            'financial-value tabular-nums',
-                                                                                            id ===
-                                                                                                'variance' &&
-                                                                                                varianceTextClass(
-                                                                                                    totals.variance,
-                                                                                                ),
-                                                                                        )}
+                                                                                        className="flex items-baseline gap-2"
                                                                                     >
-                                                                                        {id ===
-                                                                                            'variance' &&
-                                                                                        totals.comparable_count ===
-                                                                                            0
-                                                                                            ? 'Non confrontabile'
-                                                                                            : money(
-                                                                                                  totals[
-                                                                                                      id
-                                                                                                  ],
-                                                                                              )}
-                                                                                    </dd>
-                                                                                </div>
-                                                                            ),
-                                                                        )}
-                                                                </dl>
-                                                            </div>
+                                                                                        <dt className="text-xs text-muted-foreground">
+                                                                                            {
+                                                                                                columnNames[
+                                                                                                    id
+                                                                                                ]
+                                                                                            }
+                                                                                        </dt>
+                                                                                        <dd
+                                                                                            className={cn(
+                                                                                                'financial-value tabular-nums',
+                                                                                                id ===
+                                                                                                    'variance' &&
+                                                                                                    varianceTextClass(
+                                                                                                        totals.variance,
+                                                                                                    ),
+                                                                                            )}
+                                                                                        >
+                                                                                            {id ===
+                                                                                                'variance' &&
+                                                                                            totals.variance ===
+                                                                                                null
+                                                                                                ? 'Non confrontabile'
+                                                                                                : money(
+                                                                                                      totals[
+                                                                                                          id
+                                                                                                      ],
+                                                                                                  )}
+                                                                                        </dd>
+                                                                                    </div>
+                                                                                ),
+                                                                            )}
+                                                                    </dl>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
@@ -2008,9 +2075,10 @@ export function BudgetTable({
                         </TableBody>
                         <TableFooter>
                             {hasFilters &&
+                                summary &&
                                 footer(
                                     'Totale filtrato · voci incluse visibili',
-                                    filteredTotals,
+                                    summary.totals,
                                 )}
                             {footer('Totale generale annuale', budget.totals)}
                         </TableFooter>

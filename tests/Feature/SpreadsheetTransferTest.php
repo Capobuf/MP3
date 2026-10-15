@@ -91,6 +91,21 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertSame(2, $expense->lines()->count());
     }
 
+    public function test_budget_export_uses_the_same_aggregate_variance_as_the_page(): void
+    {
+        $tenant = $this->tenant();
+        $year = $tenant->budgetYears()->create(['year' => 2026]);
+        $project = $tenant->projects()->create(['name' => 'Progetto']);
+        foreach ([['100', null], [null, '80']] as [$allocated, $actual]) {
+            $tenant->expenses()->create(['title' => 'Separata', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
+        }
+        $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'project', 'project_id' => $project->id]);
+        $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
+        $this->assertEquals(-20, $book->getSheet(0)->getCell('H2')->getValue());
+        $this->assertEquals(-20, $book->getSheet(1)->getCell('E2')->getValue());
+        $this->assertSame('Completo', $book->getSheet(0)->getCell('I2')->getValue());
+    }
+
     public function test_allocated_templates_accept_previous_heading_without_losing_amounts(): void
     {
         $tenant = $this->tenant();

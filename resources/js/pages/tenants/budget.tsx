@@ -293,6 +293,7 @@ function BudgetWorkspace({
                 </Alert>
             )}
             <BudgetTable
+                budgetYearId={year.id}
                 budget={budget}
                 slug={props.tenant.slug}
                 year={year.year}

@@ -25,8 +25,10 @@ class AnnualBudget
             ->orderBy('title')->orderBy('id')->get();
     }
 
-    /** @return array<string, mixed> */
-    public function snapshot(Tenant $tenant, BudgetYear $year): array
+    /** @param list<int>|null $entryIds
+     * @return array<string, mixed>
+     */
+    public function snapshot(Tenant $tenant, BudgetYear $year, ?array $entryIds = null): array
     {
         $entries = $tenant->budgetEntries()->where('budget_year_id', $year->id)
             ->with(['contract.vendor:id,name', 'project', 'expense.vendor:id,name', 'costCenter.parent:id,name'])
@@ -53,7 +55,9 @@ class AnnualBudget
             $values = $this->values($parts);
             // Covered expenses contribute a known zero; a source without annual data stays unknown.
             if ($parts === [] && $linked->isNotEmpty()) {
-                $values = [...$values, 'allocated' => '0.00', 'actual' => '0.00', 'incomplete' => 0];
+                $values = $this->values($linked->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount === null ? null : '0.00', 'actual' => $expense->actual_amount === null ? null : '0.00'])->all());
+                $values['incomplete'] = 0;
+                $values['comparable_count'] = 0;
             }
             $rows[] = [
                 'id' => $entry->id, 'type' => $entry->type, 'source_id' => $source?->id,
@@ -72,6 +76,9 @@ class AnnualBudget
                     return $data;
                 })->values()->all(),
             ];
+        }
+        if ($entryIds !== null) {
+            $rows = array_values(array_filter($rows, fn ($row) => in_array($row['id'], $entryIds, true)));
         }
         $included = array_values(array_filter($rows, fn ($row) => $row['included']));
         $groups = [];
@@ -110,20 +117,24 @@ class AnnualBudget
             $result[$metric.'_negative'] = Money::decimal(array_sum(array_filter($cents, fn ($value) => $value < 0)));
         }
         $comparable = array_filter($parts, fn ($part) => $part['allocated'] !== null && $part['actual'] !== null);
-        $result['variance'] = $comparable === [] ? null : Money::decimal(array_sum(array_map(fn ($part) => Money::cents($part['actual']) - Money::cents($part['allocated']), $comparable)));
-        $result['incomplete'] = $parts === [] || count($comparable) < count($parts) ? 1 : 0;
+        $result['variance'] = $result['allocated'] === null || $result['actual'] === null ? null : Money::decimal(Money::cents($result['actual']) - Money::cents($result['allocated']));
+        $result['incomplete'] = $result['allocated'] === null && $result['actual'] === null ? 1 : 0;
         $result['comparable_count'] = count($comparable);
 
         return $result;
     }
 
     /** @param array<int, array<string, mixed>> $rows
-     * @return array<string, string|int>
+     * @return array<string, string|int|null>
      */
     public function totals(array $rows): array
     {
         $result = ['count' => count($rows), 'incomplete' => array_sum(array_column($rows, 'incomplete')), 'comparable_count' => array_sum(array_column($rows, 'comparable_count'))];
-        foreach (['allocated', 'actual', 'variance', 'allocated_positive', 'allocated_negative', 'actual_positive', 'actual_negative'] as $field) {
+        $values = $this->values(array_map(fn ($row) => ['allocated' => $row['allocated'], 'actual' => $row['actual']], $rows));
+        foreach (['allocated', 'actual', 'variance'] as $field) {
+            $result[$field] = $values[$field];
+        }
+        foreach (['allocated_positive', 'allocated_negative', 'actual_positive', 'actual_negative'] as $field) {
             $result[$field] = Money::decimal(array_sum(array_map(fn ($row) => Money::cents($row[$field] ?? '0.00'), $rows)));
         }
 

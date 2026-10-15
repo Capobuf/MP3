@@ -50,9 +50,12 @@ class BudgetController extends Controller
         return response()->json(['year' => $year->only('id', 'year')], 201);
     }
 
-    public function state(Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
+    public function state(Request $request, Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
     {
-        return response()->json(['budget' => $budget->snapshot($tenant, $budgetYear)]);
+        $data = $request->validate(['entry_ids' => ['nullable', 'string', 'regex:/^\d+(,\d+)*$/D']]);
+        $ids = $request->has('entry_ids') ? array_map('intval', array_values(array_filter(explode(',', $data['entry_ids'] ?? '')))) : null;
+
+        return response()->json(['budget' => $budget->snapshot($tenant, $budgetYear, $ids)]);
     }
 
     public function missing(Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse

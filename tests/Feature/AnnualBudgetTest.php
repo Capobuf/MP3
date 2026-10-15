@@ -157,6 +157,46 @@ class AnnualBudgetTest extends TestCase
         }
     }
 
+    public function test_variance_uses_aggregate_totals_including_separate_expenses_and_filtered_groups(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Previsione e acquisto']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $forecast = $this->tenant->expenses()->create(['title' => 'Previsione', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => null]);
+        $actual = $this->tenant->expenses()->create(['title' => 'Acquisto', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => null, 'actual_amount' => '80']);
+        $state = $this->add('project', $project->id, ['cost_center_id' => $center->id]);
+        $this->assertSame('-20.00', $state['entries'][0]['variance']);
+        $this->assertSame(0, $state['entries'][0]['incomplete']);
+        $this->assertSame('-20.00', $state['totals']['variance']);
+        $this->assertSame('-20.00', $state['groups']['project']['variance']);
+        $this->assertSame('-20.00', $state['cost_center_groups'][$center->id]['variance']);
+        $this->get('/t/budget/projects/'.$project->id.'?year=2026')->assertInertia(fn (Assert $page) => $page->where('analytics.current.variance', '-20.00'));
+        $id = $state['entries'][0]['id'];
+        $this->getJson($this->url('').'?entry_ids='.$id)->assertOk()->assertJsonPath('budget.totals.variance', '-20.00');
+        $this->getJson($this->url('').'?entry_ids=')->assertOk()->assertJsonPath('budget.totals.variance', null);
+        $this->add('expense', $actual->id);
+        $this->assertSame('-20.00', $this->state()['totals']['variance']);
+        $this->getJson($this->url('').'?entry_ids='.$id)->assertOk()->assertJsonPath('budget.totals.variance', '-20.00');
+        $this->year->entries()->where('project_id', $project->id)->delete();
+        $state = $this->add('expense', $forecast->id);
+        $this->assertSame('-20.00', $state['totals']['variance']);
+        $this->assertSame('-20.00', $state['groups']['expense']['variance']);
+        $this->assertNull($state['entries'][0]['variance']);
+        $this->assertNull($state['entries'][1]['variance']);
+        $this->getJson($this->url('').'?entry_ids='.$state['entries'][1]['id'])->assertOk()->assertJsonPath('budget.totals.variance', null);
+    }
+
+    public function test_variance_preserves_missing_sides_explicit_zero_and_negative_adjustments(): void
+    {
+        foreach ([[null, '80', null], ['100', null, null], ['100', '0', '-100.00'], ['100', '100', '0.00'], ['-20', '-15', '5.00']] as [$allocated, $actual, $variance]) {
+            $this->year->entries()->delete();
+            $expense = $this->tenant->expenses()->create(['title' => 'Confronto', 'year' => 2026, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
+            $state = $this->add('expense', $expense->id);
+            $this->assertSame($variance, $state['entries'][0]['variance']);
+            $this->assertSame($variance, $state['totals']['variance']);
+            $this->assertSame(0, $state['entries'][0]['incomplete']);
+        }
+    }
+
     public function test_empty_years_are_explicit_and_unique(): void
     {
         $this->tenant->expenses()->create(['title' => 'Archivio', 'year' => 2027, 'allocated_amount' => '100']);
@@ -165,7 +205,7 @@ class AnnualBudgetTest extends TestCase
         $this->postJson('/t/budget/budget/years', ['year' => 2027])->assertCreated();
         $this->postJson('/t/budget/budget/years', ['year' => 2027])->assertUnprocessable();
         $this->assertDatabaseCount('budget_entries', 0);
-        $this->get('/t/budget/budget?year=2027')->assertInertia(fn (Assert $page) => $page->where('budget.totals.allocated', '0.00')->where('budget.has_missing_entries', true)->has('budget.entries', 0));
+        $this->get('/t/budget/budget?year=2027')->assertInertia(fn (Assert $page) => $page->where('budget.totals.allocated', null)->where('budget.has_missing_entries', true)->has('budget.entries', 0));
     }
 
     public function test_kpis_compare_only_the_previous_budget_of_the_same_tenant(): void
@@ -244,10 +284,10 @@ class AnnualBudgetTest extends TestCase
         $state = $this->state();
         $this->assertSame('79.88', $state['totals']['allocated']);
         $this->assertSame('44.89', $state['totals']['actual']);
-        $this->assertSame('15.01', $state['totals']['variance']);
+        $this->assertSame('-34.99', $state['totals']['variance']);
         $this->assertSame('100.00', $state['totals']['allocated_positive']);
         $this->assertSame('-20.12', $state['totals']['allocated_negative']);
-        $this->assertSame(2, $state['totals']['incomplete']);
+        $this->assertSame(1, $state['totals']['incomplete']);
         $this->assertNull($state['entries'][1]['allocated']);
         $this->assertSame('0.00', $state['entries'][2]['allocated']);
         $this->assertSame('79.88', $state['groups']['contract']['allocated']);
