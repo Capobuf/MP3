@@ -127,7 +127,7 @@ final class ExpenseAnalytics
         return [
             ...$kpis,
             ...$groups, 'projectStatuses' => $projectStatuses, 'pairs' => $pairs,
-            'variances' => self::variances($selected, $tenant), 'expiry' => self::expiry($tenant),
+            'variances' => self::variances($selected, $tenant), 'expiry' => self::expiry($tenant, EconomicYearContext::year($tenant, $request)),
         ];
     }
 
@@ -149,14 +149,31 @@ final class ExpenseAnalytics
     }
 
     /** @return array<string, mixed> */
-    private static function expiry(Tenant $tenant): array
+    private static function expiry(Tenant $tenant, int $year): array
     {
         $today = now()->startOfDay();
         $row = $tenant->contracts()->toBase()->selectRaw('COUNT(CASE WHEN ends_on < ? THEN 1 END) AS expired, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within30, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within60, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within90, COUNT(CASE WHEN ends_on IS NULL THEN 1 END) AS undated', [
             $today->toDateString(), $today->toDateString(), $today->copy()->addDays(30)->toDateString(), $today->copy()->addDays(31)->toDateString(), $today->copy()->addDays(60)->toDateString(), $today->copy()->addDays(61)->toDateString(), $today->copy()->addDays(90)->toDateString(),
         ])->sole();
 
-        return ['asOf' => $today->toDateString(), 'groups' => [
+        $contracts = $tenant->contracts()->with('vendor:id,name')
+            ->whereBetween('ends_on', [$today->toDateString(), $today->copy()->addDays(90)->toDateString()])
+            ->orderBy('ends_on')->orderBy('id')->limit(5)->get();
+        $amounts = ExpenseOverview::economicQuery($tenant)->where('year', $year)->whereIn('contract_id', $contracts->modelKeys())
+            ->toBase()->select('contract_id')->selectRaw(self::columns())->groupBy('contract_id')->get()->keyBy('contract_id');
+        $next = $contracts->map(function ($contract) use ($amounts) {
+            $annual = $amounts->get($contract->id);
+            $economic = $annual === null ? null : self::economic($annual);
+
+            return [
+                'id' => $contract->id, 'name' => $contract->name, 'vendor' => $contract->vendor?->name,
+                'ends_on' => $contract->getRawOriginal('ends_on'),
+                'allocated' => $economic['allocated'] ?? null, 'actual' => $economic['actual'] ?? null,
+                'expense_count' => (int) ($annual->count ?? 0), 'incomplete' => (int) ($annual->incomplete ?? 0),
+            ];
+        })->all();
+
+        return ['asOf' => $today->toDateString(), 'year' => $year, 'next_contracts' => $next, 'groups' => [
             ['id' => 'expired', 'name' => 'Scaduti', 'count' => (int) $row->expired],
             ['id' => 'within30', 'name' => 'Entro 30 giorni', 'count' => (int) $row->within30],
             ['id' => 'within60', 'name' => '31–60 giorni', 'count' => (int) $row->within60],

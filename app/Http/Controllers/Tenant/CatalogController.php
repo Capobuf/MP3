@@ -39,7 +39,8 @@ class CatalogController extends Controller
     public function index(Request $request, Tenant $tenant, string $catalog): Response
     {
         $query = CatalogQuery::filtered($tenant, $catalog, $request);
-        $sort = in_array($request->input('sort'), ['name', 'updated_at', 'expenses_count'], true) ? $request->string('sort')->toString() : 'name';
+        $sorts = ['name', 'updated_at', 'expenses_count', ...($catalog === 'contracts' ? ['ends_on'] : [])];
+        $sort = in_array($request->input('sort'), $sorts, true) ? $request->string('sort')->toString() : 'name';
         $direction = $request->input('direction') === 'desc' ? 'desc' : 'asc';
 
         return Inertia::render('tenants/catalog', [

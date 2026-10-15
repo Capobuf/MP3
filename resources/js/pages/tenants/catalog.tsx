@@ -118,7 +118,16 @@ export default function CatalogPage({
                           : [{ id: 'status', label: 'Stato' }]),
                       { id: 'cost_center_ids', label: 'Centri di costo' },
                       { id: 'starts_on', label: 'Data iniziale' },
-                      { id: 'ends_on', label: 'Data finale' },
+                      {
+                          id: 'ends_on',
+                          label: 'Data finale',
+                          ...(catalog === 'contracts'
+                              ? {
+                                    value: (record: RecordData) =>
+                                        record.ends_on,
+                                }
+                              : {}),
+                      },
                   ]),
             {
                 id: 'expenses_count',
@@ -139,7 +148,7 @@ export default function CatalogPage({
         filters.search,
         filters.vendor_id,
         filters.status,
-        filters.expiring === '1',
+        filters.expiring,
         filters.linked === '1',
     ].filter(Boolean).length;
     return (
@@ -300,26 +309,58 @@ export default function CatalogPage({
                                                     }
                                                 />
                                             </div>
-                                            <Button
-                                                type="button"
-                                                variant={
-                                                    filters.expiring === '1'
-                                                        ? 'secondary'
-                                                        : 'outline'
+                                            <Select
+                                                value={
+                                                    filters.expiring || 'all'
                                                 }
-                                                onClick={() =>
+                                                onValueChange={(value) =>
                                                     applyFilters(path, {
                                                         ...filters,
                                                         expiring:
-                                                            filters.expiring ===
-                                                            '1'
+                                                            value === 'all'
                                                                 ? ''
-                                                                : '1',
+                                                                : value,
+                                                        sort:
+                                                            value === 'all' ||
+                                                            value === 'undated'
+                                                                ? 'name'
+                                                                : 'ends_on',
+                                                        direction: 'asc',
                                                     })
                                                 }
                                             >
-                                                In scadenza entro 90 giorni
-                                            </Button>
+                                                <SelectTrigger
+                                                    aria-label="Scadenza contratto"
+                                                    className="w-full"
+                                                >
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectGroup>
+                                                        <SelectItem value="all">
+                                                            Tutte le scadenze
+                                                        </SelectItem>
+                                                        <SelectItem value="expired">
+                                                            Scaduti
+                                                        </SelectItem>
+                                                        <SelectItem value="within30">
+                                                            Entro 30 giorni
+                                                        </SelectItem>
+                                                        <SelectItem value="within60">
+                                                            31–60 giorni
+                                                        </SelectItem>
+                                                        <SelectItem value="within90">
+                                                            61–90 giorni
+                                                        </SelectItem>
+                                                        <SelectItem value="1">
+                                                            Entro 90 giorni
+                                                        </SelectItem>
+                                                        <SelectItem value="undated">
+                                                            Senza scadenza
+                                                        </SelectItem>
+                                                    </SelectGroup>
+                                                </SelectContent>
+                                            </Select>
                                         </>
                                     )}
                                     {catalog === 'vendors' && (

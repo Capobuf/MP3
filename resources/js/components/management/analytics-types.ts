@@ -56,6 +56,17 @@ export type VarianceRow = {
 };
 export type ContractExpiry = {
     asOf: string;
+    year: number;
+    next_contracts: {
+        id: number;
+        name: string;
+        vendor: string | null;
+        ends_on: string;
+        allocated: string | null;
+        actual: string | null;
+        expense_count: number;
+        incomplete: number;
+    }[];
     groups: { id: string; name: string; count: number }[];
     undated: number;
     upcoming: number;

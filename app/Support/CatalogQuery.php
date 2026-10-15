@@ -28,8 +28,20 @@ final class CatalogQuery
             if ($request->filled('vendor_id')) {
                 $query->where('vendor_id', $request->integer('vendor_id'));
             }
-            if ($request->input('expiring') === '1') {
-                $query->whereBetween('ends_on', [now()->toDateString(), now()->addDays(90)->toDateString()]);
+            $today = now()->startOfDay();
+            $window = match ($request->input('expiring')) {
+                '1' => [0, 90],
+                'within30' => [0, 30],
+                'within60' => [31, 60],
+                'within90' => [61, 90],
+                default => null,
+            };
+            if ($window !== null) {
+                $query->whereBetween('ends_on', [$today->copy()->addDays($window[0])->toDateString(), $today->copy()->addDays($window[1])->toDateString()]);
+            } elseif ($request->input('expiring') === 'expired') {
+                $query->where('ends_on', '<', $today->toDateString());
+            } elseif ($request->input('expiring') === 'undated') {
+                $query->whereNull('ends_on');
             }
         }
         if ($catalog === 'projects' && $request->filled('status')) {
