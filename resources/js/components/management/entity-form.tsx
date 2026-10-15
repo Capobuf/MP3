@@ -128,12 +128,14 @@ function linePayload(lines: DraftLine[], defaultYear?: string) {
         type: line.type,
         unit_price: decimalInput(line.unit_price),
         quantity: decimalInput(line.quantity),
-        ...(defaultYear
-            ? {
-                  period_starts_on: line.period_starts_on || null,
-                  period_ends_on: line.period_ends_on || null,
-                  year: line.year ?? defaultYear,
-              }
+        ...('period_starts_on' in line || defaultYear
+            ? { period_starts_on: line.period_starts_on || null }
+            : {}),
+        ...('period_ends_on' in line || defaultYear
+            ? { period_ends_on: line.period_ends_on || null }
+            : {}),
+        ...('year' in line || defaultYear
+            ? { year: line.year ?? defaultYear ?? null }
             : {}),
     }));
 }
@@ -415,13 +417,33 @@ export function EntityForm({
             ]),
         );
         if (current.kind === 'expenses') {
+            const original = JSON.parse(current.original) as Frame;
+            if (current.record) {
+                for (const field of [
+                    'year',
+                    'period_starts_on',
+                    'period_ends_on',
+                ]) {
+                    if (current.values[field] === original.values[field])
+                        delete payload[field];
+                }
+            }
             if (current.detailed) {
                 delete payload.allocated_amount;
                 delete payload.actual_amount;
-                payload.lines = linePayload(
-                    current.lines,
-                    contractLines ? current.values.year : undefined,
-                );
+                if (
+                    !current.record ||
+                    !original.detailed ||
+                    JSON.stringify(current.lines) !==
+                        JSON.stringify(original.lines)
+                ) {
+                    payload.lines = linePayload(
+                        current.lines,
+                        contractLines && !current.record
+                            ? current.values.year
+                            : undefined,
+                    );
+                }
             }
             if (contractContext) payload.contract_entry = true;
         }
