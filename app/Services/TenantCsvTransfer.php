@@ -172,6 +172,7 @@ class TenantCsvTransfer
             Values::invalid('file', 'Metadati CSV mancanti o incompatibili.');
         }
         $unique = [];
+        $lineTotals = [];
         foreach ($records as $ref => $record) {
             try {
                 $type = $record['type'];
@@ -226,9 +227,27 @@ class TenantCsvTransfer
                     if (Money::cents($data['total']) !== intdiv(abs($product) + 5000, 10000) * ($product < 0 ? -1 : 1)) {
                         Values::invalid('total', 'Il totale della riga non corrisponde a prezzo e quantità.');
                     }
+                    $lineTotals[$data['expense_ref']][$data['type']] = ($lineTotals[$data['expense_ref']][$data['type']] ?? 0) + Money::cents($data['total']);
                 }
             } catch (ValidationException $error) {
                 $this->errors($errors, $errorCount, $record['row'], $error);
+            }
+        }
+        foreach ($records as $ref => $record) {
+            if ($record['type'] !== 'expense' || ! isset($lineTotals[$ref])) {
+                continue;
+            }
+            foreach (['allocated', 'actual'] as $type) {
+                $field = $type.'_amount';
+                $amount = $record['data'][$field];
+                $hasType = array_key_exists($type, $lineTotals[$ref]);
+                $sum = $lineTotals[$ref][$type] ?? 0;
+                // An absent type may be unknown or an ordinary expense's existing zero default.
+                if (($hasType && $amount === null) || ($amount !== null && Money::cents($amount) !== $sum)) {
+                    $expected = $hasType ? Money::decimal($sum) : 'null oppure 0.00 (nessuna riga di questo tipo)';
+                    $message = 'Spesa «'.$record['data']['title'].'» ('.$ref.'): '.$field.' = '.($amount ?? 'null').' non coerente con le righe su tutti gli anni; atteso '.$expected.'.';
+                    $this->errors($errors, $errorCount, $record['row'], ValidationException::withMessages([$field => $message]));
+                }
             }
         }
         // Restore preserves the original values; validation must reject overlapping contract containers without writing.
