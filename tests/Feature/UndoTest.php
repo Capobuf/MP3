@@ -210,7 +210,8 @@ class UndoTest extends TestCase
         $year = $this->postJson('/t/alfa/budget/years', ['year' => 2026])->assertCreated()->json('year.id');
         $this->assertNotNull($year);
         $url = '/t/alfa/budget/years/'.$year.'/entries';
-        $entry = $this->postJson($url, ['entries' => [['type' => 'manual', 'description' => 'Libera', 'manual_allocated' => '42.10']]])->assertOk()->json('budget.entries.0.id');
+        $expense = $this->postJson('/t/alfa/expenses', ['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '42.10', 'budget_year_id' => $year])->assertCreated()->json('record.id');
+        $entry = $this->tenant->budgetEntries()->where('expense_id', $expense)->sole()->id;
         $this->patchJson($url, ['action' => 'exclude', 'ids' => [$entry]])->assertOk();
         $exclude = $this->undo();
         $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'included' => true]);
@@ -218,7 +219,7 @@ class UndoTest extends TestCase
         $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'included' => false]);
         $this->patchJson($url, ['action' => 'remove', 'ids' => [$entry]])->assertOk();
         $remove = $this->undo();
-        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'manual_allocated' => '42.10', 'included' => false]);
+        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'expense_id' => $expense, 'included' => false]);
         $this->redo($remove);
         $this->undo(); // Undo removal again.
         $this->undo(); // Undo exclusion.

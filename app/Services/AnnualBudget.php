@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
 
 class AnnualBudget
 {
-    public const TYPES = ['contract', 'project', 'expense', 'manual'];
+    public const TYPES = ['contract', 'project', 'expense'];
 
     /** @return Collection<int, Expense> */
     private function expenses(Tenant $tenant, int $year): Collection
@@ -36,22 +36,20 @@ class AnnualBudget
         foreach (self::TYPES as $type) {
             foreach ($entries->where('type', $type)->where('included', true) as $entry) {
                 foreach ($expenses as $expense) {
-                    if ($type !== 'manual' && $this->matches($type, (int) $entry->getAttribute($type.'_id'), $expense)) {
+                    if ($this->matches($type, (int) $entry->getAttribute($type.'_id'), $expense)) {
                         $owners[$expense->id] ??= $entry->id;
                     }
                 }
             }
         }
-        $names = $entries->mapWithKeys(fn ($entry) => [$entry->id => $entry->type === 'manual' ? $entry->description : $entry->{$entry->type}?->getAttribute($entry->type === 'expense' ? 'title' : 'name')])->all();
+        $names = $entries->mapWithKeys(fn ($entry) => [$entry->id => $entry->{$entry->type}?->getAttribute($entry->type === 'expense' ? 'title' : 'name')])->all();
         /** @var array<int, array<string, mixed>> $rows */
         $rows = [];
         foreach ($entries as $entry) {
-            $source = $entry->type === 'manual' ? null : $entry->{$entry->type};
-            $linked = $entry->type === 'manual' ? collect() : $expenses->filter(fn (Expense $expense) => $this->matches($entry->type, (int) $entry->getAttribute($entry->type.'_id'), $expense));
+            $source = $entry->{$entry->type};
+            $linked = $expenses->filter(fn (Expense $expense) => $this->matches($entry->type, (int) $entry->getAttribute($entry->type.'_id'), $expense));
             $contributing = $linked->filter(fn (Expense $expense) => ($owners[$expense->id] ?? null) === $entry->id);
-            $parts = $entry->type === 'manual'
-                ? [['allocated' => $entry->manual_allocated, 'actual' => $entry->manual_actual]]
-                : $contributing->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount])->values()->all();
+            $parts = $contributing->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount])->values()->all();
             $values = $this->values($parts);
             // Covered expenses contribute a known zero; a source without annual data stays unknown.
             if ($parts === [] && $linked->isNotEmpty()) {
@@ -61,7 +59,7 @@ class AnnualBudget
                 'id' => $entry->id, 'type' => $entry->type, 'source_id' => $source?->id,
                 'description' => $names[$entry->id], 'included' => $entry->included, 'position' => $entry->position,
                 'cost_center_id' => $entry->cost_center_id, 'cost_center' => $entry->costCenter,
-                'vendor' => $source instanceof Contract || $source instanceof Expense ? $source->vendor : null, 'manual_allocated' => $entry->manual_allocated, 'manual_actual' => $entry->manual_actual,
+                'vendor' => $source instanceof Contract || $source instanceof Expense ? $source->vendor : null,
                 'notes' => $source?->getAttribute('notes') ?? $source?->getAttribute('description'),
                 'starts_on' => $source?->getAttribute('starts_on')?->toDateString(), 'ends_on' => $source?->getAttribute('ends_on')?->toDateString(),
                 ...$values,

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Tenant\BudgetController;
 use App\Models\BudgetYear;
 use App\Models\Tenant;
 use App\Models\User;
@@ -9,6 +10,8 @@ use App\Services\AnnualBudget;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -43,10 +46,115 @@ class AnnualBudgetTest extends TestCase
         return $this->postJson($this->url(), ['entries' => [$data]])->assertOk()->json('budget');
     }
 
+    /** @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function addExpense(array $data): array
+    {
+        $this->postJson('/t/budget/expenses', ['year' => 2026, ...$data, 'budget_year_id' => $this->year->id])->assertCreated();
+
+        return $this->state();
+    }
+
     /** @return array<string, mixed> */
     private function state(): array
     {
         return app(AnnualBudget::class)->snapshot($this->tenant, $this->year);
+    }
+
+    public function test_creation_uses_the_standard_form_and_validates_budget_context_atomically(): void
+    {
+        $context = ['budget_year_id' => $this->year->id, 'year' => 2026];
+        $this->get('/t/budget/expenses/create?'.http_build_query($context))->assertInertia(fn (Assert $page) => $page
+            ->component('tenants/create')->where('year', 2026)->where('budgetContext.id', $this->year->id)->where('budgetContext.year', 2026));
+        $this->assertDatabaseCount('expenses', 0);
+        $this->postJson('/t/budget/expenses', [...$context, 'title' => 'Dal Budget', 'lines' => [
+            ['description' => 'Previsione', 'type' => 'allocated', 'unit_price' => '100'],
+        ]])->assertCreated();
+        $this->assertDatabaseCount('expenses', 1);
+        $this->assertDatabaseCount('budget_entries', 1);
+        $this->assertSame('100.00', $this->state()['entries'][0]['allocated']);
+        $foreign = Tenant::create(['name' => 'Esterno', 'slug' => 'esterno'])->budgetYears()->create(['year' => 2026]);
+        foreach ([['year' => 2027], ['budget_year_id' => $foreign->id], ['title' => '']] as $invalid) {
+            $this->postJson('/t/budget/expenses', [...$context, 'title' => 'Non creare', ...$invalid])->assertUnprocessable();
+        }
+        $this->getJson('/t/budget/expenses/create?year=2027&budget_year_id='.$this->year->id)->assertUnprocessable();
+        $this->postJson($this->url(), ['entries' => [['type' => 'manual', 'description' => 'Vietata']]])->assertUnprocessable();
+        $this->partialMock(BudgetController::class)->shouldReceive('add')->once()
+            ->andThrow(ValidationException::withMessages(['budget' => 'Collegamento fallito.']));
+        $this->postJson('/t/budget/expenses', [...$context, 'title' => 'Rollback'])->assertUnprocessable();
+        $this->assertDatabaseCount('expenses', 1);
+        $this->assertDatabaseCount('budget_entries', 1);
+    }
+
+    public function test_single_expense_deletion_preserves_used_sources_and_removes_attachments_atomically(): void
+    {
+        Storage::fake('local');
+        $expense = $this->tenant->expenses()->create(['title' => 'Eliminabile', 'year' => 2026]);
+        $expense->lines()->create(['description' => 'Riga', 'type' => 'actual', 'unit_price' => 0, 'total' => 0, 'quantity' => 1, 'position' => 0]);
+        $state = $this->add('expense', $expense->id);
+        $entryId = $state['entries'][0]['id'];
+        $file = $expense->attachments()->make(['original_name' => 'prova.pdf', 'path' => 'private/prova.pdf', 'disk' => 'local', 'mime_type' => 'application/pdf', 'size_bytes' => 1]);
+        $file->tenant_id = $this->tenant->id;
+        $file->save();
+        Storage::disk('local')->put($file->path, 'x');
+        $other = $this->tenant->budgetYears()->create(['year' => 2027]);
+        $reference = $other->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $expense->id, 'included' => false]);
+        $this->patchJson($this->url(), ['action' => 'delete_expense', 'ids' => [$entryId]])->assertUnprocessable();
+        $this->assertDatabaseHas('budget_entries', ['id' => $entryId]);
+        $this->assertDatabaseHas('expenses', ['id' => $expense->id]);
+        $reference->delete();
+        foreach (['contract', 'project'] as $type) {
+            $source = $this->tenant->{$type.'s'}()->create(['name' => 'Usata']);
+            $expense->update([$type.'_id' => $source->id]);
+            $this->patchJson($this->url(), ['action' => 'delete_expense', 'ids' => [$entryId]])->assertUnprocessable();
+            $this->assertDatabaseHas('budget_entries', ['id' => $entryId]);
+            $expense->update([$type.'_id' => null]);
+        }
+        $second = $this->addExpense(['title' => 'Conserva']);
+        $this->patchJson($this->url(), ['action' => 'delete_expense', 'ids' => array_column($second['entries'], 'id')])->assertUnprocessable();
+        $other->update(['dismissed_sources' => ['expense:'.$expense->id]]);
+        $this->patchJson($this->url(), ['action' => 'delete_expense', 'ids' => [$entryId]])->assertOk();
+        $this->assertDatabaseMissing('expenses', ['id' => $expense->id]);
+        $this->assertDatabaseMissing('budget_entries', ['id' => $entryId]);
+        $this->assertDatabaseMissing('attachments', ['id' => $file->id]);
+        $this->assertDatabaseCount('expense_lines', 0);
+        $this->assertSame([], $other->fresh()->dismissed_sources);
+        $this->assertDatabaseCount('expenses', 1);
+    }
+
+    public function test_manual_conversion_preserves_null_zero_negatives_years_centers_and_positions_once(): void
+    {
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $future = $this->tenant->budgetYears()->create(['year' => 2027]);
+        $expected = [];
+        foreach ([[null, null], ['0.00', null], [null, '0.00'], ['-12.34', '0.00']] as $position => [$allocated, $actual]) {
+            $year = $position % 2 === 0 ? $this->year : $future;
+            $id = DB::table('budget_entries')->insertGetId([
+                'tenant_id' => $this->tenant->id, 'budget_year_id' => $year->id, 'type' => 'manual', 'description' => 'Stessa descrizione',
+                'manual_allocated' => $allocated, 'manual_actual' => $actual, 'cost_center_id' => $center->id,
+                'included' => $position % 2 === 0, 'position' => $position,
+            ]);
+            $expected[$id] = [$year, $position, $allocated, $actual];
+        }
+        $migration = require database_path('migrations/2026_10_15_000001_convert_manual_budget_entries_to_expenses.php');
+        $migration->up();
+        $migration->up();
+        $this->assertDatabaseCount('expenses', 4);
+        $this->assertDatabaseMissing('budget_entries', ['type' => 'manual']);
+        foreach ($expected as $id => [$year, $position, $allocated, $actual]) {
+            $entry = $year->entries()->findOrFail($id);
+            $expense = $entry->expense;
+            $this->assertSame('expense', $entry->type);
+            $this->assertSame($position, $entry->position);
+            $this->assertSame($position % 2 === 0, $entry->included);
+            $this->assertSame('Stessa descrizione', $expense->title);
+            $this->assertSame($year->year, $expense->year);
+            $this->assertSame($allocated, $expense->allocated_amount);
+            $this->assertSame($actual, $expense->actual_amount);
+            $this->assertSame([$center->id], $expense->costCenters()->pluck('cost_centers.id')->all());
+            $this->assertSame(count(array_filter([$allocated, $actual], fn ($amount) => $amount !== null)), $expense->lines()->count());
+        }
     }
 
     public function test_empty_years_are_explicit_and_unique(): void
@@ -65,11 +173,14 @@ class AnnualBudgetTest extends TestCase
         $this->get('/t/budget/budget?year=2026')->assertInertia(fn (Assert $page) => $page->where('previousBudget', null));
 
         $previous = $this->tenant->budgetYears()->create(['year' => 2025]);
-        $previous->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'manual', 'description' => 'Inclusa', 'included' => true, 'manual_allocated' => '100.01', 'manual_actual' => '90.02']);
-        $previous->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'manual', 'description' => 'Esclusa', 'included' => false, 'manual_allocated' => '999.00']);
+        $prior = $this->tenant->expenses()->create(['title' => 'Inclusa', 'year' => 2025, 'allocated_amount' => '100.01', 'actual_amount' => '90.02']);
+        $previous->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $prior->id]);
+        $excluded = $this->tenant->expenses()->create(['title' => 'Esclusa', 'year' => 2025, 'allocated_amount' => '999.00']);
+        $previous->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $excluded->id, 'included' => false]);
         $this->tenant->expenses()->create(['title' => 'Fuori Budget', 'year' => 2025, 'allocated_amount' => '5000']);
         $other = Tenant::create(['name' => 'Altro Budget', 'slug' => 'altro-budget']);
-        $other->budgetYears()->create(['year' => 2025])->entries()->create(['tenant_id' => $other->id, 'type' => 'manual', 'description' => 'Altro tenant', 'included' => true, 'manual_allocated' => '7000']);
+        $foreign = $other->expenses()->create(['title' => 'Altro tenant', 'year' => 2025, 'allocated_amount' => '7000']);
+        $other->budgetYears()->create(['year' => 2025])->entries()->create(['tenant_id' => $other->id, 'type' => 'expense', 'expense_id' => $foreign->id]);
 
         $this->get('/t/budget/budget?year=2026')->assertInertia(fn (Assert $page) => $page
             ->where('previousBudget.year', 2025)
@@ -90,14 +201,14 @@ class AnnualBudgetTest extends TestCase
         $this->add('contract', $contract->id);
         $this->add('project', $project->id);
         $this->add('expense', $expense->id);
-        $budget = $this->add('manual', null, ['description' => 'Libera', 'manual_allocated' => '10']);
+        $budget = $this->addExpense(['title' => 'Libera', 'allocated_amount' => '10']);
         $this->assertSame('30.00', $budget['totals']['allocated']);
         $this->assertNull($budget['entries'][0]['allocated']);
         $this->patchJson($this->url(), ['action' => 'remove', 'ids' => array_column($budget['entries'], 'id')])->assertOk();
         $this->assertDatabaseCount('budget_entries', 0);
         $this->assertDatabaseCount('contracts', 1);
         $this->assertDatabaseCount('projects', 1);
-        $this->assertDatabaseCount('expenses', 1);
+        $this->assertDatabaseCount('expenses', 2);
     }
 
     public function test_contract_conditions_follow_attribution_year_and_refresh_from_source(): void
@@ -128,8 +239,8 @@ class AnnualBudgetTest extends TestCase
             $this->tenant->expenses()->create(['title' => 'Spesa '.$index, 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
         }
         $state = $this->add('contract', $contract->id);
-        $this->add('manual', null, ['description' => 'Vuota']);
-        $this->add('manual', null, ['description' => 'Zero', 'manual_allocated' => '0', 'manual_actual' => '0']);
+        $this->addExpense(['title' => 'Vuota']);
+        $this->addExpense(['title' => 'Zero', 'allocated_amount' => '0', 'actual_amount' => '0']);
         $state = $this->state();
         $this->assertSame('79.88', $state['totals']['allocated']);
         $this->assertSame('44.89', $state['totals']['actual']);
@@ -188,16 +299,27 @@ class AnnualBudgetTest extends TestCase
         $this->assertSame(2, $this->year->entries()->count());
     }
 
-    public function test_structure_copy_keeps_order_centers_and_clears_manual_amounts_once(): void
+    public function test_structure_copy_keeps_only_sources_attributed_to_the_destination_year_once(): void
     {
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
-        $expense = $this->tenant->expenses()->create(['title' => 'Spesa 2026', 'year' => 2026, 'allocated_amount' => '100']);
-        $this->add('manual', null, ['description' => 'Libera', 'manual_allocated' => '30', 'manual_actual' => '20', 'cost_center_id' => $center->id]);
+        $expense = $this->tenant->expenses()->create(['title' => 'Solo 2026', 'year' => 2026, 'allocated_amount' => '100']);
         $this->add('expense', $expense->id);
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $this->add('contract', $contract->id, ['cost_center_id' => $center->id]);
+        $this->add('project', $project->id);
+        $annual = $this->postJson('/t/budget/expenses', ['title' => 'Due anni', 'year' => 2026, 'lines' => [
+            ['description' => '2026', 'type' => 'allocated', 'unit_price' => '10', 'year' => 2026],
+            ['description' => '2027', 'type' => 'allocated', 'unit_price' => '20', 'year' => 2027],
+        ]])->assertCreated();
+        $this->add('expense', $annual->json('record.id'));
         $future = $this->tenant->budgetYears()->create(['year' => 2027]);
-        $this->postJson($this->url('copy', $future))->assertOk()->assertJsonPath('budget.entries.0.description', 'Libera')->assertJsonPath('budget.entries.0.manual_allocated', null)->assertJsonPath('budget.entries.0.cost_center_id', $center->id)->assertJsonPath('budget.entries.1.allocated', null);
+        $this->postJson($this->url('copy', $future))->assertOk()->assertJsonPath('budget.entries.0.type', 'contract')
+            ->assertJsonPath('budget.entries.0.cost_center_id', $center->id)->assertJsonPath('budget.entries.1.type', 'project')
+            ->assertJsonPath('budget.entries.2.allocated', '20.00');
         $this->postJson($this->url('copy', $future))->assertOk();
-        $this->assertSame(2, $future->entries()->count());
+        $this->assertSame(3, $future->entries()->count());
+        $this->assertDatabaseCount('expenses', 2);
     }
 
     public function test_tenant_isolation_authorization_and_batch_rollback(): void
@@ -210,10 +332,10 @@ class AnnualBudgetTest extends TestCase
         $this->postJson($this->url(), ['entries' => [['type' => 'manual', 'description' => 'Non salvare'], ['type' => 'expense', 'source_id' => $foreign->id]]])->assertUnprocessable();
         $this->assertDatabaseCount('budget_entries', 0);
         $expense = $this->tenant->expenses()->create(['title' => 'Propria', 'year' => 2026]);
-        $this->add('manual', null, ['description' => 'Originale']);
+        $this->addExpense(['title' => 'Originale']);
         $state = $this->add('expense', $expense->id);
         $this->patchJson($this->url(), ['action' => 'update', 'ids' => array_column($state['entries'], 'id'), 'changes' => ['description' => 'Non salvare']])->assertUnprocessable();
-        $this->assertSame('Originale', $this->year->entries()->firstOrFail()->description);
+        $this->assertSame('Originale', $this->year->entries()->firstOrFail()->expense->title);
         $center = $other->costCenters()->create(['name' => 'Segreto']);
         $this->patchJson($this->url(), ['action' => 'update', 'ids' => [$state['entries'][0]['id']], 'changes' => ['cost_center_id' => $center->id]])->assertUnprocessable();
         $this->patchJson($this->url(), ['action' => 'exclude', 'ids' => [$state['entries'][0]['id'], 99999]])->assertUnprocessable();
@@ -249,8 +371,8 @@ class AnnualBudgetTest extends TestCase
         }
         $this->getJson('/t/budget/budget/options?type=expense&search=109')->assertOk()->assertJsonCount(1, 'records');
         $this->getJson('/t/budget/budget/options?type=expense&page=3')->assertOk()->assertJsonPath('total', 110)->assertJsonCount(10, 'records');
-        $this->add('manual', null, ['description' => 'Prima']);
-        $state = $this->add('manual', null, ['description' => 'Seconda']);
+        $this->addExpense(['title' => 'Prima']);
+        $state = $this->addExpense(['title' => 'Seconda']);
         $ids = array_reverse(array_column($state['entries'], 'id'));
         $this->patchJson($this->url(), ['action' => 'reorder', 'ids' => $ids])->assertOk()->assertJsonPath('budget.entries.0.description', 'Seconda');
         $this->patchJson($this->url(), ['action' => 'reorder', 'ids' => [$ids[0]]])->assertUnprocessable();
@@ -262,10 +384,10 @@ class AnnualBudgetTest extends TestCase
         $project = $this->tenant->projects()->create(['name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Condivisa', 'year' => 2026, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
         $this->add('contract', $contract->id);
-        $this->add('manual', null, ['description' => 'Esclusa', 'manual_allocated' => '999']);
+        $this->addExpense(['title' => 'Esclusa', 'allocated_amount' => '999']);
         $this->add('project', $project->id);
         $this->add('expense', $expense->id);
-        $before = $this->add('manual', null, ['description' => 'Rettifica', 'manual_allocated' => '-20.12', 'manual_actual' => '0']);
+        $before = $this->addExpense(['title' => 'Rettifica', 'allocated_amount' => '-20.12', 'actual_amount' => '0']);
         $this->patchJson($this->url(), ['action' => 'exclude', 'ids' => [$before['entries'][1]['id']]])->assertOk();
         $before = $this->state();
         $ids = array_reverse(array_column($before['entries'], 'id'));
@@ -308,7 +430,7 @@ class AnnualBudgetTest extends TestCase
         $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '0', 'actual_amount' => '10']);
         $this->add('expense', $expense->id, ['cost_center_id' => $center->id]);
         $this->add('contract', $contract->id, ['cost_center_id' => $center->id]);
-        $state = $this->add('manual', null, ['description' => 'Libera', 'manual_allocated' => '20', 'manual_actual' => '30']);
+        $state = $this->addExpense(['title' => 'Libera', 'allocated_amount' => '20', 'actual_amount' => '30']);
         $this->assertSame(2, $state['totals']['comparable_count']);
         $this->assertSame('10.00', $state['cost_center_groups'][(string) $center->id]['actual']);
         $this->assertSame('30.00', $state['cost_center_groups']['none']['actual']);

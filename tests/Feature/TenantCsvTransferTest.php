@@ -43,7 +43,8 @@ class TenantCsvTransferTest extends TestCase
         ]]);
         $legacy = $source->expenses()->create(['title' => 'Legacy', 'year' => 2026, 'allocated_amount' => null, 'actual_amount' => '0.00']);
         $year = $source->budgetYears()->create(['year' => 2026, 'structure_copied' => true, 'dismissed_sources' => ['expense:'.$legacy->id]]);
-        $year->entries()->create(['tenant_id' => $source->id, 'type' => 'manual', 'description' => 'Libera', 'manual_allocated' => '0.00', 'manual_actual' => null, 'cost_center_id' => $child->id, 'included' => false]);
+        $free = $source->expenses()->create(['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '0.00', 'actual_amount' => null]);
+        $year->entries()->create(['tenant_id' => $source->id, 'type' => 'expense', 'expense_id' => $free->id, 'cost_center_id' => $child->id, 'included' => false]);
         $year->entries()->create(['tenant_id' => $source->id, 'type' => 'contract', 'contract_id' => $contract->id, 'position' => 2]);
         $attachment = $expense->attachments()->make(['original_name' => 'a.pdf', 'path' => 'private/test.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'disk' => 'local']);
         $attachment->tenant_id = $source->id;
@@ -76,7 +77,7 @@ class TenantCsvTransferTest extends TestCase
         $this->assertSame('0.00', $newLegacy->actual_amount);
         $newYear = $target->budgetYears()->firstOrFail();
         $this->assertSame(['expense:'.$newLegacy->id], $newYear->dismissed_sources);
-        $this->assertFalse($newYear->entries()->where('type', 'manual')->firstOrFail()->included);
+        $this->assertFalse($newYear->entries()->where('type', 'expense')->firstOrFail()->included);
         $this->assertSame($new->contract_id, $newYear->entries()->where('type', 'contract')->firstOrFail()->contract_id);
         $this->assertSame(0, $target->attachments()->count());
         $this->assertSame('Destinazione', $target->fresh()->name);

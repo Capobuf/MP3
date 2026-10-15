@@ -115,7 +115,7 @@ class SpreadsheetImport
                 $data[$field] = Values::date($data[$field], $field);
             }
         }
-        foreach (['reference_amount', 'allocated_amount', 'actual_amount', 'manual_allocated', 'manual_actual'] as $field) {
+        foreach (['reference_amount', 'allocated_amount', 'actual_amount'] as $field) {
             if (array_key_exists($field, $data)) {
                 $data[$field] = Values::money($data[$field], $field);
             }
@@ -147,17 +147,17 @@ class SpreadsheetImport
             return app(CostCenterController::class)->validated(Request::create('/', 'POST', $data), $tenant);
         }
         if ($resource === 'budget') {
-            Validator::make($data, ['year' => ['required', 'integer', 'between:2000,2100'], 'type' => ['required', 'in:manual,contract,project,expense'], 'description' => ['nullable', 'string', 'max:255']])->validate();
+            Validator::make($data, ['year' => ['required', 'integer', 'between:2000,2100'], 'type' => ['required', 'in:new-expense,contract,project,expense'], 'description' => ['nullable', 'string', 'max:255']])->validate();
             $year = $tenant->budgetYears()->where('year', $data['year'])->first();
             if (! $year) {
                 Values::invalid('year', 'Crea prima l’anno di Budget in MP3.');
             }
-            if ($data['type'] === 'manual') {
+            if ($data['type'] === 'new-expense') {
                 if ($data['source_id'] !== null || $data['description'] === null) {
                     Values::invalid('description', 'Una voce libera richiede descrizione e nessuna sorgente.');
                 }
             } else {
-                if ($data['description'] !== null || $data['manual_allocated'] !== null || $data['manual_actual'] !== null) {
+                if ($data['description'] !== null || $data['allocated_amount'] !== null || $data['actual_amount'] !== null) {
                     Values::invalid('source_id', 'Le voci collegate richiedono solo la sorgente; lascia vuoti descrizione e importi.');
                 }
                 $data['source_id'] = $this->resolve($tenant, $data['type'].'s', $data['source_id'], 'source_id');
@@ -209,8 +209,10 @@ class SpreadsheetImport
     {
         if ($resource === 'budget') {
             $year = $tenant->budgetYears()->where('year', $data['year'])->firstOrFail();
-            $matches = $data['type'] === 'manual' ? $year->entries()->where('type', 'manual')->where('description', $data['description'])->get() : $year->entries()->where($data['type'].'_id', $data['source_id'])->get();
-            if ($matches->isNotEmpty() && $data['type'] !== 'manual') {
+            $matches = $data['type'] === 'new-expense'
+                ? $year->entries()->where('type', 'expense')->whereHas('expense', fn ($q) => $q->where('title', $data['description'])->where('year', $data['year']))->with('expense')->get()
+                : $year->entries()->where($data['type'].'_id', $data['source_id'])->get();
+            if ($matches->isNotEmpty() && $data['type'] !== 'new-expense') {
                 return true;
             }
         } else {
@@ -232,7 +234,7 @@ class SpreadsheetImport
             if ($data === $other) {
                 return true;
             }
-            $key = $resource === 'expenses' ? 'title' : ($resource === 'budget' ? ($data['type'] === 'manual' ? 'description' : 'source_id') : 'name');
+            $key = $resource === 'expenses' ? 'title' : ($resource === 'budget' ? ($data['type'] === 'new-expense' ? 'description' : 'source_id') : 'name');
             $sameIdentity = ($data[$key] ?? null) === ($other[$key] ?? null) && ($data['year'] ?? null) == ($other['year'] ?? null) && ($data['parent_id'] ?? null) === ($other['parent_id'] ?? null) && ($data['type'] ?? null) === ($other['type'] ?? null);
             if ($resource === 'vendors' && $data['vat_number'] !== null && $data['vat_number'] === $other['vat_number']) {
                 $sameIdentity = true;
@@ -249,6 +251,13 @@ class SpreadsheetImport
             Values::invalid('record', 'Corrispondenza duplicata ambigua: più record esistenti.');
         }
         $record = $matches->first();
+        if ($resource === 'budget' && $data['type'] === 'new-expense') {
+            if ($record->expense->title !== $data['description'] || $record->expense->allocated_amount !== $data['allocated_amount'] || $record->expense->actual_amount !== $data['actual_amount'] || $record->cost_center_id !== $data['cost_center_id']) {
+                Values::invalid('description', 'Possibile duplicato con dati diversi. Nessun record verrà aggiornato.');
+            }
+
+            return true;
+        }
         foreach ($data as $field => $value) {
             if ($field === 'lines') {
                 continue;
@@ -308,6 +317,14 @@ class SpreadsheetImport
             }
             if ($resource === 'budget') {
                 $year = $tenant->budgetYears()->where('year', $data['year'])->lockForUpdate()->firstOrFail();
+                if ($data['type'] === 'new-expense') {
+                    $expense = app(ExpenseWriter::class)->create($tenant, [
+                        'title' => $data['description'], 'year' => $year->year,
+                        'allocated_amount' => $data['allocated_amount'], 'actual_amount' => $data['actual_amount'],
+                        'cost_center_ids' => $data['cost_center_id'] === null ? [] : [$data['cost_center_id']],
+                    ], true);
+                    $data = ['type' => 'expense', 'source_id' => $expense->id, 'cost_center_id' => $data['cost_center_id']];
+                }
                 unset($data['year']);
                 app(BudgetController::class)->add($tenant, $year, $data, $row['row']);
 

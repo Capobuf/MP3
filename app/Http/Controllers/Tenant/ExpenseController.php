@@ -61,7 +61,24 @@ class ExpenseController extends Controller
 
     public function store(ExpenseRequest $request, Tenant $tenant): JsonResponse
     {
-        $expense = app(ExpenseWriter::class)->create($tenant, $request->validated());
+        $expense = DB::transaction(function () use ($tenant, $request): Expense {
+            $data = $request->validated();
+            $budgetId = $data['budget_year_id'] ?? null;
+            unset($data['budget_year_id']);
+            $year = $budgetId !== null ? $tenant->budgetYears()->whereKey($budgetId)->lockForUpdate()->firstOrFail() : null;
+            if ($year !== null && $year->year !== (int) $data['year']) {
+                throw ValidationException::withMessages(['year' => 'L’anno della spesa deve coincidere con il Budget di partenza.']);
+            }
+            $expense = app(ExpenseWriter::class)->create($tenant, $data);
+            if ($year !== null) {
+                if ($expense->year !== $year->year) {
+                    throw ValidationException::withMessages(['year' => 'L’anno delle righe deve coincidere con il Budget di partenza.']);
+                }
+                app(BudgetController::class)->add($tenant, $year, ['type' => 'expense', 'source_id' => $expense->id], 0);
+            }
+
+            return $expense;
+        });
 
         return response()->json(['record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
     }

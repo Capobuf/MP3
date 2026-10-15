@@ -23,12 +23,12 @@ class TenantCsvTransfer
         'expense' => ['relation' => 'expenses', 'fields' => ['title', 'year', 'allocated_amount', 'actual_amount', 'notes', 'period_starts_on', 'period_ends_on'], 'refs' => ['vendor_ref' => ['vendor_id', 'vendor'], 'contract_ref' => ['contract_id', 'contract'], 'project_ref' => ['project_id', 'project']]],
         'expense-line' => ['relation' => 'lines', 'fields' => ['description', 'type', 'unit_price', 'quantity', 'total', 'position', 'period_starts_on', 'period_ends_on', 'year'], 'refs' => ['expense_ref' => ['expense_id', 'expense']]],
         'budget-year' => ['relation' => 'budgetYears', 'fields' => ['year', 'structure_copied', 'dismissed_sources'], 'refs' => []],
-        'budget-entry' => ['relation' => 'budgetEntries', 'fields' => ['type', 'description', 'manual_allocated', 'manual_actual', 'included', 'position'], 'refs' => ['budget_year_ref' => ['budget_year_id', 'budget-year'], 'contract_ref' => ['contract_id', 'contract'], 'project_ref' => ['project_id', 'project'], 'expense_ref' => ['expense_id', 'expense'], 'cost_center_ref' => ['cost_center_id', 'cost-center']]],
+        'budget-entry' => ['relation' => 'budgetEntries', 'fields' => ['type', 'included', 'position'], 'refs' => ['budget_year_ref' => ['budget_year_id', 'budget-year'], 'contract_ref' => ['contract_id', 'contract'], 'project_ref' => ['project_id', 'project'], 'expense_ref' => ['expense_id', 'expense'], 'cost_center_ref' => ['cost_center_id', 'cost-center']]],
     ];
 
     private const PIVOTS = ['contract', 'project', 'expense'];
 
-    private const MONEY = ['reference_amount', 'allocated_amount', 'actual_amount', 'unit_price', 'total', 'manual_allocated', 'manual_actual'];
+    private const MONEY = ['reference_amount', 'allocated_amount', 'actual_amount', 'unit_price', 'total'];
 
     /** @return 'vendors'|'contracts'|'projects'|'expenses'|'costCenters'|'budgetYears'|'budgetEntries' */
     private function tenantRelation(string $type): string
@@ -204,7 +204,7 @@ class TenantCsvTransfer
                         Values::invalid('year', 'Anno di Budget duplicato.');
                     } $unique[$key] = true;
                 }
-                if ($type === 'budget-entry' && $data['type'] !== 'manual') {
+                if ($type === 'budget-entry') {
                     $key = $data['budget_year_ref'].':'.$data[$data['type'].'_ref'];
                     if (isset($unique[$key])) {
                         Values::invalid('source', 'Sorgente duplicata nello stesso Budget.');
@@ -281,7 +281,7 @@ class TenantCsvTransfer
                 $field === 'year' => [$type === 'expense-line' ? 'nullable' : 'required', 'integer', 'between:2000,2100'],
                 $field === 'position' => ['required', 'integer', 'min:0', 'max:4294967295'],
                 in_array($field, ['included', 'structure_copied'], true) => ['required', 'boolean'],
-                $field === 'type' => ['required', 'in:'.($type === 'expense-line' ? 'allocated,actual' : 'manual,contract,project,expense')],
+                $field === 'type' => ['required', 'in:'.($type === 'expense-line' ? 'allocated,actual' : 'contract,project,expense')],
                 $field === 'status' => ['nullable', 'string', 'max:255'],
                 in_array($field, ['name', 'title'], true) => ['required', 'string', 'max:255'],
                 default => ['nullable', 'string', 'max:'.(in_array($field, ['notes', 'description'], true) && $type !== 'expense-line' && $type !== 'budget-entry' ? '10000' : '255')],
@@ -332,9 +332,6 @@ class TenantCsvTransfer
                 if (($data[$source.'_ref'] !== null) !== ($data['type'] === $source)) {
                     Values::invalid('type', 'Sorgente Budget incoerente.');
                 }
-            }
-            if ($data['type'] === 'manual' ? trim($data['description'] ?? '') === '' : ($data['description'] !== null || $data['manual_allocated'] !== null || $data['manual_actual'] !== null)) {
-                Values::invalid('type', 'Attributi della voce Budget incoerenti con la sorgente.');
             }
         }
     }

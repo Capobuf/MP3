@@ -7,10 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * @property string|null $manual_allocated
- * @property string|null $manual_actual
+ * @property 'contract'|'project'|'expense' $type
+ * @property int|null $expense_id
  */
-#[Fillable(['tenant_id', 'type', 'contract_id', 'project_id', 'expense_id', 'description', 'manual_allocated', 'manual_actual', 'cost_center_id', 'included', 'position'])]
+#[Fillable(['tenant_id', 'type', 'contract_id', 'project_id', 'expense_id', 'cost_center_id', 'included', 'position'])]
 class BudgetEntry extends Model
 {
     /** @return BelongsTo<BudgetYear, $this> */
@@ -46,6 +46,6 @@ class BudgetEntry extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['included' => 'boolean', 'position' => 'integer', 'manual_allocated' => 'decimal:2', 'manual_actual' => 'decimal:2'];
+        return ['included' => 'boolean', 'position' => 'integer'];
     }
 }

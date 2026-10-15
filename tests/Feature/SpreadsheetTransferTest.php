@@ -97,7 +97,7 @@ class SpreadsheetTransferTest extends TestCase
         $tenant->budgetYears()->create(['year' => 2026]);
         foreach ([
             'expenses' => ['allocated_amount', ['Spesa', 2026, null, null, null, null, null, null, '12.34', '0.00', null]],
-            'budget' => ['manual_allocated', [2026, 'manual', null, 'Voce', '12.34', '0.00', null]],
+            'budget' => ['allocated_amount', [2026, 'new-expense', null, 'Voce', '12.34', '0.00', null]],
         ] as $resource => [$field, $row]) {
             $book = $this->workbook('/t/ambiente/'.$resource.'/import-template.xlsx');
             $headers = $book->getSheet(0)->rangeToArray('A1:'.$book->getSheet(0)->getHighestDataColumn().'1')[0];
@@ -111,9 +111,9 @@ class SpreadsheetTransferTest extends TestCase
             $this->postJson('/t/ambiente/'.$resource.'/import/commit', ['file' => $file, 'token' => $preview->json('token')])
                 ->assertOk()->assertJsonPath('created', 1);
         }
-        $this->assertSame('12.34', $tenant->expenses()->sole()->allocated_amount);
-        $this->assertSame('0.00', $tenant->expenses()->sole()->actual_amount);
-        $this->assertSame('12.34', $tenant->budgetYears()->sole()->entries()->sole()->manual_allocated);
+        $this->assertSame('12.34', $tenant->expenses()->where('title', 'Spesa')->sole()->allocated_amount);
+        $this->assertSame('0.00', $tenant->expenses()->where('title', 'Spesa')->sole()->actual_amount);
+        $this->assertSame('12.34', $tenant->budgetYears()->sole()->entries()->sole()->expense->allocated_amount);
         $budget = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
         $this->assertSame('Allocato', $budget->getSheet(0)->getCell('F1')->getValue());
         $this->assertSame('Allocato', $budget->getSheet(1)->getCell('C1')->getValue());
@@ -168,13 +168,22 @@ class SpreadsheetTransferTest extends TestCase
             'cost-centers' => [['IT', null]],
             'contracts' => [['Canone', '001', '01/01/2026', '31/12/2026', 100, 'IT', null]],
             'projects' => [['Progetto', 'Descrizione', 'attivo', null, null, 'IT']],
-            'budget' => [[2026, 'manual', null, 'Budget libero', 0, null, 'IT'], [2026, 'contract', 'Canone', null, null, null, 'IT']],
+            'budget' => [[2026, 'new-expense', null, 'Budget libero', 0, null, 'IT'], [2026, 'contract', 'Canone', null, null, null, 'IT']],
         ];
         foreach ($files as $resource => $rows) {
             $file = $this->file($resource, $rows);
             $preview = $this->postJson('/t/ambiente/'.$resource.'/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
             $this->postJson('/t/ambiente/'.$resource.'/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
         }
+        $this->assertDatabaseCount('expenses', 1);
+        $this->assertDatabaseMissing('budget_entries', ['type' => 'manual']);
+        $free = $tenant->expenses()->sole();
+        $this->assertSame('0.00', $free->allocated_amount);
+        $this->assertNull($free->actual_amount);
+        $file = $this->file('budget', $files['budget']);
+        $repeat = $this->postJson('/t/ambiente/budget/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0)->assertJsonPath('duplicates', 2);
+        $this->postJson('/t/ambiente/budget/import/commit', ['file' => $file, 'token' => $repeat->json('token')])->assertOk();
+        $this->assertDatabaseCount('expenses', 1);
         $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
         $this->assertSame(3, $book->getSheetCount());
         $original = $this->file('vendors', [['Nuovo', null, null, null, null]]);

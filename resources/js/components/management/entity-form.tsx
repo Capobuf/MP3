@@ -198,6 +198,7 @@ export function EntityForm({
     options,
     contractContext,
     projectContext,
+    budgetYearId,
     onClose,
     onSaved,
     onBusyChange,
@@ -210,6 +211,7 @@ export function EntityForm({
     options: Options;
     contractContext?: RecordData;
     projectContext?: RecordData;
+    budgetYearId?: number;
     onClose: () => void;
     onSaved: (record: RecordData) => void;
     onBusyChange?: (busy: boolean) => void;
@@ -446,6 +448,8 @@ export function EntityForm({
                 }
             }
             if (contractContext) payload.contract_entry = true;
+            if (budgetYearId && !current.record)
+                payload.budget_year_id = budgetYearId;
         }
         // Proposed descriptions and default quantities do not create a condition.
         const initialLines =

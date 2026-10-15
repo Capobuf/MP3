@@ -21,7 +21,10 @@ class ExpenseRequest extends FormRequest
         /** @var Tenant $tenant */
         $tenant = $this->route('tenant');
 
-        return self::forTenant($tenant, $this->isMethod('patch'));
+        return [
+            ...self::forTenant($tenant, $this->isMethod('patch')),
+            'budget_year_id' => $this->isMethod('patch') ? ['prohibited'] : ['nullable', 'integer', Rule::exists('budget_years', 'id')->where('tenant_id', $tenant->id)->where('year', $this->input('year'))],
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -61,6 +64,7 @@ class ExpenseRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'budget_year_id.exists' => 'Il Budget di partenza non è disponibile per questo ambiente e anno. Conserva l’anno del Budget.',
             'lines.*.description.required' => 'Inserisci la descrizione della riga.',
             'lines.*.type.in' => 'Seleziona allocato o effettivo.',
             'lines.*.unit_price.required' => 'Inserisci il prezzo unitario della riga.',

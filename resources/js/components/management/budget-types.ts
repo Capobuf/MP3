@@ -3,12 +3,11 @@ import type { SummaryAnalytics } from './dashboard-summary';
 import type { Expense, Option, Options } from './types';
 import type { Tenant } from '@/types';
 
-export type BudgetType = 'contract' | 'project' | 'expense' | 'manual';
+export type BudgetType = 'contract' | 'project' | 'expense';
 export const budgetLabels: Record<BudgetType, string> = {
     contract: 'Contratti',
     project: 'Progetti',
     expense: 'Spese singole',
-    manual: 'Voci manuali',
 };
 export const budgetTypes = Object.keys(budgetLabels) as BudgetType[];
 export type BudgetTotals = {
@@ -36,8 +35,6 @@ export type BudgetEntry = Omit<
     allocated: string | null;
     actual: string | null;
     variance: string | null;
-    manual_allocated: string | null;
-    manual_actual: string | null;
     cost_center_id: number | null;
     cost_center: Option | null;
     vendor: Option | null;
@@ -69,7 +66,7 @@ export type BudgetProps = {
 };
 export type BudgetSuggestion = {
     key: string;
-    type: Exclude<BudgetType, 'manual'>;
+    type: BudgetType;
     source_id: number;
     entry_id: number | null;
     description: string;
@@ -79,9 +76,6 @@ export type BudgetSuggestion = {
     expense_ids: number[];
 };
 export type BudgetChanges = {
-    description?: string;
-    manual_allocated?: string | null;
-    manual_actual?: string | null;
     cost_center_id?: number | null;
 };
 export type BudgetMutate = (
