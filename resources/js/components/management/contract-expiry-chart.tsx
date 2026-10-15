@@ -192,7 +192,7 @@ export function ContractExpiryChart({
                                 <TableRow key={contract.id}>
                                     <TableCell className="whitespace-normal">
                                         <Link
-                                            className="font-medium underline underline-offset-4"
+                                            className="font-medium text-primary"
                                             href={`/t/${slug}/contracts/${contract.id}?year=${expiry.year}`}
                                         >
                                             {contract.name}
