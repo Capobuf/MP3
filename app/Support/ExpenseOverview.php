@@ -129,29 +129,6 @@ final class ExpenseOverview
         return $result;
     }
 
-    /** @param Builder<Expense> $query
-     * @return array<int, array<string, mixed>>
-     */
-    public static function chart(Builder $query, Tenant $tenant, string $relation): array
-    {
-        $field = $relation.'_id';
-        $groups = (clone $query)->reorder()->select($field)->selectRaw('
-            SUM(allocated_amount) as allocated, SUM(actual_amount) as actual,
-            COUNT(*) as expense_count,
-            SUM(CASE WHEN allocated_amount IS NULL OR actual_amount IS NULL THEN 1 ELSE 0 END) as incomplete
-        ')->groupBy($field)->orderByRaw('COALESCE(SUM(allocated_amount), 0) + COALESCE(SUM(actual_amount), 0) DESC')->limit(12)->get();
-        $names = $tenant->{$relation.'s'}()->whereIn('id', $groups->pluck($field)->filter())->pluck('name', 'id');
-
-        return $groups->map(fn (Expense $row) => [
-            'id' => $row->getAttribute($field) ?? 'none',
-            'name' => $names[$row->getAttribute($field)] ?? ($relation === 'vendor' ? 'Senza fornitore' : 'Senza progetto'),
-            'allocated' => $row->getAttribute('allocated'),
-            'actual' => $row->getAttribute('actual'),
-            'count' => (int) $row->getAttribute('expense_count'),
-            'incomplete' => (int) $row->getAttribute('incomplete'),
-        ])->all();
-    }
-
     /** @param array<string, string|int>|null $totals
      * @return array<string, mixed>
      */

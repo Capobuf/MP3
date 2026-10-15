@@ -325,9 +325,9 @@ class ManagementTest extends TestCase
         $this->tenant->expenses()->create(['title' => 'Anno precedente', 'year' => 2025, 'allocated_amount' => '999']);
         $this->other->expenses()->create(['title' => 'Altro tenant', 'year' => 2026, 'allocated_amount' => '999']);
         $this->get('/t/alfa/dashboard?year=2026&vendor_id='.$vendor->id)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('totals.allocated', '38.30')->where('totals.actual', '21.50')->where('totals.variance', '0.10')->where('totals.incomplete', 2)->where('totals.count', 5)->has('expenses.data', 5)->where('vendorChart.0.name', 'Uno'));
+            ->where('totals.allocated', '38.30')->where('totals.actual', '21.50')->where('totals.variance', '0.10')->where('totals.incomplete', 2)->where('totals.count', 5)->has('expenses.data', 5)->where('analytics.vendors.0.name', 'Uno'));
         $this->get('/t/alfa/dashboard?year=2025')->assertInertia(fn (Assert $page) => $page->where('totals.allocated', '999.00')->has('expenses.data', 1));
-        $this->get('/t/alfa/dashboard?year=2026&search=inesistente')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0)->where('totals.variance', '0.00')->has('vendorChart', 0));
+        $this->get('/t/alfa/dashboard?year=2026&search=inesistente')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0)->where('totals.variance', '0.00')->has('analytics.vendors', 0));
     }
 
     public function test_cross_tenant_records_cannot_be_read_modified_deleted_or_linked(): void
@@ -460,12 +460,12 @@ class ManagementTest extends TestCase
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['actual_amount' => '0'])->assertOk()->assertJsonPath('record.variance', '-12.50');
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
             ->where('totals.allocated', '12.50')->where('totals.actual', '0.00')->where('totals.variance', '-12.50')->where('totals.incomplete', 0)
-            ->where('vendorChart.0.id', $vendor->id)->where('projectChart.0.id', $project->id));
+            ->missing('vendorChart')->missing('projectChart')->missing('expiringContracts')->where('analytics.vendors.0.id', $vendor->id)->where('analytics.projects.0.id', $project->id));
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['allocated_amount' => null])->assertOk()->assertJsonPath('record.variance', null);
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('totals.incomplete', 1));
         $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$expense->id]])->assertOk();
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
-            ->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00')->has('vendorChart', 0)->has('projectChart', 0));
+            ->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00')->has('analytics.vendors', 0)->has('analytics.projects', 0));
     }
 
     public function test_server_sorting_preserves_filters_and_pagination(): void

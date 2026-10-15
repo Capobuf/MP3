@@ -24,9 +24,6 @@ class TenantDashboardController extends Controller
 
         return Inertia::render('tenants/dashboard', [
             ...ExpenseOverview::page($tenant, $request, $totals),
-            'vendorChart' => $analytics['vendors'],
-            'projectChart' => $analytics['projects'],
-            'expiringContracts' => $analytics['expiry']['upcoming'],
             'analytics' => $analytics,
         ]);
     }
