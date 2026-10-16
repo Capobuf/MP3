@@ -75,7 +75,6 @@ export function draftLines(record?: RecordData): DraftLine[] {
           });
     return lines.map((line) => ({
         ...line,
-        year: line.year ?? record?.year,
         key: lineKey(),
     }));
 }

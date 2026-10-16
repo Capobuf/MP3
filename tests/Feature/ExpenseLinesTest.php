@@ -86,6 +86,26 @@ class ExpenseLinesTest extends TestCase
         $this->assertDatabaseCount('expense_lines', 0);
     }
 
+    public function test_metadata_and_line_edits_preserve_individual_and_inherited_attributions(): void
+    {
+        $lines = [
+            [...$this->line('Ereditata', 'actual', '100'), 'year' => null, 'period_starts_on' => null, 'period_ends_on' => null],
+            [...$this->line('2027', 'actual', '200'), 'year' => 2027, 'period_starts_on' => '2027-01-01', 'period_ends_on' => '2027-12-31'],
+        ];
+        $response = $this->postJson('/t/righe/expenses', ['title' => 'Pluriennale', 'year' => 2026, 'lines' => $lines])->assertCreated();
+        $url = '/t/righe/expenses/'.$response->json('record.id');
+        $expense = $this->tenant->expenses()->findOrFail($response->json('record.id'));
+        $before = $expense->lines()->get()->toArray();
+        // An unchanged shared period must not become an instruction to rewrite lines.
+        $this->patchJson($url, ['title' => 'Rinominata', 'notes' => 'Note', 'year' => 2026, 'period_starts_on' => $response->json('record.period_starts_on'), 'period_ends_on' => $response->json('record.period_ends_on')])->assertOk();
+        $this->assertSame($before, $expense->lines()->get()->toArray());
+        $lines[0]['unit_price'] = '110';
+        $this->patchJson($url, ['lines' => $lines])->assertOk()
+            ->assertJsonPath('record.year', 2026)->assertJsonPath('record.lines.0.year', null)
+            ->assertJsonPath('record.lines.1.year', 2027)->assertJsonPath('record.lines.1.total', '200.00')
+            ->assertJsonPath('record.lines.1.period_starts_on', '2027-01-01');
+    }
+
     public function test_invalid_lines_are_rejected_atomically(): void
     {
         $line = $this->line('Valida', 'allocated', '10');

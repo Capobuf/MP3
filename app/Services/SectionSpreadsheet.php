@@ -35,7 +35,7 @@ class SectionSpreadsheet
             'projects' => ['Nome' => 'name', 'Descrizione' => 'description', 'Stato' => 'status', 'Data iniziale' => 'starts_on', 'Data finale' => 'ends_on', 'Centri di costo' => 'cost_center_ids'],
             'expenses' => ['Descrizione' => 'title', 'Anno' => 'year', 'Fornitore' => 'vendor_id', 'Contratto' => 'contract_id', 'Progetto' => 'project_id', 'Centri di costo' => 'cost_center_ids', 'Periodo iniziale' => 'period_starts_on', 'Periodo finale' => 'period_ends_on', 'Importo allocato' => 'allocated_amount', 'Importo effettivo' => 'actual_amount', 'Note' => 'notes'],
             'cost-centers' => ['Nome' => 'name', 'Centro padre' => 'parent_id'],
-            'budget' => ['Anno' => 'year', 'Tipo' => 'type', 'Sorgente' => 'source_id', 'Descrizione' => 'description', 'Importo allocato' => 'manual_allocated', 'Importo effettivo' => 'manual_actual', 'Centro di costo' => 'cost_center_id'],
+            'budget' => ['Anno' => 'year', 'Tipo' => 'type', 'Sorgente' => 'source_id', 'Descrizione' => 'description', 'Importo allocato' => 'allocated_amount', 'Importo effettivo' => 'actual_amount', 'Centro di costo' => 'cost_center_id'],
             default => abort(404),
         };
     }
@@ -48,7 +48,7 @@ class SectionSpreadsheet
             $formats[$column.':'.$column] = match (true) {
                 in_array($field, ['year'], true) => '0',
                 str_ends_with($field, '_on') => self::DATE,
-                in_array($field, ['reference_amount', 'allocated_amount', 'actual_amount', 'manual_allocated', 'manual_actual'], true) => self::EUR,
+                in_array($field, ['reference_amount', 'allocated_amount', 'actual_amount'], true) => self::EUR,
                 default => '@',
             };
         }
@@ -62,7 +62,7 @@ class SectionSpreadsheet
                 'Riferimenti: nome esatto del record esistente. Per il fornitore puoi usare anche la partita IVA. Le corrispondenze ambigue bloccano la riga.',
                 'Centri di costo: nome univoco o percorso Padre / Figlio. Separa più centri con punto e virgola. Importa prima i centri padre, poi i figli.',
                 'Progetti: usa il nome esatto di uno stato definito nelle impostazioni ambiente. Vuoto significa nessuno stato.',
-                'Budget: anno già creato, tipo manual, contract, project o expense. Per manual usa descrizione e importi; per gli altri usa una sorgente esistente e lascia descrizione e importi vuoti.',
+                'Budget: anno già creato, tipo new-expense, contract, project o expense. Per new-expense usa descrizione e importi: verrà creata una spesa reale; per gli altri usa una sorgente esistente e lascia descrizione e importi vuoti.',
                 'Spese: una riga rappresenta una spesa semplice. Le condizioni avanzate si gestiscono in MP3 o si trasferiscono con il CSV tecnico.',
                 'Non inserire formule. Correggi gli errori nel file e caricalo nuovamente. Nessuna modifica viene salvata prima della conferma.',
             ])),
@@ -185,7 +185,7 @@ class SectionSpreadsheet
         $selected = EconomicYearContext::year($tenant, $request);
         $year = $tenant->budgetYears()->where('year', $selected)->first();
         $snapshot = $year ? app(AnnualBudget::class)->snapshot($tenant, $year) : ['entries' => [], 'totals' => [], 'groups' => []];
-        $typeNames = ['manual' => 'Voce libera', 'contract' => 'Contratto', 'project' => 'Progetto', 'expense' => 'Spesa'];
+        $typeNames = ['contract' => 'Contratto', 'project' => 'Progetto', 'expense' => 'Spesa'];
         $rows = array_map(fn ($row) => [$selected, $typeNames[$row['type']], $row['description'], $row['included'] ? 'Sì' : 'No', $row['cost_center'] ? self::path($row['cost_center']) : null, self::amount($row['allocated']), self::amount($row['actual']), self::amount($row['variance']), $row['incomplete'] ? 'Incompleto' : 'Completo', $row['notes'], self::excelDate($row['starts_on']), self::excelDate($row['ends_on'])], $snapshot['entries']);
         $summaries = [];
         foreach (['Totale' => $snapshot['totals'], ...$snapshot['groups']] as $label => $totals) {

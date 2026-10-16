@@ -62,7 +62,7 @@ const fields: Record<Kind, FormField[]> = {
         { key: 'notes', label: 'Note', type: 'textarea' },
     ],
     contracts: [
-        { key: 'name', label: 'Nome', required: true },
+        { key: 'name', label: 'Nome' },
         { key: 'vendor_id', label: 'Fornitore', catalog: 'vendors' },
         { key: 'starts_on', label: 'Inizio contratto', type: 'date' },
         { key: 'ends_on', label: 'Fine contratto', type: 'date' },
@@ -128,12 +128,14 @@ function linePayload(lines: DraftLine[], defaultYear?: string) {
         type: line.type,
         unit_price: decimalInput(line.unit_price),
         quantity: decimalInput(line.quantity),
-        ...(defaultYear
-            ? {
-                  period_starts_on: line.period_starts_on || null,
-                  period_ends_on: line.period_ends_on || null,
-                  year: line.year ?? defaultYear,
-              }
+        ...('period_starts_on' in line || defaultYear
+            ? { period_starts_on: line.period_starts_on || null }
+            : {}),
+        ...('period_ends_on' in line || defaultYear
+            ? { period_ends_on: line.period_ends_on || null }
+            : {}),
+        ...('year' in line || defaultYear
+            ? { year: line.year ?? defaultYear ?? null }
             : {}),
     }));
 }
@@ -196,6 +198,7 @@ export function EntityForm({
     options,
     contractContext,
     projectContext,
+    budgetYearId,
     onClose,
     onSaved,
     onBusyChange,
@@ -208,6 +211,7 @@ export function EntityForm({
     options: Options;
     contractContext?: RecordData;
     projectContext?: RecordData;
+    budgetYearId?: number;
     onClose: () => void;
     onSaved: (record: RecordData) => void;
     onBusyChange?: (busy: boolean) => void;
@@ -218,7 +222,9 @@ export function EntityForm({
         const initial = frame(kind, year, record);
         if (kind === 'expenses' && contractContext && !record) {
             initial.values.title = contractContext.name ?? '';
-            initial.lines = [emptyDraftLine('allocated', contractContext.name)];
+            initial.lines = [
+                emptyDraftLine('allocated', contractContext.name ?? ''),
+            ];
             initial.values.contract_id = String(contractContext.id);
             if (
                 !contractContext.has_period_expenses &&
@@ -415,15 +421,37 @@ export function EntityForm({
             ]),
         );
         if (current.kind === 'expenses') {
+            const original = JSON.parse(current.original) as Frame;
+            if (current.record) {
+                for (const field of [
+                    'year',
+                    'period_starts_on',
+                    'period_ends_on',
+                ]) {
+                    if (current.values[field] === original.values[field])
+                        delete payload[field];
+                }
+            }
             if (current.detailed) {
                 delete payload.allocated_amount;
                 delete payload.actual_amount;
-                payload.lines = linePayload(
-                    current.lines,
-                    contractLines ? current.values.year : undefined,
-                );
+                if (
+                    !current.record ||
+                    !original.detailed ||
+                    JSON.stringify(current.lines) !==
+                        JSON.stringify(original.lines)
+                ) {
+                    payload.lines = linePayload(
+                        current.lines,
+                        contractLines && !current.record
+                            ? current.values.year
+                            : undefined,
+                    );
+                }
             }
             if (contractContext) payload.contract_entry = true;
+            if (budgetYearId && !current.record)
+                payload.budget_year_id = budgetYearId;
         }
         // Proposed descriptions and default quantities do not create a condition.
         const initialLines =
@@ -466,7 +494,13 @@ export function EntityForm({
                     ...previous,
                     [catalog]: [
                         ...previous[catalog],
-                        { id: data.record.id, name: data.record.name ?? '' },
+                        {
+                            id: data.record.id,
+                            name:
+                                data.record.display_name ??
+                                data.record.name ??
+                                '',
+                        },
                     ],
                 }));
                 setFrames((previous) =>
@@ -644,8 +678,10 @@ export function EntityForm({
                         )}
                         {current.kind === 'expenses' && contractContext && (
                             <p className="text-sm text-muted-foreground">
-                                Contratto: {contractContext.name}. Date di
-                                riferimento:{' '}
+                                Contratto:{' '}
+                                {contractContext.display_name ??
+                                    contractContext.name}
+                                . Date di riferimento:{' '}
                                 {dateLabel(contractContext.starts_on)} –{' '}
                                 {dateLabel(contractContext.ends_on)}. Puoi
                                 indicare anche un periodo diverso.

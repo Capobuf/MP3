@@ -1,17 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
+import { Link } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
     Sheet,
     SheetContent,
@@ -20,8 +10,7 @@ import {
     SheetDescription,
     SheetFooter,
 } from '@/components/ui/sheet';
-import { Field, FieldLabel, FieldGroup } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { Field, FieldLabel } from '@/components/ui/field';
 import {
     Select,
     SelectContent,
@@ -45,7 +34,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
 import {
     Empty,
     EmptyHeader,
@@ -53,11 +41,9 @@ import {
     EmptyDescription,
 } from '@/components/ui/empty';
 import { ChevronsUpDown } from 'lucide-react';
-import { MoneyField } from './money-field';
-import { api, decimalInput, money } from './helpers';
+import { api, money } from './helpers';
 import { budgetLabels, budgetTypes } from './budget-types';
 import type {
-    BudgetChanges,
     BudgetEntry,
     BudgetMutate,
     BudgetSuggestion,
@@ -101,158 +87,6 @@ export function BudgetCenterSelect({
     );
 }
 
-export function BudgetManualForm({
-    entry,
-    centers,
-    disabled,
-    onSave,
-    highlightIncomplete = false,
-}: {
-    entry?: BudgetEntry;
-    centers: Option[];
-    disabled: boolean;
-    onSave: (changes: BudgetChanges) => Promise<boolean>;
-    highlightIncomplete?: boolean;
-}) {
-    const [description, setDescription] = useState(entry?.description ?? '');
-    const [allocated, setAllocated] = useState(entry?.manual_allocated ?? '');
-    const [actual, setActual] = useState(entry?.manual_actual ?? '');
-    const [center, setCenter] = useState<number | null>(
-        entry?.cost_center_id ?? null,
-    );
-    const dirty =
-        description !== (entry?.description ?? '') ||
-        allocated !== (entry?.manual_allocated ?? '') ||
-        actual !== (entry?.manual_actual ?? '') ||
-        center !== (entry?.cost_center_id ?? null);
-    const navigation = useUnsavedNavigation(dirty && !disabled);
-    return (
-        <>
-            <form
-                aria-busy={disabled}
-                data-undo-dirty={dirty}
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void onSave({
-                        description,
-                        manual_allocated: decimalInput(allocated),
-                        manual_actual: decimalInput(actual),
-                        cost_center_id: center,
-                    });
-                }}
-                className="flex flex-col gap-4"
-            >
-                <FieldGroup className="grid gap-4 sm:grid-cols-2">
-                    <Field className="sm:col-span-2">
-                        <FieldLabel
-                            htmlFor={`description-${entry?.id ?? 'new'}`}
-                        >
-                            Descrizione
-                        </FieldLabel>
-                        <Input
-                            id={`description-${entry?.id ?? 'new'}`}
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            required
-                            maxLength={255}
-                            disabled={disabled}
-                        />
-                    </Field>
-                    <Field
-                        data-budget-incomplete={
-                            highlightIncomplete && allocated.trim() === ''
-                        }
-                        className={cn(
-                            highlightIncomplete &&
-                                allocated.trim() === '' &&
-                                'rounded-md bg-accent p-3 ring-1 ring-primary/40',
-                        )}
-                    >
-                        <FieldLabel htmlFor={`allocated-${entry?.id ?? 'new'}`}>
-                            Allocato facoltativo
-                        </FieldLabel>
-                        <MoneyField
-                            id={`allocated-${entry?.id ?? 'new'}`}
-                            value={allocated}
-                            onChange={setAllocated}
-                            disabled={disabled}
-                        />
-                    </Field>
-                    <Field
-                        data-budget-incomplete={
-                            highlightIncomplete && actual.trim() === ''
-                        }
-                        className={cn(
-                            highlightIncomplete &&
-                                actual.trim() === '' &&
-                                'rounded-md bg-accent p-3 ring-1 ring-primary/40',
-                        )}
-                    >
-                        <FieldLabel htmlFor={`actual-${entry?.id ?? 'new'}`}>
-                            Effettivo facoltativo
-                        </FieldLabel>
-                        <MoneyField
-                            id={`actual-${entry?.id ?? 'new'}`}
-                            value={actual}
-                            onChange={setActual}
-                            disabled={disabled}
-                        />
-                    </Field>
-                    <Field className="sm:col-span-2">
-                        <FieldLabel>Centro di costo principale</FieldLabel>
-                        <BudgetCenterSelect
-                            centers={centers}
-                            value={center}
-                            onChange={setCenter}
-                            disabled={disabled}
-                        />
-                    </Field>
-                </FieldGroup>
-                <p className="text-sm text-muted-foreground">
-                    Vuoto indica un importo da compilare. Zero è un importo
-                    disponibile.
-                </p>
-                <Button type="submit" disabled={disabled} className="self-end">
-                    {disabled
-                        ? 'Salvataggio…'
-                        : entry
-                          ? 'Salva voce'
-                          : 'Aggiungi voce libera'}
-                </Button>
-            </form>
-            <AlertDialog
-                open={navigation.pending !== null}
-                onOpenChange={(open) => {
-                    if (!open) navigation.cancel();
-                }}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Scartare le modifiche?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Ci sono dati non salvati nel form. Puoi tornare a
-                            modificarli.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>
-                            Continua a modificare
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            variant="destructive"
-                            onClick={navigation.confirm}
-                        >
-                            Scarta modifiche
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
-    );
-}
-
 function SourcePicker({
     slug,
     type,
@@ -260,7 +94,7 @@ function SourcePicker({
     onChange,
 }: {
     slug: string;
-    type: Exclude<BudgetType, 'manual'>;
+    type: BudgetType;
     value: Option | null;
     onChange: (value: Option) => void;
 }) {
@@ -391,6 +225,7 @@ export function BudgetEntrySheet({
     open,
     onClose,
     slug,
+    budgetYear,
     entries,
     centers,
     busy,
@@ -399,6 +234,7 @@ export function BudgetEntrySheet({
     open: boolean;
     onClose: () => void;
     slug: string;
+    budgetYear: { id: number; year: number };
     entries: BudgetEntry[];
     centers: Option[];
     busy: boolean;
@@ -449,78 +285,65 @@ export function BudgetEntrySheet({
                             </SelectContent>
                         </Select>
                     </Field>
-                    {type === 'manual' ? (
-                        <BudgetManualForm
-                            centers={centers}
-                            disabled={busy}
-                            onSave={async (changes) => {
-                                const ok = await mutate('entries', 'POST', {
-                                    entries: [{ type: 'manual', ...changes }],
-                                });
-                                if (ok) onClose();
-                                return ok;
-                            }}
-                        />
-                    ) : (
-                        <>
-                            <Field>
-                                <FieldLabel>Sorgente esistente</FieldLabel>
-                                <SourcePicker
-                                    key={type}
-                                    slug={slug}
-                                    type={type}
-                                    value={source}
-                                    onChange={setSource}
-                                />
-                            </Field>
-                            <Field>
-                                <FieldLabel>
-                                    Centro di costo principale
-                                </FieldLabel>
-                                <BudgetCenterSelect
-                                    value={center}
-                                    centers={centers}
-                                    onChange={setCenter}
-                                    disabled={busy || !!existing}
-                                />
-                            </Field>
-                            {existing && (
-                                <p role="status" className="text-sm">
-                                    {existing.included
-                                        ? 'Questa voce è già inclusa nel Budget.'
-                                        : 'Questa voce è esclusa. Puoi riattivarla mantenendo i suoi collegamenti.'}
-                                </p>
-                            )}
-                            <Button
-                                disabled={busy || !source || existing?.included}
-                                onClick={() => {
-                                    void (async () => {
-                                        const ok = await mutate(
-                                            'entries',
-                                            'POST',
+                    <Button asChild variant="outline" disabled={busy}>
+                        <Link
+                            href={`/t/${slug}/expenses/create?year=${budgetYear.year}&budget_year_id=${budgetYear.id}`}
+                        >
+                            Crea nuova spesa
+                        </Link>
+                    </Button>
+                    <>
+                        <Field>
+                            <FieldLabel>Sorgente esistente</FieldLabel>
+                            <SourcePicker
+                                key={type}
+                                slug={slug}
+                                type={type}
+                                value={source}
+                                onChange={setSource}
+                            />
+                        </Field>
+                        <Field>
+                            <FieldLabel>Centro di costo principale</FieldLabel>
+                            <BudgetCenterSelect
+                                value={center}
+                                centers={centers}
+                                onChange={setCenter}
+                                disabled={busy || !!existing}
+                            />
+                        </Field>
+                        {existing && (
+                            <p role="status" className="text-sm">
+                                {existing.included
+                                    ? 'Questa voce è già inclusa nel Budget.'
+                                    : 'Questa voce è esclusa. Puoi riattivarla mantenendo i suoi collegamenti.'}
+                            </p>
+                        )}
+                        <Button
+                            disabled={busy || !source || existing?.included}
+                            onClick={() => {
+                                void (async () => {
+                                    const ok = await mutate('entries', 'POST', {
+                                        entries: [
                                             {
-                                                entries: [
-                                                    {
-                                                        type,
-                                                        source_id: source?.id,
-                                                        cost_center_id: center,
-                                                        reactivate: !!existing,
-                                                    },
-                                                ],
+                                                type,
+                                                source_id: source?.id,
+                                                cost_center_id: center,
+                                                reactivate: !!existing,
                                             },
-                                        );
-                                        if (ok) onClose();
-                                    })();
-                                }}
-                            >
-                                {busy
-                                    ? 'Salvataggio…'
-                                    : existing
-                                      ? 'Riattiva voce'
-                                      : 'Aggiungi al Budget'}
-                            </Button>
-                        </>
-                    )}
+                                        ],
+                                    });
+                                    if (ok) onClose();
+                                })();
+                            }}
+                        >
+                            {busy
+                                ? 'Salvataggio…'
+                                : existing
+                                  ? 'Riattiva voce'
+                                  : 'Aggiungi al Budget'}
+                        </Button>
+                    </>
                 </div>
             </SheetContent>
         </Sheet>

@@ -293,6 +293,7 @@ function BudgetWorkspace({
                 </Alert>
             )}
             <BudgetTable
+                budgetYearId={year.id}
                 budget={budget}
                 slug={props.tenant.slug}
                 year={year.year}
@@ -310,6 +311,7 @@ function BudgetWorkspace({
                 }}
             />
             <BudgetEntrySheet
+                budgetYear={props.budgetYear!}
                 open={add}
                 onClose={() => setAdd(false)}
                 slug={props.tenant.slug}

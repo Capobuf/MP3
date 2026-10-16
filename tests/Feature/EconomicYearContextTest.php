@@ -122,7 +122,7 @@ class EconomicYearContextTest extends TestCase
                 $this->get('/t/alfa/'.$catalog.'/'.$records[$catalog]->id)->assertInertia(fn (Assert $page) => $page
                     ->where('year', $year)->where('totals.count', 1)
                     ->where('totals.actual', $year === 2025 ? '80.02' : '-10.04')
-                    ->where('breakdown.actual.net', $year === 2025 ? '80.02' : '-10.04')
+                    ->where($catalog === 'contracts' ? 'breakdown' : 'breakdown.actual.net', $catalog === 'contracts' ? null : ($year === 2025 ? '80.02' : '-10.04'))
                     ->where('expenses.data.0.year', $year));
             }
         }
@@ -150,7 +150,8 @@ class EconomicYearContextTest extends TestCase
     {
         foreach ([2025 => '10.00', 2026 => '20.00'] as $selected => $amount) {
             $year = $this->tenant->budgetYears()->create(['year' => $selected]);
-            $year->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'manual', 'description' => 'Voce', 'manual_allocated' => $amount]);
+            $expense = $this->tenant->expenses()->create(['title' => 'Voce', 'year' => $selected, 'allocated_amount' => $amount]);
+            $year->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
         }
         foreach ([2025 => '10.00', 2026 => '20.00'] as $selected => $amount) {
             $this->get('/t/alfa/expenses?year='.$selected)->assertOk();

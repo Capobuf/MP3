@@ -49,7 +49,7 @@ class SectionRows implements Import, OnEachRow, WithEvents, WithHeadingRow, With
         $formulas = [];
         foreach (SectionSpreadsheet::columns($this->resource) as $heading => $field) {
             $mapped[$field] = $values[Str::slug($heading, '_')]
-                ?? (in_array($field, ['allocated_amount', 'manual_allocated'], true) ? ($values['importo_previsto'] ?? null) : null);
+                ?? ($field === 'allocated_amount' ? ($values['importo_previsto'] ?? null) : null);
         }
         foreach ($row->getDelegate()->getCellIterator() as $cell) {
             if ($cell->getDataType() === DataType::TYPE_FORMULA) {

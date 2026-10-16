@@ -30,6 +30,30 @@ class ManagementTest extends TestCase
         $this->actingAs($user);
     }
 
+    public function test_contract_can_be_created_empty_and_its_dates_cleared_independently(): void
+    {
+        $response = $this->postJson('/t/alfa/contracts', [])->assertCreated();
+        $contract = $this->tenant->contracts()->findOrFail($response->json('record.id'));
+        $this->assertNull($contract->name);
+        $this->assertSame('Contratto senza nome', $contract->display_name);
+        $this->assertSame(0, $contract->expenses()->count());
+        $url = '/t/alfa/contracts/'.$contract->id;
+        $this->patchJson($url, ['starts_on' => '2026-06-13'])->assertOk()->assertJsonPath('record.ends_on', null);
+        $this->patchJson($url, ['ends_on' => '2027-06-13'])->assertOk()->assertJsonPath('record.starts_on', '2026-06-13');
+        $this->patchJson($url, ['ends_on' => '2026-01-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
+        $this->patchJson($url, ['starts_on' => null])->assertOk()->assertJsonPath('record.ends_on', '2027-06-13');
+        $this->patchJson($url, ['ends_on' => null, 'name' => ''])->assertOk()
+            ->assertJsonPath('record.starts_on', null)->assertJsonPath('record.name', null);
+        $this->patchJson($url, ['starts_on' => 'invalid'])->assertUnprocessable();
+        $this->patchJson($url, ['name' => str_repeat('x', 256)])->assertUnprocessable();
+        $this->get('/t/alfa/contracts')->assertInertia(fn (Assert $page) => $page->where('records.data.0.name', null));
+        $this->get($url)->assertInertia(fn (Assert $page) => $page->where('record.display_name', 'Contratto senza nome'));
+        $this->getJson('/t/alfa/contracts/options')->assertOk()->assertJsonPath('records.0.name', 'Contratto senza nome');
+        foreach (['vendors', 'projects'] as $catalog) {
+            $this->postJson('/t/alfa/'.$catalog, [])->assertUnprocessable()->assertJsonValidationErrors('name');
+        }
+    }
+
     public function test_catalog_fields_can_be_patched_without_resending_required_fields(): void
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore', 'email' => 'originale@example.com']);
@@ -84,7 +108,9 @@ class ManagementTest extends TestCase
     public function test_catalog_crud_and_required_fields(): void
     {
         foreach (['vendors', 'contracts', 'projects'] as $catalog) {
-            $this->postJson('/t/alfa/'.$catalog, [])->assertUnprocessable()->assertJsonValidationErrors('name');
+            if ($catalog !== 'contracts') {
+                $this->postJson('/t/alfa/'.$catalog, [])->assertUnprocessable()->assertJsonValidationErrors('name');
+            }
             $data = ['name' => 'Elemento '.$catalog];
             if ($catalog === 'projects') {
                 $data['status'] = 'pianificato';
@@ -325,9 +351,9 @@ class ManagementTest extends TestCase
         $this->tenant->expenses()->create(['title' => 'Anno precedente', 'year' => 2025, 'allocated_amount' => '999']);
         $this->other->expenses()->create(['title' => 'Altro tenant', 'year' => 2026, 'allocated_amount' => '999']);
         $this->get('/t/alfa/dashboard?year=2026&vendor_id='.$vendor->id)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('totals.allocated', '38.30')->where('totals.actual', '21.50')->where('totals.variance', '0.10')->where('totals.incomplete', 2)->where('totals.count', 5)->has('expenses.data', 5)->where('vendorChart.0.name', 'Uno'));
+            ->where('totals.allocated', '38.30')->where('totals.actual', '21.50')->where('totals.variance', '0.10')->where('totals.incomplete', 2)->where('totals.count', 5)->has('expenses.data', 5)->where('analytics.vendors.0.name', 'Uno'));
         $this->get('/t/alfa/dashboard?year=2025')->assertInertia(fn (Assert $page) => $page->where('totals.allocated', '999.00')->has('expenses.data', 1));
-        $this->get('/t/alfa/dashboard?year=2026&search=inesistente')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0)->where('totals.variance', '0.00')->has('vendorChart', 0));
+        $this->get('/t/alfa/dashboard?year=2026&search=inesistente')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0)->where('totals.variance', '0.00')->has('analytics.vendors', 0));
     }
 
     public function test_cross_tenant_records_cannot_be_read_modified_deleted_or_linked(): void
@@ -460,12 +486,12 @@ class ManagementTest extends TestCase
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['actual_amount' => '0'])->assertOk()->assertJsonPath('record.variance', '-12.50');
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
             ->where('totals.allocated', '12.50')->where('totals.actual', '0.00')->where('totals.variance', '-12.50')->where('totals.incomplete', 0)
-            ->where('vendorChart.0.id', $vendor->id)->where('projectChart.0.id', $project->id));
+            ->missing('vendorChart')->missing('projectChart')->missing('expiringContracts')->where('analytics.vendors.0.id', $vendor->id)->where('analytics.projects.0.id', $project->id));
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['allocated_amount' => null])->assertOk()->assertJsonPath('record.variance', null);
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('totals.incomplete', 1));
         $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$expense->id]])->assertOk();
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
-            ->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00')->has('vendorChart', 0)->has('projectChart', 0));
+            ->where('totals.count', 0)->where('totals.allocated', '0.00')->where('totals.actual', '0.00')->has('analytics.vendors', 0)->has('analytics.projects', 0));
     }
 
     public function test_server_sorting_preserves_filters_and_pagination(): void

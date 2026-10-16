@@ -409,7 +409,7 @@ export default function CatalogPage({
                                                                             value={
                                                                                 record.name
                                                                             }
-                                                                            label={`Nome di ${record.name}`}
+                                                                            label={`Nome di ${record.display_name ?? record.name}`}
                                                                             disabled={
                                                                                 deleting !==
                                                                                 null
@@ -433,7 +433,7 @@ export default function CatalogPage({
                                                                         >
                                                                             <Link
                                                                                 href={`${path}/${record.id}`}
-                                                                                aria-label={`Apri ${record.name}`}
+                                                                                aria-label={`Apri ${record.display_name ?? record.name}`}
                                                                             >
                                                                                 <ArrowUpRight />
                                                                             </Link>
@@ -442,12 +442,11 @@ export default function CatalogPage({
                                                                 ) : (
                                                                     <Link
                                                                         href={`${path}/${record.id}`}
-                                                                        aria-label={`Apri ${record.name}`}
+                                                                        aria-label={`Apri ${record.display_name ?? record.name}`}
                                                                         className="rounded focus-visible:ring-2 focus-visible:ring-ring"
                                                                     >
-                                                                        {
-                                                                            record.name
-                                                                        }
+                                                                        {record.display_name ??
+                                                                            record.name}
                                                                     </Link>
                                                                 )}
                                                             </TableCell>
@@ -469,7 +468,7 @@ export default function CatalogPage({
                                                                                               record.vendor_id,
                                                                                           )
                                                                                 }
-                                                                                label={`Fornitore di ${record.name}`}
+                                                                                label={`Fornitore di ${record.display_name ?? record.name}`}
                                                                                 disabled={
                                                                                     deleting !==
                                                                                     null
@@ -537,7 +536,7 @@ export default function CatalogPage({
                                                                                 value={
                                                                                     record.status
                                                                                 }
-                                                                                label={`Stato di ${record.name}`}
+                                                                                label={`Stato di ${record.display_name ?? record.name}`}
                                                                                 disabled={
                                                                                     deleting !==
                                                                                     null
@@ -608,7 +607,7 @@ export default function CatalogPage({
                                                                                 ) ??
                                                                                     [],
                                                                             )}
-                                                                            label={`Centri di costo di ${record.name}`}
+                                                                            label={`Centri di costo di ${record.display_name ?? record.name}`}
                                                                             disabled={
                                                                                 deleting !==
                                                                                 null
@@ -708,7 +707,7 @@ export default function CatalogPage({
                                                                                         ]
                                                                                     }
                                                                                     type="date"
-                                                                                    label={`${field === 'starts_on' ? 'Data iniziale' : 'Data finale'} di ${record.name}`}
+                                                                                    label={`${field === 'starts_on' ? 'Data iniziale' : 'Data finale'} di ${record.display_name ?? record.name}`}
                                                                                     disabled={
                                                                                         deleting !==
                                                                                         null
@@ -756,7 +755,7 @@ export default function CatalogPage({
                                                                                         field
                                                                                     ]
                                                                                 }
-                                                                                label={`${field === 'vat_number' ? 'Partita IVA' : field === 'email' ? 'Email' : 'Telefono'} di ${record.name}`}
+                                                                                label={`${field === 'vat_number' ? 'Partita IVA' : field === 'email' ? 'Email' : 'Telefono'} di ${record.display_name ?? record.name}`}
                                                                                 type={
                                                                                     field ===
                                                                                     'email'
@@ -809,7 +808,7 @@ export default function CatalogPage({
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
-                                                                            aria-label={`Azioni per ${record.name}`}
+                                                                            aria-label={`Azioni per ${record.display_name ?? record.name}`}
                                                                         >
                                                                             <Ellipsis />
                                                                         </Button>
@@ -866,7 +865,7 @@ export default function CatalogPage({
             {deleting && (
                 <DeleteRecord
                     url={`${path}/${deleting.id}`}
-                    label={deleting.name ?? ''}
+                    label={deleting.display_name ?? deleting.name ?? ''}
                     open
                     onOpenChange={(open) => {
                         if (!open) setDeleting(null);

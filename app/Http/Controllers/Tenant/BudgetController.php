@@ -7,6 +7,7 @@ use App\Http\Requests\BudgetEntriesRequest;
 use App\Models\BudgetYear;
 use App\Models\Tenant;
 use App\Services\AnnualBudget;
+use App\Services\AttachmentFiles;
 use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
 use Illuminate\Http\JsonResponse;
@@ -49,9 +50,12 @@ class BudgetController extends Controller
         return response()->json(['year' => $year->only('id', 'year')], 201);
     }
 
-    public function state(Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
+    public function state(Request $request, Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
     {
-        return response()->json(['budget' => $budget->snapshot($tenant, $budgetYear)]);
+        $data = $request->validate(['entry_ids' => ['nullable', 'string', 'regex:/^\d+(,\d+)*$/D']]);
+        $ids = $request->has('entry_ids') ? array_map('intval', array_values(array_filter(explode(',', $data['entry_ids'] ?? '')))) : null;
+
+        return response()->json(['budget' => $budget->snapshot($tenant, $budgetYear, $ids)]);
     }
 
     public function missing(Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
@@ -93,7 +97,7 @@ class BudgetController extends Controller
                 $suggestion = $suggestions->get($key);
                 if ($suggestion === null) {
                     // Already covered is an idempotent no-op; never insert arbitrary or stale sources.
-                    if ($data['type'] === 'manual' || ! $tenant->{$data['type'].'s'}()->whereKey($data['source_id'] ?? 0)->exists()) {
+                    if (! $tenant->{$data['type'].'s'}()->whereKey($data['source_id'] ?? 0)->exists()) {
                         throw ValidationException::withMessages(['entries' => 'La selezione non è valida. Riapri le spese mancanti.']);
                     }
 
@@ -112,50 +116,43 @@ class BudgetController extends Controller
     public function add(Tenant $tenant, BudgetYear $year, array $data, int $index): void
     {
         $type = $data['type'];
-        if ($type === 'manual') {
-            if (($data['source_id'] ?? null) !== null || trim($data['description'] ?? '') === '') {
-                throw ValidationException::withMessages(["entries.{$index}.description" => 'Una voce libera richiede una descrizione e nessuna sorgente.']);
-            }
-            $fields = ['description' => $data['description'], 'manual_allocated' => $data['manual_allocated'] ?? null, 'manual_actual' => $data['manual_actual'] ?? null];
-        } else {
-            if (($data['source_id'] ?? null) === null || ($data['description'] ?? null) !== null || ($data['manual_allocated'] ?? null) !== null || ($data['manual_actual'] ?? null) !== null) {
-                throw ValidationException::withMessages(["entries.{$index}.source_id" => 'Seleziona una sola sorgente; gli importi collegati sono calcolati automaticamente.']);
-            }
-            $source = $tenant->{$type.'s'}()->whereKey($data['source_id'])->lockForUpdate()->first();
-            if ($source === null) {
-                throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La sorgente non appartiene a questo ambiente o è stata eliminata.']);
-            }
-            $existing = $year->entries()->where($type.'_id', $source->id)->first();
-            if ($existing !== null) {
-                if (! $existing->included && ($data['reactivate'] ?? false)) {
-                    $existing->update(['included' => true]);
-                } elseif (! $existing->included) {
-                    throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La voce è già presente ma esclusa. Riattivala esplicitamente.']);
-                }
-
-                return;
-            }
-            $fields = [$type.'_id' => $source->id];
-            $year->dismissed_sources = array_values(array_diff($year->dismissed_sources ?? [], [$type.':'.$source->id]));
-            $year->save();
+        if (! in_array($type, AnnualBudget::TYPES, true) || ($data['source_id'] ?? null) === null) {
+            throw ValidationException::withMessages(["entries.{$index}.source_id" => 'Seleziona una sorgente esistente.']);
         }
+        $source = $tenant->{$type.'s'}()->whereKey($data['source_id'])->lockForUpdate()->first();
+        if ($source === null) {
+            throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La sorgente non appartiene a questo ambiente o è stata eliminata.']);
+        }
+        $existing = $year->entries()->where($type.'_id', $source->id)->first();
+        if ($existing !== null) {
+            if (! $existing->included && ($data['reactivate'] ?? false)) {
+                $existing->update(['included' => true]);
+            } elseif (! $existing->included) {
+                throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La voce è già presente ma esclusa. Riattivala esplicitamente.']);
+            }
+
+            return;
+        }
+        $fields = [$type.'_id' => $source->id];
+        $year->dismissed_sources = array_values(array_diff($year->dismissed_sources ?? [], [$type.':'.$source->id]));
+        $year->save();
         $year->entries()->create(['tenant_id' => $tenant->id, 'type' => $type, ...$fields, 'cost_center_id' => $data['cost_center_id'] ?? null, 'position' => (int) $year->entries()->max('position') + 1]);
     }
 
-    public function batch(Request $request, Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
+    public function batch(Request $request, Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget, AttachmentFiles $files): JsonResponse
     {
         $data = $request->validate([
-            'tenant_id' => ['prohibited'], 'action' => ['required', Rule::in(['exclude', 'reactivate', 'remove', 'reorder', 'update'])],
+            'tenant_id' => ['prohibited'], 'action' => ['required', Rule::in(['exclude', 'reactivate', 'remove', 'delete_expense', 'reorder', 'update'])],
             'ids' => ['required', 'array', 'list', 'min:1'],
             'ids.*' => ['required', 'integer', 'distinct', Rule::exists('budget_entries', 'id')->where('tenant_id', $tenant->id)->where('budget_year_id', $budgetYear->id)],
-            'changes' => ['sometimes', 'array:description,manual_allocated,manual_actual,cost_center_id'],
-            'changes.description' => ['sometimes', 'required', 'string', 'max:255'],
-            'changes.manual_allocated' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
-            'changes.manual_actual' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
+            'changes' => ['sometimes', 'array:cost_center_id'],
             'changes.cost_center_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)],
         ]);
 
-        return $this->mutate($tenant, $budgetYear, $budget, function (BudgetYear $year) use ($data): void {
+        $response = $this->mutate($tenant, $budgetYear, $budget, function (BudgetYear $year) use ($data, $tenant, $files): void {
+            if ($data['action'] === 'delete_expense' && count($data['ids']) !== 1) {
+                throw ValidationException::withMessages(['ids' => 'Elimina una sola spesa alla volta.']);
+            }
             $entries = $year->entries()->whereIn('id', $data['ids'])->lockForUpdate()->get()->keyBy('id');
             abort_unless($entries->count() === count($data['ids']), 409, 'La selezione è cambiata. Ricarica il Budget.');
             if ($data['action'] === 'reorder' && $year->entries()->count() !== count($data['ids'])) {
@@ -172,21 +169,37 @@ class BudgetController extends Controller
                         $entry->update(['position' => $position]);
                         break;
                     case 'remove':
-                        if ($entry->type !== 'manual') {
-                            $year->dismissed_sources = array_values(array_unique([...($year->dismissed_sources ?? []), $entry->type.':'.$entry->getAttribute($entry->type.'_id')]));
-                            $year->save();
-                        }
+                        $year->dismissed_sources = array_values(array_unique([...($year->dismissed_sources ?? []), $entry->type.':'.$entry->getAttribute($entry->type.'_id')]));
+                        $year->save();
                         $entry->delete();
                         break;
-                    case 'update':
-                        $changes = $data['changes'] ?? [];
-                        if ($entry->type !== 'manual' && array_diff(array_keys($changes), ['cost_center_id']) !== []) {
-                            throw ValidationException::withMessages(['changes' => 'Modifica gli importi e la descrizione nell’archivio originale.']);
+                    case 'delete_expense':
+                        if ($entry->type !== 'expense') {
+                            throw ValidationException::withMessages(['ids' => 'Puoi eliminare soltanto una spesa singola.']);
                         }
-                        $entry->update($changes);
+                        $expense = $tenant->expenses()->whereKey($entry->expense_id)->lockForUpdate()->firstOrFail();
+                        if ($expense->contract_id !== null || $expense->project_id !== null) {
+                            throw ValidationException::withMessages(['expense' => 'La spesa è collegata a un contratto o progetto. Usa «Rimuovi solo dal Budget».']);
+                        }
+                        $entry->delete();
+                        $files->delete($expense);
+                        foreach ($tenant->budgetYears()->orderBy('id')->lockForUpdate()->get() as $linkedYear) {
+                            $dismissed = array_values(array_diff($linkedYear->dismissed_sources ?? [], ['expense:'.$expense->id]));
+                            if ($dismissed !== ($linkedYear->dismissed_sources ?? [])) {
+                                $linkedYear->update(['dismissed_sources' => $dismissed]);
+                            }
+                        }
+                        break;
+                    case 'update':
+                        $entry->update($data['changes'] ?? []);
                 }
             }
         });
+        if ($data['action'] === 'delete_expense') {
+            $response->setData([...$response->getData(true), ...$files->result('Voce e spesa eliminate.')]);
+        }
+
+        return $response;
     }
 
     public function copy(Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
@@ -200,13 +213,16 @@ class BudgetController extends Controller
                 throw ValidationException::withMessages(['year' => 'Non esiste un Budget nell’anno precedente.']);
             }
             $position = (int) $year->entries()->max('position');
-            foreach ($previous->entries()->get() as $entry) {
-                if ($entry->type !== 'manual' && ($year->entries()->where($entry->type.'_id', $entry->getAttribute($entry->type.'_id'))->exists() || in_array($entry->type.':'.$entry->getAttribute($entry->type.'_id'), $year->dismissed_sources ?? [], true))) {
+            foreach ($previous->entries()->orderBy('position')->orderBy('id')->get() as $entry) {
+                if ($year->entries()->where($entry->type.'_id', $entry->getAttribute($entry->type.'_id'))->exists() || in_array($entry->type.':'.$entry->getAttribute($entry->type.'_id'), $year->dismissed_sources ?? [], true)) {
+                    continue;
+                }
+                if ($entry->type === 'expense' && ! ExpenseOverview::economicQuery($tenant)->whereKey($entry->expense_id)->where('year', $year->year)->exists()) {
                     continue;
                 }
                 $year->entries()->create([
-                    'tenant_id' => $tenant->id, ...$entry->only('type', 'contract_id', 'project_id', 'expense_id', 'description', 'cost_center_id', 'included'),
-                    'manual_allocated' => null, 'manual_actual' => null, 'position' => ++$position,
+                    'tenant_id' => $tenant->id, ...$entry->only('type', 'contract_id', 'project_id', 'expense_id', 'cost_center_id', 'included'),
+                    'position' => ++$position,
                 ]);
             }
             $year->update(['structure_copied' => true]);

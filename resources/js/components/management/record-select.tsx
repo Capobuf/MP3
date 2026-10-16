@@ -30,7 +30,7 @@ export function RecordSelect({
     catalog: Catalog | 'expenses';
     value: string;
     onChange: (value: string) => void;
-    options: Option[];
+    options: (Omit<Option, 'name'> & { name: string | null })[];
     label: string;
     includeNone?: boolean;
     disabled?: boolean;
@@ -76,7 +76,14 @@ export function RecordSelect({
             clearTimeout(timer);
         };
     }, [search, open, slug, catalog, excludeProjectId]);
-    const allOptions = [...options, ...results, ...(chosen ? [chosen] : [])];
+    const allOptions = [
+        ...options.map((option) => ({
+            ...option,
+            name: option.display_name ?? option.name ?? '',
+        })),
+        ...results,
+        ...(chosen ? [chosen] : []),
+    ];
     const itemLabel = (id: string) =>
         id === 'none'
             ? 'Solo senza collegamento'

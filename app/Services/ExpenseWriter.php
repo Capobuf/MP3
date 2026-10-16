@@ -33,14 +33,23 @@ class ExpenseWriter
         $hasLines = $expense->exists && $expense->lines()->exists();
         $contractEntry = $data['contract_entry'] ?? false;
         unset($data['contract_entry']);
+        if ($expense->exists) {
+            foreach (['year', 'period_starts_on', 'period_ends_on'] as $field) {
+                if (array_key_exists($field, $data) && (string) $data[$field] === (string) $expense->getRawOriginal($field)) {
+                    unset($data[$field]);
+                }
+            }
+        }
         $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
         $individualPeriods = isset($data['lines']) && array_filter($data['lines'], fn ($line) => array_key_exists('year', $line) || array_key_exists('period_starts_on', $line) || array_key_exists('period_ends_on', $line)) !== [];
-        if ($individualPeriods) {
+        if ($individualPeriods && (! $expense->exists || $expense->contract_id !== null)) {
             $starts = array_filter(array_column($data['lines'], 'period_starts_on'));
             $ends = array_filter(array_column($data['lines'], 'period_ends_on'));
             $data['period_starts_on'] = $starts === [] ? null : min($starts);
             $data['period_ends_on'] = $ends === [] ? null : max($ends);
-            $data['year'] = $data['lines'][0]['year'] ?? $expense->year;
+            if (! $expense->exists) {
+                $data['year'] = $data['lines'][0]['year'] ?? $expense->year;
+            }
             $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
         }
         $sharedPeriodUpdate = array_intersect_key($data, array_flip(['year', 'period_starts_on', 'period_ends_on']));
@@ -61,10 +70,14 @@ class ExpenseWriter
             // Keep the former shared-period API compatible without changing independent conditions.
             $periodUpdate = array_intersect_key($data, array_flip(['period_starts_on', 'period_ends_on', 'year']));
             if ($hasLines && $periodUpdate !== []) {
-                $expense->lines()->where('period_starts_on', $expense->getRawOriginal('period_starts_on'))
+                $sharedLines = $expense->lines()->where('period_starts_on', $expense->getRawOriginal('period_starts_on'))
                     ->where('period_ends_on', $expense->getRawOriginal('period_ends_on'))
-                    ->where(fn ($query) => $query->where('year', $expense->getRawOriginal('year'))->orWhereNull('year'))
-                    ->update($periodUpdate);
+                    ->where(fn ($query) => $query->where('year', $expense->getRawOriginal('year'))->orWhereNull('year'));
+                (clone $sharedLines)->whereNotNull('year')->update($periodUpdate);
+                unset($periodUpdate['year']);
+                if ($periodUpdate !== []) {
+                    $sharedLines->whereNull('year')->update($periodUpdate);
+                }
             }
             $expense->fill($data);
             if (! $write) {
@@ -111,7 +124,7 @@ class ExpenseWriter
                 'position' => $position,
                 'period_starts_on' => $start,
                 'period_ends_on' => $end,
-                'year' => $expense->contract_id !== null || array_key_exists('year', $line) ? $year : null,
+                'year' => array_key_exists('year', $line) ? $line['year'] : ($expense->contract_id !== null ? $year : null),
             ];
         }
         foreach ($totals as $total) {

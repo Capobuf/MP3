@@ -61,7 +61,7 @@ class SpreadsheetController extends Controller
             return response()->json(['message' => 'Importazione non riuscita. Nessun record salvato.'], 422);
         }
 
-        return response()->json(['message' => "Importazione completata: {$plan['new']} nuovi record, {$plan['duplicates']} duplicati saltati.", 'created' => $plan['new'], 'duplicates' => $plan['duplicates']]);
+        return response()->json(['message' => "Importazione completata: {$plan['new']} nuovi record, {$plan['duplicates']} duplicati saltati.", 'warnings' => $plan['warnings'], 'created' => $plan['new'], 'duplicates' => $plan['duplicates']]);
     }
 
     private function file(Request $request): UploadedFile

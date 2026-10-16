@@ -224,7 +224,7 @@ class ExpenseAnalyticsTest extends TestCase
         $this->assertSame([1, 2, 2, 2], array_column($data['expiry']['groups'], 'count'));
         $this->assertSame(1, $data['expiry']['undated']);
         $this->assertSame(6, $data['expiry']['upcoming']);
-        $this->get('/t/alfa/dashboard?year=2001&search=Assente')->assertInertia(fn (Assert $page) => $page->where('expiringContracts', 6)->where('analytics.expiry.upcoming', 6));
+        $this->get('/t/alfa/dashboard?year=2001&search=Assente')->assertInertia(fn (Assert $page) => $page->missing('expiringContracts')->where('analytics.expiry.upcoming', 6));
         $this->get('/t/alfa/contracts?expiring=1')->assertInertia(fn (Assert $page) => $page->has('records.data', 6));
     }
 

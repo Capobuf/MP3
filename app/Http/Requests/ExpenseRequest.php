@@ -21,7 +21,10 @@ class ExpenseRequest extends FormRequest
         /** @var Tenant $tenant */
         $tenant = $this->route('tenant');
 
-        return self::forTenant($tenant, $this->isMethod('patch'));
+        return [
+            ...self::forTenant($tenant, $this->isMethod('patch')),
+            'budget_year_id' => $this->isMethod('patch') ? ['prohibited'] : ['nullable', 'integer', Rule::exists('budget_years', 'id')->where('tenant_id', $tenant->id)->where('year', $this->input('year'))],
+        ];
     }
 
     /** @return array<string, mixed> */
@@ -48,7 +51,7 @@ class ExpenseRequest extends FormRequest
             'lines.*.quantity' => ['sometimes', 'required', 'numeric', 'gt:0', 'regex:/^\d{1,6}(\.\d{1,4})?$/'],
             'lines.*.period_starts_on' => ['nullable', 'date_format:Y-m-d', 'required_with:lines.*.period_ends_on'],
             'lines.*.period_ends_on' => ['nullable', 'date_format:Y-m-d', 'required_with:lines.*.period_starts_on', 'after_or_equal:lines.*.period_starts_on'],
-            'lines.*.year' => ['sometimes', 'required', 'integer', 'between:2000,2100'],
+            'lines.*.year' => ['sometimes', 'nullable', 'integer', 'between:2000,2100'],
         ];
         foreach (['vendor' => 'vendors', 'contract' => 'contracts', 'project' => 'projects'] as $field => $table) {
             $rules[$field.'_id'] = ['nullable', 'integer', Rule::exists($table, 'id')->where('tenant_id', $tenant->id)];
@@ -61,6 +64,7 @@ class ExpenseRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'budget_year_id.exists' => 'Il Budget di partenza non è disponibile per questo ambiente e anno. Conserva l’anno del Budget.',
             'lines.*.description.required' => 'Inserisci la descrizione della riga.',
             'lines.*.type.in' => 'Seleziona allocato o effettivo.',
             'lines.*.unit_price.required' => 'Inserisci il prezzo unitario della riga.',

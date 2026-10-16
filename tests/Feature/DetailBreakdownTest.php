@@ -23,6 +23,31 @@ class DetailBreakdownTest extends TestCase
         $this->actingAs(User::factory()->create(['is_super_admin' => true]));
     }
 
+    public function test_contract_sankey_needs_three_annual_expenses_and_totals_include_overlapping_extras(): void
+    {
+        $contract = $this->tenant->contracts()->create(['starts_on' => '2026-06-13', 'ends_on' => '2027-06-13']);
+        $path = '/t/dettagli/contracts/'.$contract->id;
+        $this->tenant->expenses()->create(['title' => 'Altro anno', 'contract_id' => $contract->id, 'year' => 2025, 'allocated_amount' => '999']);
+        $this->get($path.'?year=2026&history=1')->assertInertia(fn (Assert $page) => $page->where('breakdown', null)->where('totals.count', 0));
+        foreach (['Canone annuale' => '1000', 'Formazione aggiuntiva' => '500', 'Supporto' => '0'] as $title => $amount) {
+            $expense = $this->tenant->expenses()->create(['title' => $title, 'contract_id' => $contract->id, 'year' => 2026,
+                'allocated_amount' => $amount, 'period_starts_on' => '2026-06-13', 'period_ends_on' => '2027-06-13']);
+            $expense->lines()->createMany([
+                ['description' => $title, 'type' => 'allocated', 'unit_price' => $amount, 'quantity' => '1', 'total' => $amount, 'year' => 2026, 'position' => 0],
+                ['description' => $title, 'type' => 'actual', 'unit_price' => '0', 'quantity' => '1', 'total' => '0', 'year' => 2026, 'position' => 1],
+            ]);
+            $count = $contract->expenses()->where('year', 2026)->count();
+            $response = $this->get($path.'?year=2026&search=Canone')->assertInertia(fn (Assert $page) => $page
+                ->where('totals.count', $count)->has('expenses.data', 1));
+            if ($count < 3) {
+                $response->assertInertia(fn (Assert $page) => $page->where('breakdown', null));
+            } else {
+                $response->assertInertia(fn (Assert $page) => $page->where('breakdown.allocated.net', '1500.00')->where('totals.allocated', '1500.00'));
+            }
+        }
+        $this->get($path.'?year=2025&history=1')->assertInertia(fn (Assert $page) => $page->where('breakdown', null)->where('totals.allocated', '999.00'));
+    }
+
     public function test_contract_breakdown_is_bounded_reconciles_and_ignores_pagination_and_reference_amount(): void
     {
         $contract = $this->tenant->contracts()->create(['name' => 'Accordo', 'reference_amount' => '99999.99']);
@@ -107,7 +132,8 @@ class DetailBreakdownTest extends TestCase
         $other->expenses()->create([...$links, 'title' => 'Esclusa', 'year' => 2026, 'actual_amount' => '999.99']);
         foreach (['contracts' => $contract, 'projects' => $project] as $catalog => $record) {
             $this->get('/t/dettagli/'.$catalog.'/'.$record->id)->assertInertia(fn (Assert $page) => $page
-                ->where('totals.count', 1)->where('breakdown.actual.net', '1.01')->has('expenses.data', 1));
+                ->where('totals.count', 1)->has('expenses.data', 1)
+                ->where($catalog === 'contracts' ? 'breakdown' : 'breakdown.actual.net', $catalog === 'contracts' ? null : '1.01'));
             $this->get('/t/altro/'.$catalog.'/'.$record->id)->assertNotFound();
         }
         $this->get('/t/dettagli/vendors/'.$vendor->id)->assertInertia(fn (Assert $page) => $page

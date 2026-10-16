@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
 
 class AnnualBudget
 {
-    public const TYPES = ['contract', 'project', 'expense', 'manual'];
+    public const TYPES = ['contract', 'project', 'expense'];
 
     /** @return Collection<int, Expense> */
     private function expenses(Tenant $tenant, int $year): Collection
@@ -25,8 +25,10 @@ class AnnualBudget
             ->orderBy('title')->orderBy('id')->get();
     }
 
-    /** @return array<string, mixed> */
-    public function snapshot(Tenant $tenant, BudgetYear $year): array
+    /** @param list<int>|null $entryIds
+     * @return array<string, mixed>
+     */
+    public function snapshot(Tenant $tenant, BudgetYear $year, ?array $entryIds = null): array
     {
         $entries = $tenant->budgetEntries()->where('budget_year_id', $year->id)
             ->with(['contract.vendor:id,name', 'project', 'expense.vendor:id,name', 'costCenter.parent:id,name'])
@@ -36,32 +38,32 @@ class AnnualBudget
         foreach (self::TYPES as $type) {
             foreach ($entries->where('type', $type)->where('included', true) as $entry) {
                 foreach ($expenses as $expense) {
-                    if ($type !== 'manual' && $this->matches($type, (int) $entry->getAttribute($type.'_id'), $expense)) {
+                    if ($this->matches($type, (int) $entry->getAttribute($type.'_id'), $expense)) {
                         $owners[$expense->id] ??= $entry->id;
                     }
                 }
             }
         }
-        $names = $entries->mapWithKeys(fn ($entry) => [$entry->id => $entry->type === 'manual' ? $entry->description : $entry->{$entry->type}?->getAttribute($entry->type === 'expense' ? 'title' : 'name')])->all();
+        $names = $entries->mapWithKeys(fn ($entry) => [$entry->id => $entry->{$entry->type}?->getAttribute($entry->type === 'expense' ? 'title' : ($entry->type === 'contract' ? 'display_name' : 'name'))])->all();
         /** @var array<int, array<string, mixed>> $rows */
         $rows = [];
         foreach ($entries as $entry) {
-            $source = $entry->type === 'manual' ? null : $entry->{$entry->type};
-            $linked = $entry->type === 'manual' ? collect() : $expenses->filter(fn (Expense $expense) => $this->matches($entry->type, (int) $entry->getAttribute($entry->type.'_id'), $expense));
+            $source = $entry->{$entry->type};
+            $linked = $expenses->filter(fn (Expense $expense) => $this->matches($entry->type, (int) $entry->getAttribute($entry->type.'_id'), $expense));
             $contributing = $linked->filter(fn (Expense $expense) => ($owners[$expense->id] ?? null) === $entry->id);
-            $parts = $entry->type === 'manual'
-                ? [['allocated' => $entry->manual_allocated, 'actual' => $entry->manual_actual]]
-                : $contributing->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount])->values()->all();
+            $parts = $contributing->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount])->values()->all();
             $values = $this->values($parts);
             // Covered expenses contribute a known zero; a source without annual data stays unknown.
             if ($parts === [] && $linked->isNotEmpty()) {
-                $values = [...$values, 'allocated' => '0.00', 'actual' => '0.00', 'incomplete' => 0];
+                $values = $this->values($linked->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount === null ? null : '0.00', 'actual' => $expense->actual_amount === null ? null : '0.00'])->all());
+                $values['incomplete'] = 0;
+                $values['comparable_count'] = 0;
             }
             $rows[] = [
                 'id' => $entry->id, 'type' => $entry->type, 'source_id' => $source?->id,
                 'description' => $names[$entry->id], 'included' => $entry->included, 'position' => $entry->position,
                 'cost_center_id' => $entry->cost_center_id, 'cost_center' => $entry->costCenter,
-                'vendor' => $source instanceof Contract || $source instanceof Expense ? $source->vendor : null, 'manual_allocated' => $entry->manual_allocated, 'manual_actual' => $entry->manual_actual,
+                'vendor' => $source instanceof Contract || $source instanceof Expense ? $source->vendor : null,
                 'notes' => $source?->getAttribute('notes') ?? $source?->getAttribute('description'),
                 'starts_on' => $source?->getAttribute('starts_on')?->toDateString(), 'ends_on' => $source?->getAttribute('ends_on')?->toDateString(),
                 ...$values,
@@ -74,6 +76,9 @@ class AnnualBudget
                     return $data;
                 })->values()->all(),
             ];
+        }
+        if ($entryIds !== null) {
+            $rows = array_values(array_filter($rows, fn ($row) => in_array($row['id'], $entryIds, true)));
         }
         $included = array_values(array_filter($rows, fn ($row) => $row['included']));
         $groups = [];
@@ -112,20 +117,24 @@ class AnnualBudget
             $result[$metric.'_negative'] = Money::decimal(array_sum(array_filter($cents, fn ($value) => $value < 0)));
         }
         $comparable = array_filter($parts, fn ($part) => $part['allocated'] !== null && $part['actual'] !== null);
-        $result['variance'] = $comparable === [] ? null : Money::decimal(array_sum(array_map(fn ($part) => Money::cents($part['actual']) - Money::cents($part['allocated']), $comparable)));
-        $result['incomplete'] = $parts === [] || count($comparable) < count($parts) ? 1 : 0;
+        $result['variance'] = $result['allocated'] === null || $result['actual'] === null ? null : Money::decimal(Money::cents($result['actual']) - Money::cents($result['allocated']));
+        $result['incomplete'] = $result['allocated'] === null && $result['actual'] === null ? 1 : 0;
         $result['comparable_count'] = count($comparable);
 
         return $result;
     }
 
     /** @param array<int, array<string, mixed>> $rows
-     * @return array<string, string|int>
+     * @return array<string, string|int|null>
      */
     public function totals(array $rows): array
     {
         $result = ['count' => count($rows), 'incomplete' => array_sum(array_column($rows, 'incomplete')), 'comparable_count' => array_sum(array_column($rows, 'comparable_count'))];
-        foreach (['allocated', 'actual', 'variance', 'allocated_positive', 'allocated_negative', 'actual_positive', 'actual_negative'] as $field) {
+        $values = $this->values(array_map(fn ($row) => ['allocated' => $row['allocated'], 'actual' => $row['actual']], $rows));
+        foreach (['allocated', 'actual', 'variance'] as $field) {
+            $result[$field] = $values[$field];
+        }
+        foreach (['allocated_positive', 'allocated_negative', 'actual_positive', 'actual_negative'] as $field) {
             $result[$field] = Money::decimal(array_sum(array_map(fn ($row) => Money::cents($row[$field] ?? '0.00'), $rows)));
         }
 
@@ -178,7 +187,7 @@ class AnnualBudget
             }
             $suggestions[$key] ??= [
                 'key' => $key, 'type' => $type, 'source_id' => $id, 'entry_id' => $existing['id'] ?? null,
-                'description' => $type === 'expense' ? $expense->title : $expense->{$type}?->name,
+                'description' => $type === 'expense' ? $expense->title : $expense->{$type}?->getAttribute($type === 'contract' ? 'display_name' : 'name'),
                 'state' => $state, 'parts' => [], 'expense_ids' => [],
             ];
             $suggestions[$key]['parts'][] = ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount];

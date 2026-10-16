@@ -44,7 +44,7 @@ class TenantDataTransferController extends Controller
         $file = $this->file($request);
         $plan = $transfer->read($tenant, $file->getPathname());
 
-        return response()->json(['meta' => $plan['meta'], 'counts' => $plan['counts'], 'errors' => $plan['errors'], 'error_count' => $plan['error_count'], 'token' => TransferPreview::token($tenant, 'tenant-csv', $file->getPathname(), $plan)]);
+        return response()->json(['meta' => $plan['meta'], 'warnings' => $plan['warnings'], 'counts' => $plan['counts'], 'errors' => $plan['errors'], 'error_count' => $plan['error_count'], 'token' => TransferPreview::token($tenant, 'tenant-csv', $file->getPathname(), $plan)]);
     }
 
     public function commit(Request $request, Tenant $tenant, TenantCsvTransfer $transfer): JsonResponse
@@ -68,7 +68,7 @@ class TenantDataTransferController extends Controller
             return response()->json(['message' => 'Ripristino non riuscito. Nessun dato importato.'], 422);
         }
 
-        return response()->json(['message' => 'Trasferimento CSV completato.', 'counts' => $plan['counts']]);
+        return response()->json(['message' => 'Trasferimento CSV completato.', 'warnings' => $plan['warnings'], 'counts' => $plan['counts']]);
     }
 
     private function file(Request $request): UploadedFile

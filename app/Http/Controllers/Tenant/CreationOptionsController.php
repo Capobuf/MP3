@@ -46,6 +46,8 @@ class CreationOptionsController extends Controller
     private function form(Request $request, Tenant $tenant, string $kind, ?Model $record = null): Response
     {
         $data = $request->validate([
+            'year' => ['sometimes', 'required', 'integer', 'between:2000,2100'],
+            'budget_year_id' => $kind === 'expenses' && $record === null ? ['nullable', 'integer', Rule::exists('budget_years', 'id')->where('tenant_id', $tenant->id)->where('year', $request->input('year'))] : ['prohibited'],
             'contract_id' => ['nullable', 'integer', Rule::exists('contracts', 'id')->where('tenant_id', $tenant->id)],
             'project_id' => ['nullable', 'integer', Rule::exists('projects', 'id')->where('tenant_id', $tenant->id)],
             'parent_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)->whereNull('parent_id')],
@@ -72,6 +74,7 @@ class CreationOptionsController extends Controller
             'options' => ExpenseOverview::options($tenant),
             'contractContext' => $contract,
             'projectContext' => $project,
+            'budgetContext' => isset($data['budget_year_id']) ? $tenant->budgetYears()->findOrFail($data['budget_year_id'])->only('id', 'year') : null,
             'parentId' => $kind === 'cost-centers' && isset($data['parent_id']) ? (int) $data['parent_id'] : null,
         ]);
     }

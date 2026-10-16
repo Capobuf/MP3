@@ -17,6 +17,7 @@ export default function CreateRecord({
     options,
     contractContext,
     projectContext,
+    budgetContext,
     parentId,
     record,
 }: {
@@ -26,21 +27,24 @@ export default function CreateRecord({
     options: Options;
     contractContext: RecordData | null;
     projectContext: RecordData | null;
+    budgetContext: { id: number; year: number } | null;
     parentId: number | null;
     record: RecordData | null;
 }) {
     const { economicContext } = usePage().props;
     const workingYear = economicContext!.year;
     const path = `/t/${tenant.slug}/${kind}`;
-    const returnPath = projectContext
-        ? `/t/${tenant.slug}/projects/${projectContext.id}?year=${year}`
-        : contractContext
-          ? `/t/${tenant.slug}/contracts/${contractContext.id}`
-          : record && kind !== 'cost-centers'
-            ? `${path}/${record.id}`
-            : kind === 'expenses'
-              ? `${path}?year=${workingYear}`
-              : path;
+    const returnPath = budgetContext
+        ? `/t/${tenant.slug}/budget?year=${budgetContext.year}`
+        : projectContext
+          ? `/t/${tenant.slug}/projects/${projectContext.id}?year=${year}`
+          : contractContext
+            ? `/t/${tenant.slug}/contracts/${contractContext.id}`
+            : record && kind !== 'cost-centers'
+              ? `${path}/${record.id}`
+              : kind === 'expenses'
+                ? `${path}?year=${workingYear}`
+                : path;
     const close = () => router.visit(returnPath);
     return (
         <>
@@ -69,6 +73,7 @@ export default function CreateRecord({
                         tenant={tenant}
                         kind={kind}
                         year={year}
+                        budgetYearId={budgetContext?.id}
                         options={options}
                         contractContext={contractContext ?? undefined}
                         projectContext={projectContext ?? undefined}
@@ -79,7 +84,9 @@ export default function CreateRecord({
                                     kind === 'contracts' ||
                                     kind === 'projects'
                                     ? `${path}/${record.id}`
-                                    : contractContext || projectContext
+                                    : contractContext ||
+                                        projectContext ||
+                                        budgetContext
                                       ? returnPath
                                       : `${path}?year=${workingYear}`,
                             )
