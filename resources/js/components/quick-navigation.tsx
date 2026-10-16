@@ -80,9 +80,10 @@ export function QuickNavigation() {
         },
         {
             heading: 'Amministrazione',
-            items: auth.user.is_super_admin
-                ? getAdministrativeNavItems(currentTenant)
-                : [],
+            items: getAdministrativeNavItems(
+                currentTenant,
+                auth.user.is_super_admin,
+            ),
         },
     ];
     const seenUrls = new Set<string>();

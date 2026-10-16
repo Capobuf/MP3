@@ -17,9 +17,11 @@ export function getPrimaryNavItems(
     if (!tenant) {
         return [
             {
-                title: isSuperAdmin ? 'Piattaforma' : 'Scegli ambiente',
+                title: isSuperAdmin
+                    ? 'Impostazioni Piattaforma'
+                    : 'Scegli ambiente',
                 href: isSuperAdmin ? '/platform' : '/dashboard',
-                icon: LayoutGrid,
+                icon: isSuperAdmin ? Settings : LayoutGrid,
             },
         ];
     }
@@ -59,7 +61,10 @@ export function getPrimaryNavItems(
     ];
 }
 
-export function getAdministrativeNavItems(tenant: Tenant | null): NavItem[] {
+export function getAdministrativeNavItems(
+    tenant: Tenant | null,
+    isSuperAdmin: boolean,
+): NavItem[] {
     return [
         ...(tenant
             ? [
@@ -70,6 +75,14 @@ export function getAdministrativeNavItems(tenant: Tenant | null): NavItem[] {
                   },
               ]
             : []),
-        { title: 'Piattaforma', href: '/platform', icon: LayoutGrid },
+        ...(isSuperAdmin
+            ? [
+                  {
+                      title: 'Impostazioni Piattaforma',
+                      href: '/platform',
+                      icon: Settings,
+                  },
+              ]
+            : []),
     ];
 }

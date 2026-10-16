@@ -1,0 +1,2 @@
+<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:20px;color:#85868c;margin:0 0 5px;">Se il pulsante non funziona, usa questo link:</p>
+<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:20px;color:#5b5e63;margin:0;overflow-wrap:anywhere;word-break:break-all;"><a href="{{ $actionUrl }}" target="_blank" style="color:#555962;text-decoration:underline;word-break:break-all;">{{ $actionUrl }}</a></p>

@@ -75,7 +75,7 @@ class ProjectStatusTest extends TestCase
         $this->assertSame('3.00', $groups['none']['actual']);
     }
 
-    public function test_configuration_is_admin_only_and_state_selection_is_tenant_scoped(): void
+    public function test_configuration_is_available_to_members_and_state_selection_is_tenant_scoped(): void
     {
         $tenant = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa']);
         $other = Tenant::create(['name' => 'Beta', 'slug' => 'beta']);
@@ -88,10 +88,14 @@ class ProjectStatusTest extends TestCase
         $member->tenants()->attach($tenant);
         $this->actingAs($member);
         $id = $tenant->projectStatuses()->firstOrFail()->id;
-        $this->get('/t/alfa/settings/project-statuses')->assertForbidden();
-        $this->postJson('/t/alfa/settings/project-statuses', ['name' => 'Nuovo'])->assertForbidden();
-        $this->patchJson('/t/alfa/settings/project-statuses/'.$id, ['name' => 'Nuovo'])->assertForbidden();
-        $this->deleteJson('/t/alfa/settings/project-statuses/'.$id, ['replacement' => null])->assertForbidden();
+        $this->get('/t/alfa/settings/project-statuses')->assertOk();
+        $this->postJson('/t/alfa/settings/project-statuses', ['name' => 'Nuovo'])->assertCreated();
+        $this->patchJson('/t/alfa/settings/project-statuses/'.$id, ['name' => 'Rinominato'])->assertOk();
+        $this->deleteJson('/t/alfa/settings/project-statuses/'.$id, ['replacement' => null])->assertOk();
+        $this->get('/t/beta/settings/project-statuses')->assertForbidden();
+        $this->postJson('/t/beta/settings/project-statuses', ['name' => 'Vietato'])->assertForbidden();
+        $this->patchJson('/t/beta/settings/project-statuses/'.$foreignStatus->id, ['name' => 'Vietato'])->assertForbidden();
+        $this->deleteJson('/t/beta/settings/project-statuses/'.$foreignStatus->id, ['replacement' => null])->assertForbidden();
         $this->patchJson('/t/alfa/projects/'.$project->id, ['status' => $foreignStatus->key])->assertUnprocessable();
         $this->patchJson('/t/alfa/projects/'.$project->id, ['status' => 'completato'])->assertOk();
         $this->patchJson('/t/alfa/projects/'.$project->id, ['status' => null])->assertOk();

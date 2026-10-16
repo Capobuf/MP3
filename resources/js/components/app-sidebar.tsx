@@ -21,10 +21,14 @@ export function AppSidebar() {
     const { auth, currentTenant } = usePage().props;
     const homeHref = currentTenant
         ? `/t/${currentTenant.slug}/dashboard`
-        : '/platform';
+        : auth.user.is_super_admin
+          ? '/platform'
+          : '/dashboard';
     const homeLabel = currentTenant
         ? `Vai alla home di ${currentTenant.name}`
-        : 'Vai alla home della piattaforma';
+        : auth.user.is_super_admin
+          ? 'Vai a Impostazioni Piattaforma'
+          : 'Scegli ambiente';
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -57,9 +61,12 @@ export function AppSidebar() {
                     )}
                     label="Navigazione"
                 />
-                {currentTenant && auth.user.is_super_admin && (
+                {currentTenant && (
                     <NavMain
-                        items={getAdministrativeNavItems(currentTenant)}
+                        items={getAdministrativeNavItems(
+                            currentTenant,
+                            auth.user.is_super_admin,
+                        )}
                         label="Amministrazione"
                     />
                 )}

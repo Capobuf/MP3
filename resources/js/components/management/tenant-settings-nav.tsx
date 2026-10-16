@@ -10,6 +10,7 @@ export function TenantSettingsNav({ slug }: { slug: string }) {
         >
             {[
                 ['project-statuses', 'Stati dei progetti'],
+                ['users', 'Utenti'],
                 ['data', 'Importazione ed esportazione'],
             ].map(([path, title]) => {
                 const href = `/t/${slug}/settings/${path}`;

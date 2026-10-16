@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Building2, Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown, Settings } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -98,8 +98,8 @@ export function TenantSwitcher() {
                                         href="/platform"
                                         onClick={() => setOpenMobile(false)}
                                     >
-                                        <Plus aria-hidden="true" />
-                                        Gestisci ambienti
+                                        <Settings aria-hidden="true" />
+                                        Impostazioni Piattaforma
                                     </Link>
                                 </DropdownMenuItem>
                             </>

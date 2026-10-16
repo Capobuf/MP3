@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Platform\EmailSettingsController;
 use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
 use App\Http\Controllers\Platform\TenantUserController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Tenant\ProjectStatusController;
 use App\Http\Controllers\Tenant\SpreadsheetController;
 use App\Http\Controllers\Tenant\TenantDataTransferController;
 use App\Http\Controllers\Tenant\UndoController;
+use App\Http\Controllers\Tenant\UserController as TenantUserSettingsController;
 use App\Http\Controllers\TenantDashboardController;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\RecordUndo;
@@ -30,9 +32,13 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('platform')->middleware(EnsureSuperAdmin::class)->name('platform.')->group(function () {
         Route::get('/', PlatformController::class)->name('index');
+        Route::get('settings/users', [PlatformController::class, 'users'])->name('users.index');
+        Route::get('settings/email', [EmailSettingsController::class, 'edit'])->name('email.edit');
+        Route::put('settings/email', [EmailSettingsController::class, 'update'])->name('email.update');
+        Route::post('settings/email/test', [EmailSettingsController::class, 'sendTest'])->middleware('throttle:5,1')->name('email.test');
         Route::post('tenants', [PlatformTenantController::class, 'store'])->name('tenants.store');
         Route::patch('tenants/{tenant}', [PlatformTenantController::class, 'update'])->name('tenants.update');
-        Route::post('users', [PlatformUserController::class, 'store'])->name('users.store');
+        Route::post('users', [PlatformUserController::class, 'store'])->middleware('throttle:10,1')->name('users.store');
         Route::post('tenants/{tenant}/users', [TenantUserController::class, 'store'])->name('tenants.users.store');
         Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'destroy'])->name('tenants.users.destroy');
     });
@@ -44,14 +50,17 @@ Route::middleware('auth')->group(function () {
             Route::post('import/preview', [SpreadsheetController::class, 'preview'])->name('spreadsheet.preview');
             Route::post('import/commit', [SpreadsheetController::class, 'commit'])->name('spreadsheet.commit');
         });
-        Route::middleware(EnsureSuperAdmin::class)->group(function () {
-            Route::get('settings', fn (Tenant $tenant) => to_route('tenant.project-statuses.index', $tenant));
-            Route::get('settings/project-statuses', [ProjectStatusController::class, 'index'])->name('project-statuses.index');
-            Route::post('settings/project-statuses', [ProjectStatusController::class, 'store'])->name('project-statuses.store');
-            Route::patch('settings/project-statuses/{status}', [ProjectStatusController::class, 'update'])->whereNumber('status')->name('project-statuses.update');
-            Route::delete('settings/project-statuses/{status}', [ProjectStatusController::class, 'destroy'])->whereNumber('status')->name('project-statuses.destroy');
+        Route::prefix('settings/users')->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('/', [TenantUserSettingsController::class, 'index'])->name('users.index');
+            Route::post('/', [TenantUserSettingsController::class, 'store'])->middleware('throttle:10,1')->name('users.store');
+            Route::delete('{user}', [TenantUserSettingsController::class, 'destroy'])->name('users.destroy');
         });
-        Route::prefix('settings/data')->middleware(EnsureSuperAdmin::class)->withoutMiddleware(RecordUndo::class)->group(function () {
+        Route::get('settings', fn (Tenant $tenant) => to_route('tenant.project-statuses.index', $tenant));
+        Route::get('settings/project-statuses', [ProjectStatusController::class, 'index'])->name('project-statuses.index');
+        Route::post('settings/project-statuses', [ProjectStatusController::class, 'store'])->name('project-statuses.store');
+        Route::patch('settings/project-statuses/{status}', [ProjectStatusController::class, 'update'])->whereNumber('status')->name('project-statuses.update');
+        Route::delete('settings/project-statuses/{status}', [ProjectStatusController::class, 'destroy'])->whereNumber('status')->name('project-statuses.destroy');
+        Route::prefix('settings/data')->withoutMiddleware(RecordUndo::class)->group(function () {
             Route::get('/', [TenantDataTransferController::class, 'index'])->name('data.index');
             Route::get('export.csv', [TenantDataTransferController::class, 'export'])->name('data.export');
             Route::post('import/preview', [TenantDataTransferController::class, 'preview'])->name('data.preview');

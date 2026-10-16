@@ -11,12 +11,20 @@ type Props = {
     token: string;
     email: string;
     passwordRules: string;
+    invitation: boolean;
 };
 
-export default function ResetPassword({ token, email, passwordRules }: Props) {
+export default function ResetPassword({
+    token,
+    email,
+    passwordRules,
+    invitation,
+}: Props) {
+    const title = invitation ? 'Imposta password' : 'Reimposta password';
+
     return (
         <>
-            <Head title="Reimposta password" />
+            <Head title={title} />
 
             <Form
                 {...update.form()}
@@ -81,7 +89,7 @@ export default function ResetPassword({ token, email, passwordRules }: Props) {
                             data-test="reset-password-button"
                         >
                             {processing && <Spinner />}
-                            Reimposta password
+                            {title}
                         </Button>
                     </div>
                 )}
@@ -90,7 +98,9 @@ export default function ResetPassword({ token, email, passwordRules }: Props) {
     );
 }
 
-ResetPassword.layout = {
-    title: 'Reimposta password',
-    description: 'Inserisci la nuova password.',
-};
+ResetPassword.layout = (props: Props) => ({
+    title: props.invitation ? 'Imposta password' : 'Reimposta password',
+    description: props.invitation
+        ? 'Benvenuto in MP3. Scegli la password per accedere.'
+        : 'Inserisci la nuova password.',
+});

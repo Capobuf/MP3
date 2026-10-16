@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\Tenant;
 use App\Policies\TenantPolicy;
 use App\Services\AttachmentFiles;
+use App\Services\PlatformMailManager;
 use App\Services\UndoHistory;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
@@ -22,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->scoped(UndoHistory::class);
         $this->app->scoped(AttachmentFiles::class);
+        $this->app->extend('mail.manager', fn ($manager, $app) => new PlatformMailManager($app));
     }
 
     /**

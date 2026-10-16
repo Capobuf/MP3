@@ -56,6 +56,82 @@ npm run build
 
 Il file `.env` non deve essere versionato e non deve contenere credenziali di produzione nel repository.
 
+## Email della piattaforma
+
+I super admin possono aprire **Impostazioni Piattaforma → Email** e salvare
+un unico SMTP per tutti gli ambienti. La configurazione si applica al mailer
+standard Laravel, compresi verifica email e recupero password Fortify.
+La modalità **Automatica / STARTTLS** usa `smtp` e negozia STARTTLS quando
+supportato dal server; **SMTPS** usa TLS implicito. Username e password sono
+facoltativi per server che non richiedono autenticazione.
+
+La password è cifrata nel database con il cast nativo Laravel e non viene
+restituita al frontend. Un campo password vuoto mantiene quella esistente,
+anche al primo salvataggio se già presente nella configurazione Laravel.
+Conservare `APP_KEY` insieme ai backup per poter decifrare le credenziali.
+Il salvataggio non modifica `.env`; la configurazione applicativa prevale
+su `MAIL_URL` e aggiorna i mailer risolti alle successive richieste d’invio.
+Senza una configurazione salvata rimane attiva la configurazione Laravel.
+
+La prova richiede un destinatario esplicito e una configurazione salvata,
+avviene in modo sincrono e segnala l’accettazione del messaggio da parte del
+trasporto SMTP, senza garantire il recapito. I mailer `log` e `array` non
+recapitano email reali e non vengono usati per dichiarare riuscita la prova.
+I test dedicati in `tests/Feature/PlatformEmailSettingsTest.php` simulano il
+trasporto e non contattano server SMTP esterni.
+
+### Template email HTML
+
+Il test SMTP, gli inviti e le notifiche di accesso usano il layout Blade
+condiviso `resources/views/mail/layouts/mp3.blade.php`. Markup, tipografia e
+PNG provengono dalla proposta V2 del commit
+`cf65b3a9352570ddf1d80d2be4d895d2ca0c6bfb`, conservata nel branch
+`issue-assets/email-templates-v2`. Gli asset sono in `public/branding/email`.
+Le email includono anche una parte testuale, senza dipendenze esterne o CDN.
+
+`GeneralNotification` gestisce titolo e contenuto dinamici, azione facoltativa
+e organizzazione facoltativa. `UserInvitation` usa un’unica vista per inviti
+piattaforma e organizzazione, mantenendo i token Fortify. Gli utenti esistenti
+ricevono il link all’organizzazione, senza una nuova impostazione password.
+
+Gli URL delle immagini usano `APP_URL`, oppure `ASSET_URL` se valorizzato.
+In produzione impostare un URL pubblico HTTPS (per esempio
+`APP_URL=https://app.dominio.it`), pubblicare gli asset e invalidare la cache
+Laravel. I link operativi restano generati dalle rotte Laravel. Con un URL
+locale, le immagini nelle caselle esterne non saranno raggiungibili.
+
+I test `EmailTemplatesTest`, `PlatformEmailSettingsTest` e
+`UserInvitationsTest` verificano rendering, escaping, parti HTML/testo e
+integrazione senza SMTP reale. La resa nei client Gmail e Outlook richiede
+anche una verifica nelle rispettive caselle: l’accettazione SMTP e l’anteprima
+nel browser non certificano da sole il recapito o la compatibilità del client.
+
+## Inviti e accesso agli ambienti
+
+In **Impostazioni Piattaforma → Utenti** il super admin invita un nuovo account
+con email e nome facoltativo. L’invito non assegna ambienti né privilegi globali.
+Un account già presente si assegna agli ambienti dalla gestione esistente.
+
+Ogni membro può gestire **Impostazioni ambiente → Utenti**, stati dei progetti
+e importazione/esportazione dati del proprio ambiente. L’invito a un nuovo
+utente usa il reset password Fortify; un account esistente conserva password
+e altri ambienti e riceve una notifica con il link all’ambiente. La rimozione
+revoca soltanto l’associazione corrente, anche quando riguarda il proprio
+accesso; i super admin mantengono accesso a tutti gli ambienti.
+
+Il link di impostazione password usa `password_reset_tokens` e la scadenza del
+broker configurato (normalmente 60 minuti). L’indirizzo diventa verificato solo
+dopo un reset valido e completato, senza una seconda email di verifica.
+Il recupero password ordinario resta disponibile anche per inviti scaduti o
+invii falliti. Non sono aggiunte tabelle o stati di invito.
+
+Gli invii sono sincroni. Se l’invio fallisce, il form mostra un errore e conserva
+account e associazioni: una volta sistemata la configurazione email, il
+destinatario può usare **Password dimenticata?**. I mailer `log` e `array`
+(e i failover che li includono) non vengono considerati un invio reale;
+`array` è ammesso soltanto nell’ambiente di test. I test inviti non contattano
+SMTP esterni.
+
 ## Sviluppo locale senza Docker
 
 Il comando ufficiale avvia i processi di sviluppo Laravel e Vite:
@@ -121,7 +197,7 @@ e paginata sul server.
 ## Stati dei progetti
 
 Gli stati si gestiscono in **Impostazioni ambiente → Stati dei progetti**, con
-accesso amministratore e configurazione separata per ambiente. È possibile
+accesso per tutti i membri e configurazione separata per ambiente. È possibile
 crearli, rinominarli ed eliminarli. Prima dell’eliminazione va scelto un altro
 stato oppure **Nessuno stato**: l’operazione aggiorna i progetti e rimuove lo
 stato nella stessa transazione. Gli stati iniziali e le assegnazioni esistenti

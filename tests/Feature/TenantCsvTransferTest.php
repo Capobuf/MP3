@@ -35,6 +35,9 @@ class TenantCsvTransferTest extends TestCase
             $source->expenses()->create(['contract_id' => $contract->id, 'title' => $title, 'year' => 2026,
                 'period_starts_on' => '2026-06-13', 'period_ends_on' => '2027-06-13', 'allocated_amount' => $amount]);
         }
+        $member = User::factory()->create();
+        $member->tenants()->attach([$source->id, $target->id]);
+        $this->actingAs($member);
         $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
         $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()
             ->assertJsonPath('error_count', 0)->assertJsonCount(1, 'warnings');
@@ -163,7 +166,7 @@ class TenantCsvTransferTest extends TestCase
         $this->assertSame('Destinazione', $target->fresh()->name);
     }
 
-    public function test_invalid_archive_nonempty_destination_and_ordinary_member_are_rejected(): void
+    public function test_invalid_archive_nonempty_destination_and_nonmember_are_rejected(): void
     {
         [$source, $target] = $this->setupTenants();
         $source->contracts()->create(['name' => 'Contratto']);
@@ -196,10 +199,12 @@ class TenantCsvTransferTest extends TestCase
         $user->tenants()->attach($target);
         $this->actingAs($user);
         foreach (['', '/export.csv'] as $suffix) {
-            $this->get('/t/destinazione/settings/data'.$suffix)->assertForbidden();
+            $this->get('/t/destinazione/settings/data'.$suffix)->assertOk();
+            $this->get('/t/origine/settings/data'.$suffix)->assertForbidden();
         }
         foreach (['preview', 'commit'] as $action) {
-            $this->postJson('/t/destinazione/settings/data/import/'.$action, ['file' => $this->csv($csv)])->assertForbidden();
+            $this->postJson('/t/origine/settings/data/import/'.$action, ['file' => $this->csv($csv)])->assertForbidden();
+            $this->postJson('/t/destinazione/settings/data/import/'.$action, ['file' => $this->csv($csv)])->assertUnprocessable();
         }
     }
 

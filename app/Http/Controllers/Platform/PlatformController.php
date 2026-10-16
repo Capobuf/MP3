@@ -20,6 +20,13 @@ class PlatformController extends Controller
                     ->select('users.id', 'name', 'email')])
                 ->orderBy('name')
                 ->get(['id', 'name', 'slug']),
+            'users' => User::query()->where('is_super_admin', false)->orderBy('name')->get(['id', 'name', 'email']),
+        ]);
+    }
+
+    public function users(): Response
+    {
+        return Inertia::render('platform/users', [
             'users' => User::query()
                 ->with(['tenants' => fn ($query) => $query
                     ->orderBy('name')

@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Notifications\UserInvitation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -19,7 +21,9 @@ class MultitenancyTest extends TestCase
         $superuser = $this->createSuperuser();
 
         $this->get(route('platform.index'))->assertRedirect(route('login'));
+        $this->get(route('platform.users.index'))->assertRedirect(route('login'));
         $this->actingAs($member)->get(route('platform.index'))->assertForbidden();
+        $this->get(route('platform.users.index'))->assertForbidden();
         $this->actingAs($member)
             ->post(route('platform.tenants.store'), [
                 'name' => 'Unauthorized',
@@ -31,6 +35,9 @@ class MultitenancyTest extends TestCase
             ->get(route('platform.index'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->component('platform/index'));
+        $this->get(route('platform.users.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('platform/users')->has('users', 2)->missing('tenants'));
     }
 
     public function test_superuser_can_create_and_rename_a_tenant_without_changing_its_slug(): void
@@ -57,8 +64,9 @@ class MultitenancyTest extends TestCase
         $this->assertSame('acme', $tenant->slug);
     }
 
-    public function test_superuser_can_create_a_standard_unverified_user_with_a_secure_password(): void
+    public function test_superuser_can_invite_a_standard_unverified_user_with_an_unknown_password(): void
     {
+        Notification::fake();
         $superuser = $this->createSuperuser();
 
         $this->actingAs($superuser)
@@ -69,13 +77,14 @@ class MultitenancyTest extends TestCase
                 'password_confirmation' => 'Valid-password1!',
                 'is_super_admin' => true,
             ])
-            ->assertRedirect(route('platform.index'));
+            ->assertRedirect(route('platform.users.index'));
 
         $member = User::query()->where('email', 'member@example.com')->firstOrFail();
 
         $this->assertFalse($member->is_super_admin);
         $this->assertNull($member->email_verified_at);
-        $this->assertTrue(Hash::check('Valid-password1!', $member->password));
+        $this->assertFalse(Hash::check('Valid-password1!', $member->password));
+        Notification::assertSentTo($member, UserInvitation::class);
     }
 
     public function test_superuser_can_assign_and_remove_tenant_access(): void

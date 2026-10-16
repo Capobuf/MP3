@@ -1,0 +1,1 @@
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-collapse:collapse;"><tr><td height="{{ $height }}" style="height:{{ $height }}px;font-size:0;line-height:{{ $height }}px;">&nbsp;</td></tr></table>
