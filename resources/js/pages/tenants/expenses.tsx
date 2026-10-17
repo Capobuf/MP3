@@ -1,3 +1,5 @@
+import { ReceiptText } from 'lucide-react';
+import { DetailHero } from '@/components/management/detail-hero';
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
@@ -14,14 +16,9 @@ export default function Expenses(
         <>
             <Head title={`Spese · ${props.tenant.name}`} />
             <div className="page-shell">
-                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <p className="text-sm text-muted-foreground">
-                            {props.tenant.name} · {props.filters.year}
-                        </p>
-                        <h1 className="page-title">Spese</h1>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                <DetailHero
+                    icon={ReceiptText}
+                    actions={
                         <SpreadsheetActions
                             slug={props.tenant.slug}
                             resource="expenses"
@@ -29,8 +26,13 @@ export default function Expenses(
                             filters={props.filters}
                             disabled={busy}
                         />
-                    </div>
-                </header>
+                    }
+                >
+                    <h1 className="page-title">Spese</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        {props.tenant.name}
+                    </p>
+                </DetailHero>
                 <DashboardSummary
                     analytics={props.analytics}
                     year={props.filters.year!}

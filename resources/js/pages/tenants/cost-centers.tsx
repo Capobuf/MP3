@@ -1,3 +1,4 @@
+import { DetailHero } from '@/components/management/detail-hero';
 import {
     Sheet,
     SheetContent,
@@ -12,7 +13,7 @@ import {
 } from '@/components/management/inline-edit';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, Link, router } from '@inertiajs/react';
-import { CornerDownRight, Plus, Ellipsis } from 'lucide-react';
+import { CornerDownRight, Plus, Ellipsis, Tags } from 'lucide-react';
 import { useState } from 'react';
 import {
     useTableView,
@@ -257,30 +258,35 @@ export default function CostCenters({
         <>
             <Head title={`Centri di Costo · ${tenant.name}`} />
             <div className="page-shell">
-                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <p className="text-sm text-muted-foreground">
-                            {tenant.name}
-                        </p>
-                        <h1 className="page-title">Centri di Costo</h1>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            Tag per categorizzare spese, progetti e contratti.
-                            Sono consentiti due livelli: padre e figlio.
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button onClick={() => router.visit(`${path}/create`)}>
-                            <Plus data-icon="inline-start" />
-                            Nuovo Centro di Costo
-                        </Button>
-                        <SpreadsheetActions
-                            slug={tenant.slug}
-                            resource="cost-centers"
-                            label="Centri di costo"
-                            filters={filters}
-                        />
-                    </div>
-                </header>
+                <DetailHero
+                    icon={Tags}
+                    accent="cost-center"
+                    actions={
+                        <>
+                            <Button
+                                onClick={() => router.visit(`${path}/create`)}
+                            >
+                                <Plus data-icon="inline-start" />
+                                Nuovo Centro di Costo
+                            </Button>
+                            <SpreadsheetActions
+                                slug={tenant.slug}
+                                resource="cost-centers"
+                                label="Centri di costo"
+                                filters={filters}
+                            />
+                        </>
+                    }
+                >
+                    <h1 className="page-title">Centri di Costo</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        {tenant.name}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Tag per categorizzare spese, progetti e contratti. Sono
+                        consentiti due livelli: padre e figlio.
+                    </p>
+                </DetailHero>
                 <Card>
                     <CardContent className="flex min-w-0 flex-col gap-4">
                         <div className="flex flex-wrap items-center gap-2">
