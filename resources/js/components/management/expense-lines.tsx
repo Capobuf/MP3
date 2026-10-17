@@ -50,29 +50,31 @@ export function emptyDraftLine(
 }
 
 export function draftLines(record?: RecordData): DraftLine[] {
-    const lines = record?.lines?.length
-        ? record.lines
-        : (['allocated', 'actual'] as const).flatMap((type) => {
-              const amount =
-                  record?.[
-                      type === 'allocated'
-                          ? 'allocated_amount'
-                          : 'actual_amount'
-                  ];
-              return amount == null
-                  ? []
-                  : [
-                        {
-                            description: record?.title ?? '',
-                            type,
-                            unit_price: amount,
-                            quantity: '1',
-                            period_starts_on: record?.period_starts_on,
-                            period_ends_on: record?.period_ends_on,
-                            year: record?.year,
-                        },
-                    ];
-          });
+    // An explicitly empty list must not turn calculated totals into draft lines.
+    const lines =
+        record?.lines !== undefined
+            ? record.lines
+            : (['allocated', 'actual'] as const).flatMap((type) => {
+                  const amount =
+                      record?.[
+                          type === 'allocated'
+                              ? 'allocated_amount'
+                              : 'actual_amount'
+                      ];
+                  return amount == null
+                      ? []
+                      : [
+                            {
+                                description: record?.title ?? '',
+                                type,
+                                unit_price: amount,
+                                quantity: '1',
+                                period_starts_on: record?.period_starts_on,
+                                period_ends_on: record?.period_ends_on,
+                                year: record?.year,
+                            },
+                        ];
+              });
     return lines.map((line) => ({
         ...line,
         key: lineKey(),

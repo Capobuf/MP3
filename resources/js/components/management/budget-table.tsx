@@ -49,6 +49,7 @@ import type {
 import {
     ArrowDown,
     ArrowUp,
+    ArrowUpRight,
     ChevronDown,
     ChevronRight,
     GripVertical,
@@ -787,7 +788,6 @@ export function BudgetTable({
         [summary, preferences.group],
     );
     const [removing, setRemoving] = useState<number[]>([]);
-    const [excluding, setExcluding] = useState<{ ids: number[] } | null>(null);
     const [dragging, setDragging] = useState(false);
     const [detailHeights, setDetailHeights] = useState<Record<number, number>>(
         {},
@@ -918,6 +918,22 @@ export function BudgetTable({
                                     );
                                 }}
                             />
+                            {row.original.source_id !== null && (
+                                <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="icon"
+                                    className="shrink-0"
+                                    disabled={busy || loading}
+                                >
+                                    <Link
+                                        href={`/t/${slug}/${row.original.type}s/${row.original.source_id}`}
+                                        aria-label={`Apri ${row.original.description}`}
+                                    >
+                                        <ArrowUpRight />
+                                    </Link>
+                                </Button>
+                            )}
                             {row.original.incomplete > 0 &&
                                 completionLabel(row.original, year) && (
                                     <Tooltip>
@@ -992,10 +1008,15 @@ export function BudgetTable({
             },
             {
                 id: 'vendor',
-                accessorFn: (row) => row.vendor?.name ?? 'Senza fornitore',
+                accessorFn: (row) =>
+                    row.type === 'project'
+                        ? '—'
+                        : (row.vendor?.name ?? 'Senza fornitore'),
                 header: 'Fornitore',
                 cell: ({ row }) =>
-                    row.original.vendor ? (
+                    row.original.type === 'project' ? (
+                        '—'
+                    ) : row.original.vendor ? (
                         <Link
                             href={`/t/${slug}/vendors/${row.original.vendor.id}`}
                             className="text-foreground"
@@ -1169,22 +1190,17 @@ export function BudgetTable({
                                             Righe e collegamenti
                                         </DropdownMenuItem>
                                     )}
-                                    <DropdownMenuItem
-                                        onSelect={() => {
-                                            if (entry.included)
-                                                setExcluding({
-                                                    ids: [entry.id],
-                                                });
-                                            else
+                                    {!entry.included && (
+                                        <DropdownMenuItem
+                                            onSelect={() => {
                                                 void batch('reactivate', [
                                                     entry.id,
                                                 ]);
-                                        }}
-                                    >
-                                        {entry.included
-                                            ? 'Escludi dai totali'
-                                            : 'Riattiva nei totali'}
-                                    </DropdownMenuItem>
+                                            }}
+                                        >
+                                            Riattiva nei totali
+                                        </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem
                                         variant="destructive"
                                         onSelect={() => setRemoving([entry.id])}
@@ -1718,14 +1734,6 @@ export function BudgetTable({
                         size="sm"
                         variant="outline"
                         disabled={busy}
-                        onClick={() => setExcluding({ ids: selected })}
-                    >
-                        Escludi dai totali
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
                         onClick={() => {
                             void batch('reactivate', selected).then((ok) => {
                                 if (ok) setSelection({});
@@ -2085,57 +2093,6 @@ export function BudgetTable({
                     </Table>
                 </div>
             </DndContext>
-            <AlertDialog
-                open={excluding !== null}
-                onOpenChange={(open) => {
-                    if (!open && !busy) setExcluding(null);
-                }}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Escludere le voci dai totali?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Le voci resteranno nel Budget senza contribuire ai
-                            totali. Potrai riattivarle dal filtro «Voci
-                            escluse».
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <ul className="max-h-48 list-disc overflow-y-auto pl-5 text-sm">
-                        {budget.entries
-                            .filter((entry) =>
-                                excluding?.ids.includes(entry.id),
-                            )
-                            .map((entry) => (
-                                <li key={entry.id}>{entry.description}</li>
-                            ))}
-                    </ul>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={busy}>
-                            Annulla
-                        </AlertDialogCancel>
-                        <AlertDialogAction
-                            disabled={busy}
-                            variant="destructive"
-                            onClick={(event) => {
-                                event.preventDefault();
-                                if (!excluding) return;
-                                void batch('exclude', excluding.ids).then(
-                                    (ok) => {
-                                        if (ok) {
-                                            setExcluding(null);
-                                            setSelection({});
-                                        }
-                                    },
-                                );
-                            }}
-                        >
-                            Escludi dai totali
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
             <AlertDialog
                 open={removing.length > 0}
                 onOpenChange={(open) => {
