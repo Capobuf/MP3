@@ -274,7 +274,7 @@ export function CommentEditor({
                                     <TooltipTrigger asChild>
                                         <Button
                                             type="submit"
-                                            size="icon"
+                                            size="sm"
                                             aria-label="Invia commento"
                                             disabled={
                                                 disabled ||
@@ -283,7 +283,12 @@ export function CommentEditor({
                                                 linkOpen
                                             }
                                         >
-                                            {busy ? <Spinner /> : <Send />}
+                                            {busy ? (
+                                                <Spinner />
+                                            ) : (
+                                                <Send data-icon="inline-start" />
+                                            )}
+                                            Invia
                                         </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
