@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { ChartLabel } from './chart-label';
 import {
     Bar,
     BarChart,
@@ -100,37 +100,22 @@ export function EconomicChart({
                                 const row = data[index];
                                 if (!row || row.name !== payload.value)
                                     return <g />;
-                                const href = getHref(row.id);
-                                const label = (
-                                    <text
-                                        textAnchor="end"
-                                        dominantBaseline="middle"
-                                        fill="var(--muted-foreground)"
-                                    >
-                                        {row.name.length > 23
-                                            ? `${row.name.slice(0, 22)}…`
-                                            : row.name}
-                                    </text>
-                                );
                                 return (
                                     <g transform={`translate(${x},${y})`}>
-                                        {href ? (
-                                            <Link
-                                                href={href}
-                                                aria-label={`Apri ${row.name}`}
-                                            >
-                                                <title>{row.name}</title>
-                                                {label}
-                                            </Link>
-                                        ) : (
-                                            label
-                                        )}
+                                        <ChartLabel
+                                            x={-120}
+                                            y={0}
+                                            width={120}
+                                            name={row.name}
+                                            href={getHref(row.id)}
+                                        />
                                     </g>
                                 );
                             }}
                         />
                         <ReferenceLine x={0} stroke="var(--muted-foreground)" />
                         <ChartTooltip
+                            shared={false}
                             content={({ active, payload }) => {
                                 const row = payload?.[0]?.payload as
                                     | (typeof data)[number]

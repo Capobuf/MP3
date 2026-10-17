@@ -1,7 +1,6 @@
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { AnalyticsLoadingContext } from '@/components/management/analytics-ui';
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
 import type {
     EntityFilter,
     ExpenseAnalytics,
@@ -15,7 +14,6 @@ import { DashboardSummary } from '@/components/management/dashboard-summary';
 import { DistributionChart } from '@/components/management/distribution-chart';
 import { EconomicChart } from '@/components/management/economic-chart';
 import { ExpenseSankey } from '@/components/management/expense-sankey';
-import { ExpenseWorkspace } from '@/components/management/expense-workspace';
 import type { ExpensePageProps } from '@/components/management/types';
 import { VarianceChart } from '@/components/management/variance-chart';
 
@@ -23,7 +21,6 @@ export default function TenantDashboard(
     props: ExpensePageProps & { analytics: ExpenseAnalytics },
 ) {
     const { tenant, filters, analytics } = props;
-    const [tableBusy, setTableBusy] = useState(false);
     const path = `/t/${tenant.slug}/dashboard`;
     const year = filters.year!;
     const refresh = usePageRefresh(path);
@@ -42,17 +39,7 @@ export default function TenantDashboard(
             <Head title={`Panoramica economica · ${tenant.name}`} />
             <div
                 className="page-shell dashboard-enter"
-                aria-busy={refresh.pending || tableBusy}
-                onClickCapture={(event) => {
-                    if (
-                        tableBusy &&
-                        event.target instanceof Element &&
-                        event.target.closest('a')
-                    ) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                    }
-                }}
+                aria-busy={refresh.pending}
             >
                 <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -77,7 +64,6 @@ export default function TenantDashboard(
                         key={JSON.stringify([tenant.slug, filters])}
                         {...props}
                         path={path}
-                        busy={tableBusy}
                     />
                 </div>
                 <AnalyticsLoadingContext value={refresh.visible}>
@@ -196,16 +182,8 @@ export default function TenantDashboard(
                             key={`${chartKey}:variances`}
                             rows={analytics.variances}
                             slug={tenant.slug}
-                            disabled={tableBusy}
                         />
                     </section>
-                    <ExpenseWorkspace
-                        key={JSON.stringify([tenant.slug, filters])}
-                        {...props}
-                        dashboard
-                        showFilters={false}
-                        onBusyChange={setTableBusy}
-                    />
                 </AnalyticsLoadingContext>
             </div>
         </>

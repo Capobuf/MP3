@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { ChartLabel } from './chart-label';
 import { useState } from 'react';
 import { Sankey } from 'recharts';
 import type { SankeyLinkProps, SankeyNodeProps } from 'recharts';
@@ -107,20 +107,6 @@ export function ExpenseSankey({
             node.field && node.id !== undefined
                 ? getHref(node.field, node.id)
                 : undefined;
-        const label = (
-            <text
-                x={target ? x - 8 : x + width + 8}
-                y={y + height / 2}
-                textAnchor={target ? 'end' : 'start'}
-                dominantBaseline="middle"
-                fill="var(--foreground)"
-                fontSize={12}
-            >
-                {node.name.length > 25
-                    ? `${node.name.slice(0, 24)}…`
-                    : node.name}
-            </text>
-        );
         return (
             <g
                 onMouseEnter={() => setHoveredKey(node.key)}
@@ -128,9 +114,6 @@ export function ExpenseSankey({
                 onFocus={() => setHoveredKey(node.key)}
                 onBlur={() => setHoveredKey(null)}
             >
-                <title>
-                    {node.name}: {money(payload.value)}
-                </title>
                 <rect
                     role={actionable ? 'button' : undefined}
                     tabIndex={actionable ? 0 : undefined}
@@ -164,15 +147,18 @@ export function ExpenseSankey({
                             ? 'cursor-pointer transition-[opacity,stroke] duration-200 outline-none focus:opacity-70 motion-reduce:transition-none'
                             : 'transition-[opacity,stroke] duration-200 motion-reduce:transition-none'
                     }
+                >
+                    <title>
+                        {node.name}: {money(payload.value)}
+                    </title>
+                </rect>
+                <ChartLabel
+                    x={target ? x - 168 : x + width + 8}
+                    y={y + height / 2}
+                    width={160}
+                    name={node.name}
+                    href={href}
                 />
-                {href ? (
-                    <Link href={href} aria-label={`Apri ${node.name}`}>
-                        <title>{node.name}</title>
-                        {label}
-                    </Link>
-                ) : (
-                    label
-                )}
             </g>
         );
     };

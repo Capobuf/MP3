@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from '@inertiajs/react';
+import { ChartLabel } from './chart-label';
 import {
     Bar,
     BarChart,
@@ -19,11 +19,9 @@ import { money, varianceTextClass } from './helpers';
 export function VarianceChart({
     rows,
     slug,
-    disabled,
 }: {
     rows: VarianceRow[];
     slug: string;
-    disabled: boolean;
 }) {
     const [selected, setSelected] = useState<VarianceRow['id'] | null>(null);
     const select = (id: VarianceRow['id']) =>
@@ -83,25 +81,13 @@ export function VarianceChart({
                                     return <g />;
                                 return (
                                     <g transform={`translate(${x},${y})`}>
-                                        <Link
+                                        <ChartLabel
+                                            x={-135}
+                                            y={0}
+                                            width={135}
+                                            name={row.title}
                                             href={`/t/${slug}/expenses/${row.id}`}
-                                            aria-label={`Apri ${row.title}`}
-                                            onClick={(event) => {
-                                                if (disabled)
-                                                    event.preventDefault();
-                                            }}
-                                        >
-                                            <title>{row.title}</title>
-                                            <text
-                                                textAnchor="end"
-                                                dominantBaseline="middle"
-                                                fill="var(--muted-foreground)"
-                                            >
-                                                {row.title.length > 25
-                                                    ? `${row.title.slice(0, 24)}…`
-                                                    : row.title}
-                                            </text>
-                                        </Link>
+                                        />
                                     </g>
                                 );
                             }}
@@ -110,6 +96,7 @@ export function VarianceChart({
                         />
                         <ReferenceLine x={0} stroke="var(--muted-foreground)" />
                         <ChartTooltip
+                            shared={false}
                             content={({ active, payload }) => {
                                 const row = payload?.[0]?.payload as
                                     | VarianceRow
