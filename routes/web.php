@@ -14,6 +14,7 @@ use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
 use App\Http\Controllers\Tenant\ProjectStatusController;
+use App\Http\Controllers\Tenant\SearchController;
 use App\Http\Controllers\Tenant\SpreadsheetController;
 use App\Http\Controllers\Tenant\TenantDataTransferController;
 use App\Http\Controllers\Tenant\UndoController;
@@ -82,6 +83,7 @@ Route::middleware('auth')->group(function () {
             Route::patch('{comment}', [CommentController::class, 'update'])->whereNumber('comment')->name('comments.update');
             Route::delete('{comment}', [CommentController::class, 'destroy'])->whereNumber('comment')->name('comments.destroy');
         });
+        Route::get('search', SearchController::class)->name('search');
         Route::get('creation-options', CreationOptionsController::class)->name('creation-options');
         Route::get('{kind}/create', [CreationOptionsController::class, 'create'])->whereIn('kind', ['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'])->name('create');
         Route::get('{kind}/{record}/edit', [CreationOptionsController::class, 'edit'])->whereIn('kind', ['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'])->whereNumber('record')->name('edit');
