@@ -156,7 +156,7 @@ final class ExpenseOverview
             'vendors' => $tenant->vendors()->orderBy('name')->limit(100)->get(['id', 'name']),
             'cost_centers' => $tenant->costCenters()->with('parent:id,name')->orderBy('name')->get(['id', 'name', 'parent_id']),
             'contracts' => $tenant->contracts()->forYear(EconomicYearContext::year($tenant, request()))->orderBy('name')->limit(100)->get(['id', 'name'])->map(fn ($contract) => ['id' => $contract->id, 'name' => $contract->display_name]),
-            'projects' => $tenant->projects()->orderBy('name')->limit(100)->get(['id', 'name']),
+            'projects' => $tenant->projects()->forYear(EconomicYearContext::year($tenant, request()))->orderBy('name')->limit(100)->get(['id', 'name']),
         ];
     }
 }

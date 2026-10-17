@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Models\Contract;
 use App\Models\Expense;
+use App\Models\Project;
 use App\Models\Tenant;
 use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
@@ -33,7 +34,7 @@ class CreationOptionsController extends Controller
             default => abort(404),
         };
         $item = $relation->whereKey($record)->firstOrFail();
-        if ($item instanceof Contract && $item->year !== null && EconomicYearContext::year($tenant, $request) !== $item->year) {
+        if (($item instanceof Contract || $item instanceof Project) && $item->year !== null && EconomicYearContext::year($tenant, $request) !== $item->year) {
             return Inertia::location($request->url().'?'.http_build_query([...$request->query(), 'year' => $item->year]));
         }
         $item->load(match ($kind) {
@@ -74,7 +75,7 @@ class CreationOptionsController extends Controller
             'tenant' => $tenant->only('id', 'name', 'slug'),
             'kind' => $kind,
             'record' => $record,
-            'year' => $record instanceof Expense || ($record instanceof Contract && $record->year !== null) ? $record->year : EconomicYearContext::year($tenant, $request),
+            'year' => $record instanceof Expense || (($record instanceof Contract || $record instanceof Project) && $record->year !== null) ? $record->year : EconomicYearContext::year($tenant, $request),
             'options' => ExpenseOverview::options($tenant),
             'contractContext' => $contract,
             'projectContext' => $project,

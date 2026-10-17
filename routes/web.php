@@ -104,6 +104,8 @@ Route::middleware('auth')->group(function () {
             Route::patch('entries', [BudgetController::class, 'batch'])->name('budget.entries.batch');
             Route::get('contract-import', [AnnualContractImportController::class, 'preview'])->name('budget.contract-import.preview');
             Route::post('contract-import', [AnnualContractImportController::class, 'store'])->name('budget.contract-import.store');
+            Route::get('project-import', [AnnualContractImportController::class, 'preview'])->defaults('type', 'project')->name('budget.project-import.preview');
+            Route::post('project-import', [AnnualContractImportController::class, 'store'])->defaults('type', 'project')->name('budget.project-import.store');
         });
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::get('expenses/options', [ExpenseController::class, 'options'])->name('expenses.options');

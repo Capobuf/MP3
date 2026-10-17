@@ -159,7 +159,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_variance_uses_aggregate_totals_including_separate_expenses_and_filtered_groups(): void
     {
-        $project = $this->tenant->projects()->create(['name' => 'Previsione e acquisto']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Previsione e acquisto']);
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
         $forecast = $this->tenant->expenses()->create(['title' => 'Previsione', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => null]);
         $actual = $this->tenant->expenses()->create(['title' => 'Acquisto', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => null, 'actual_amount' => '80']);
@@ -236,7 +236,7 @@ class AnnualBudgetTest extends TestCase
     public function test_sources_are_references_and_removal_keeps_originals(): void
     {
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto', 'reference_amount' => '90000']);
-        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026, 'allocated_amount' => '20']);
         $this->add('contract', $contract->id);
         $this->add('project', $project->id);
@@ -297,7 +297,7 @@ class AnnualBudgetTest extends TestCase
     public function test_deduplication_exclusion_reactivation_and_reassignment(): void
     {
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
-        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Condivisa', 'year' => 2026, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
         $this->add('expense', $expense->id);
         $this->add('project', $project->id);
@@ -315,7 +315,7 @@ class AnnualBudgetTest extends TestCase
     public function test_missing_suggestions_and_idempotent_assisted_insertion(): void
     {
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
-        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Progetto']);
         foreach ([['contract_id' => $contract->id], ['contract_id' => $contract->id, 'project_id' => $project->id], ['project_id' => $project->id], []] as $index => $links) {
             $this->tenant->expenses()->create(['title' => 'Spesa '.$index, 'year' => 2026, 'allocated_amount' => '10', ...$links]);
         }
@@ -373,7 +373,7 @@ class AnnualBudgetTest extends TestCase
     public function test_referenced_sources_and_centers_cannot_be_deleted_even_when_excluded(): void
     {
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
-        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026]);
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
         $this->add('contract', $contract->id);
@@ -408,7 +408,7 @@ class AnnualBudgetTest extends TestCase
     public function test_reordering_preserves_amounts_attribution_and_excluded_entries(): void
     {
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
-        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Condivisa', 'year' => 2026, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
         $this->add('contract', $contract->id);
         $this->addExpense(['title' => 'Esclusa', 'allocated_amount' => '999']);

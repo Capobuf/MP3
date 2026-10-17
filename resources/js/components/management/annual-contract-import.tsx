@@ -33,6 +33,14 @@ import {
     TableHead,
     TableCell,
 } from '@/components/ui/table';
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 
 type Center = { id: number; name: string; parent?: { name: string } | null };
@@ -40,12 +48,15 @@ type SourceExpense = {
     id: number;
     title: string;
     allocated: string | null;
+    actual: string | null;
+    contract_id: number | null;
     has_target_year: boolean;
     project_id: number | null;
 };
 type Source = {
     id: number;
     display_name: string;
+    status: string | null;
     starts_on: string | null;
     ends_on: string | null;
     group: number;
@@ -59,7 +70,9 @@ type Source = {
 type Preview = {
     source_year: number;
     target_year: number;
-    contracts: Source[];
+    contracts?: Source[];
+    projects?: Source[];
+    project_statuses: { key: string; name: string }[];
     legacy_count: number;
 };
 type Selection = {
@@ -81,16 +94,23 @@ export function AnnualContractImport({
     onClose: () => void;
     onImported: (budget: BudgetSnapshot) => void;
 }) {
+    const [kind, setKind] = useState<'contract' | 'project'>('contract');
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selection, setSelection] = useState<Record<number, Selection>>({});
     const [summary, setSummary] = useState(false);
     const [expanded, setExpanded] = useState<number[]>([]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    const [status, setStatus] = useState('all');
+    const [showActual, setShowActual] = useState(false);
+    const isProject = kind === 'project';
+    const resource = isProject ? 'projects' : 'contracts';
+    const plural = isProject ? 'progetti' : 'contratti';
+    const singular = isProject ? 'progetto' : 'contratto';
     const lock = useRef(false);
     const form = useRef<HTMLFormElement>(null);
     const content = useRef<HTMLDivElement>(null);
-    const endpoint = `${path}/contract-import`;
+    const endpoint = `${path}/${kind}-import`;
     async function load() {
         setBusy(true);
         setError('');
@@ -99,7 +119,7 @@ export function AnnualContractImport({
             setPreview(result);
             setSelection(
                 Object.fromEntries(
-                    result.contracts
+                    (isProject ? [] : (result.contracts ?? []))
                         .filter((source) => !source.already_imported)
                         .map((source) => [source.id, initial(source)]),
                 ),
@@ -110,7 +130,7 @@ export function AnnualContractImport({
             setError(
                 failure instanceof Error
                     ? failure.message
-                    : 'Impossibile caricare i contratti.',
+                    : `Impossibile caricare i ${plural}.`,
             );
         } finally {
             setBusy(false);
@@ -131,17 +151,16 @@ export function AnnualContractImport({
             expense_ids: [],
         };
     }
-    function selectAll() {
-        setSelection((current) =>
-            Object.fromEntries(
-                (preview?.contracts ?? [])
-                    .filter((source) => !source.already_imported)
-                    .map((source) => [
-                        source.id,
-                        current[source.id] ?? initial(source),
-                    ]),
-            ),
-        );
+    function selectAll(checked: boolean) {
+        setSelection((current) => {
+            const next = { ...current };
+            for (const source of available) {
+                if (checked)
+                    next[source.id] = current[source.id] ?? initial(source);
+                else delete next[source.id];
+            }
+            return next;
+        });
     }
     function selectAllExpenses(checked: boolean) {
         setSelection((current) => {
@@ -189,7 +208,7 @@ export function AnnualContractImport({
             const result = await api<{
                 budget: BudgetSnapshot;
                 message: string;
-            }>(endpoint, 'POST', { contracts: Object.values(selection) });
+            }>(endpoint, 'POST', { [resource]: Object.values(selection) });
             onImported(result.budget);
             toast.success(result.message);
             onClose();
@@ -204,10 +223,25 @@ export function AnnualContractImport({
             setBusy(false);
         }
     }
-    const chosen =
-        preview?.contracts.filter((source) => selection[source.id]) ?? [];
-    const available =
-        preview?.contracts.filter((source) => !source.already_imported) ?? [];
+    const records = preview?.[resource] ?? [];
+    const chosen = records.filter((source) => selection[source.id]);
+    const visible = records.filter(
+        (source) =>
+            !isProject ||
+            status === 'all' ||
+            (status === 'none'
+                ? source.status === null
+                : source.status === status),
+    );
+    const available = visible.filter((source) => !source.already_imported);
+    const visibleChosenCount = available.filter(
+        (source) => selection[source.id],
+    ).length;
+    const visibleExpenseCount = available.reduce(
+        (count, source) =>
+            count + (selection[source.id]?.expense_ids.length ?? 0),
+        0,
+    );
     const expenseCount = available.reduce(
         (count, source) =>
             count +
@@ -243,12 +277,15 @@ export function AnnualContractImport({
     }
     const tables =
         preview &&
-        [
-            `Validi nel ${preview.target_year}`,
-            `Scaduti nel ${preview.source_year} / Da rinnovare`,
-            'Altri',
-        ].map((label, group) => {
-            const sources = (summary ? chosen : preview.contracts).filter(
+        (isProject
+            ? ['Progetti']
+            : [
+                  `Validi nel ${preview.target_year}`,
+                  `Scaduti nel ${preview.source_year} / Da rinnovare`,
+                  'Altri',
+              ]
+        ).map((label, group) => {
+            const sources = (summary ? chosen : visible).filter(
                 (source) => source.group === group,
             );
             if (sources.length === 0) return null;
@@ -307,8 +344,8 @@ export function AnnualContractImport({
                                             <TableRow>
                                                 <TableCell>
                                                     <Checkbox
-                                                        id={`annual-contract-${source.id}`}
-                                                        aria-label={`Seleziona contratto ${source.display_name}`}
+                                                        id={`annual-source-${source.id}`}
+                                                        aria-label={`Seleziona ${singular} ${source.display_name}`}
                                                         disabled={
                                                             summary ||
                                                             busy ||
@@ -369,12 +406,13 @@ export function AnnualContractImport({
                                                             </Button>
                                                         )}
                                                         <FieldLabel
-                                                            htmlFor={`annual-contract-${source.id}`}
+                                                            htmlFor={`annual-source-${source.id}`}
                                                             className="min-w-0 flex-1"
                                                         >
-                                                            {
-                                                                source.display_name
-                                                            }
+                                                            {summary &&
+                                                            isProject
+                                                                ? `${source.display_name} (${preview.source_year}) → ${source.display_name} (${preview.target_year})`
+                                                                : source.display_name}
                                                         </FieldLabel>
                                                     </div>
                                                     {source.already_imported && (
@@ -388,10 +426,26 @@ export function AnnualContractImport({
                                                     {summary && (
                                                         <div className="mt-1 flex flex-col gap-1 pl-10 text-xs text-muted-foreground">
                                                             <p>
-                                                                Fornitore:{' '}
-                                                                {source.vendor
-                                                                    ?.name ??
-                                                                    'Nessuno'}
+                                                                {isProject
+                                                                    ? 'Stato: '
+                                                                    : 'Fornitore: '}
+                                                                {isProject
+                                                                    ? source.status ===
+                                                                      null
+                                                                        ? 'Senza stato'
+                                                                        : (preview.project_statuses.find(
+                                                                              (
+                                                                                  item,
+                                                                              ) =>
+                                                                                  item.key ===
+                                                                                  source.status,
+                                                                          )
+                                                                              ?.name ??
+                                                                          source.status)
+                                                                    : (source
+                                                                          .vendor
+                                                                          ?.name ??
+                                                                      'Nessuno')}
                                                             </p>
                                                             <p>
                                                                 Centri di costo:{' '}
@@ -410,25 +464,32 @@ export function AnnualContractImport({
                                                                       )
                                                                     : 'Nessuno'}
                                                             </p>
-                                                            {outside(draft) && (
-                                                                <p role="note">
-                                                                    Attenzione:
-                                                                    periodo
-                                                                    esterno al{' '}
-                                                                    {
-                                                                        preview.target_year
-                                                                    }
-                                                                    . Puoi
-                                                                    comunque
-                                                                    importare il
-                                                                    contratto
-                                                                    con queste
-                                                                    date.
-                                                                </p>
-                                                            )}
+                                                            {!isProject &&
+                                                                outside(
+                                                                    draft,
+                                                                ) && (
+                                                                    <p role="note">
+                                                                        Attenzione:
+                                                                        periodo
+                                                                        esterno
+                                                                        al{' '}
+                                                                        {
+                                                                            preview.target_year
+                                                                        }
+                                                                        . Puoi
+                                                                        comunque
+                                                                        importare
+                                                                        il
+                                                                        contratto
+                                                                        con
+                                                                        queste
+                                                                        date.
+                                                                    </p>
+                                                                )}
                                                         </div>
                                                     )}
                                                     {!summary &&
+                                                        !isProject &&
                                                         source.group === 1 &&
                                                         draft && (
                                                             <Button
@@ -572,7 +633,7 @@ export function AnnualContractImport({
                                                             className="pl-20 text-muted-foreground"
                                                         >
                                                             {summary
-                                                                ? 'Solo contratto, nessuna spesa.'
+                                                                ? `Solo ${singular}, nessuna spesa.`
                                                                 : `Nessuna spesa attribuita al ${preview.source_year}.`}
                                                         </TableCell>
                                                     </TableRow>
@@ -685,17 +746,23 @@ export function AnnualContractImport({
                                                                         </p>
                                                                     )}
                                                                 {summary &&
-                                                                    expense.project_id !==
+                                                                    (isProject
+                                                                        ? expense.contract_id
+                                                                        : expense.project_id) !==
                                                                         null && (
                                                                         <p className="mt-1 pl-10 text-xs text-muted-foreground">
                                                                             Il
                                                                             collegamento
                                                                             al
-                                                                            progetto
+                                                                            {isProject
+                                                                                ? 'contratto'
+                                                                                : 'progetto'}{' '}
                                                                             sorgente
                                                                             non
                                                                             verrà
                                                                             copiato.
+                                                                            {isProject &&
+                                                                                ' Importare questa spesa anche dal contratto può creare due previsioni distinte.'}
                                                                         </p>
                                                                     )}
                                                             </TableCell>
@@ -704,6 +771,17 @@ export function AnnualContractImport({
                                                                     expense.allocated,
                                                                     'Non presente',
                                                                 )}
+                                                                {isProject &&
+                                                                    showActual &&
+                                                                    !summary && (
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            Effettivo:{' '}
+                                                                            {money(
+                                                                                expense.actual,
+                                                                                'Non compilato',
+                                                                            )}
+                                                                        </p>
+                                                                    )}
                                                             </TableCell>
                                                         </TableRow>
                                                     ))
@@ -740,9 +818,38 @@ export function AnnualContractImport({
                         {preview
                             ? `: ${preview.source_year} → ${preview.target_year}`
                             : ''}
-                        . I contratti saranno copie indipendenti.
+                        . I {plural} saranno copie indipendenti.
                     </DialogDescription>
                 </DialogHeader>
+                {!summary && (
+                    <Field>
+                        <FieldLabel htmlFor="annual-kind">Importa</FieldLabel>
+                        <Select
+                            value={kind}
+                            disabled={busy}
+                            onValueChange={(value) => {
+                                setPreview(null);
+                                setSelection({});
+                                setStatus('all');
+                                setKind(value as 'contract' | 'project');
+                            }}
+                        >
+                            <SelectTrigger id="annual-kind">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem value="contract">
+                                        Contratti
+                                    </SelectItem>
+                                    <SelectItem value="project">
+                                        Progetti
+                                    </SelectItem>
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                )}
                 {error && (
                     <Alert variant="destructive">
                         <AlertTitle>Operazione non completata</AlertTitle>
@@ -762,7 +869,7 @@ export function AnnualContractImport({
                 {!preview && (
                     <p role="status">
                         {busy
-                            ? 'Caricamento contratti…'
+                            ? `Caricamento ${plural}…`
                             : 'Anteprima non disponibile.'}
                     </p>
                 )}
@@ -771,10 +878,11 @@ export function AnnualContractImport({
                         {preview.legacy_count > 0 && (
                             <Alert>
                                 <AlertTitle>
-                                    Contratti storici senza anno
+                                    {isProject ? 'Progetti' : 'Contratti'}{' '}
+                                    storici senza anno
                                 </AlertTitle>
                                 <AlertDescription>
-                                    {preview.legacy_count} contratti richiedono
+                                    {preview.legacy_count} {plural} richiedono
                                     una classificazione esplicita prima
                                     dell’importazione. Restano disponibili
                                     nell’archivio.
@@ -789,6 +897,42 @@ export function AnnualContractImport({
                             }}
                             className="flex min-w-0 flex-col gap-4"
                         >
+                            {!summary && isProject && (
+                                <Field>
+                                    <FieldLabel htmlFor="annual-status">
+                                        Stato
+                                    </FieldLabel>
+                                    <Select
+                                        value={status}
+                                        onValueChange={setStatus}
+                                        disabled={busy}
+                                    >
+                                        <SelectTrigger id="annual-status">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectGroup>
+                                                <SelectItem value="all">
+                                                    Tutti
+                                                </SelectItem>
+                                                <SelectItem value="none">
+                                                    Senza stato
+                                                </SelectItem>
+                                                {preview.project_statuses.map(
+                                                    (item) => (
+                                                        <SelectItem
+                                                            key={item.key}
+                                                            value={item.key}
+                                                        >
+                                                            {item.name}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
+                                            </SelectGroup>
+                                        </SelectContent>
+                                    </Select>
+                                </Field>
+                            )}
                             {!summary && (
                                 <FieldSet>
                                     <FieldLegend className="sr-only">
@@ -806,21 +950,19 @@ export function AnnualContractImport({
                                                     available.length === 0
                                                 }
                                                 checked={
-                                                    chosen.length === 0
+                                                    visibleChosenCount === 0
                                                         ? false
-                                                        : chosen.length ===
+                                                        : visibleChosenCount ===
                                                             available.length
                                                           ? true
                                                           : 'indeterminate'
                                                 }
                                                 onCheckedChange={(checked) =>
-                                                    checked === true
-                                                        ? selectAll()
-                                                        : setSelection({})
+                                                    selectAll(checked === true)
                                                 }
                                             />
                                             <FieldLabel htmlFor="annual-all-contracts">
-                                                Tutti i contratti
+                                                Tutti i {plural}
                                             </FieldLabel>
                                         </Field>
                                         <Field
@@ -833,9 +975,9 @@ export function AnnualContractImport({
                                                     busy || expenseCount === 0
                                                 }
                                                 checked={
-                                                    selectedExpenseCount === 0
+                                                    visibleExpenseCount === 0
                                                         ? false
-                                                        : selectedExpenseCount ===
+                                                        : visibleExpenseCount ===
                                                             expenseCount
                                                           ? true
                                                           : 'indeterminate'
@@ -850,18 +992,40 @@ export function AnnualContractImport({
                                                 Tutte le spese allocate
                                             </FieldLabel>
                                         </Field>
+                                        {isProject && (
+                                            <Field
+                                                orientation="horizontal"
+                                                className="w-auto"
+                                            >
+                                                <Checkbox
+                                                    id="annual-show-actual"
+                                                    checked={showActual}
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) =>
+                                                        setShowActual(
+                                                            checked === true,
+                                                        )
+                                                    }
+                                                />
+                                                <FieldLabel htmlFor="annual-show-actual">
+                                                    Mostra effettivi{' '}
+                                                    {preview.source_year}
+                                                </FieldLabel>
+                                            </Field>
+                                        )}
                                     </FieldGroup>
                                 </FieldSet>
                             )}
                             <p className="text-sm text-muted-foreground">
-                                Selezionati: {chosen.length} contratti ·{' '}
+                                Selezionati: {chosen.length} {plural} ·{' '}
                                 {selectedExpenseCount} spese allocate
                             </p>
-                            {preview.contracts.length === 0 && (
+                            {records.length === 0 && (
                                 <Empty>
                                     <EmptyHeader>
                                         <EmptyTitle>
-                                            Nessun contratto nell’anno{' '}
+                                            Nessun {singular} nell’anno{' '}
                                             {preview.source_year}
                                         </EmptyTitle>
                                     </EmptyHeader>
@@ -870,6 +1034,17 @@ export function AnnualContractImport({
                             {tables}
                             {summary && (
                                 <>
+                                    {isProject && (
+                                        <p className="text-sm text-muted-foreground">
+                                            Copie indipendenti:{' '}
+                                            {preview.source_year} →{' '}
+                                            {preview.target_year}. Nomi, stato e
+                                            centri di costo mantenuti.
+                                            Effettivi, commenti e allegati
+                                            esclusi. Dati {preview.source_year}{' '}
+                                            invariati.
+                                        </p>
+                                    )}
                                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 p-4 font-medium">
                                         <span>
                                             Totale allocato{' '}

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\BudgetEntriesRequest;
 use App\Models\BudgetYear;
 use App\Models\Contract;
+use App\Models\Project;
 use App\Models\Tenant;
 use App\Services\AnnualBudget;
 use App\Services\AttachmentFiles;
@@ -68,7 +69,7 @@ class BudgetController extends Controller
     {
         $data = $request->validate(['type' => ['required', Rule::in(['contract', 'project', 'expense'])], 'search' => ['nullable', 'string', 'max:255'], 'page' => ['nullable', 'integer', 'min:1'], 'id' => ['nullable', 'integer']]);
         $relation = $tenant->{$data['type'].'s'}();
-        if ($data['type'] === 'contract') {
+        if (in_array($data['type'], ['contract', 'project'], true)) {
             $relation->where('year', EconomicYearContext::year($tenant, $request));
         }
         if (isset($data['id'])) {
@@ -127,8 +128,8 @@ class BudgetController extends Controller
         if ($source === null) {
             throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La sorgente non appartiene a questo ambiente o è stata eliminata.']);
         }
-        if ($source instanceof Contract && $source->year !== $year->year) {
-            throw ValidationException::withMessages(['entries' => 'Seleziona un contratto di questo anno. Per lo storico senza anno occorre prima una classificazione esplicita.']);
+        if (($source instanceof Contract || $source instanceof Project) && $source->year !== $year->year) {
+            throw ValidationException::withMessages(['entries' => 'Seleziona una sorgente di questo anno. Per lo storico senza anno occorre prima una classificazione esplicita.']);
         }
         $existing = $year->entries()->where($type.'_id', $source->id)->first();
         if ($existing !== null) {

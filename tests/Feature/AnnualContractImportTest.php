@@ -25,7 +25,7 @@ class AnnualContractImportTest extends TestCase
 
     private function selection(string $path, int $id, array $expenses = []): array
     {
-        $row = collect($this->getJson($path)->assertOk()->json('contracts'))->firstWhere('id', $id);
+        $row = collect($this->getJson($path)->assertOk()->json(str_ends_with($path, 'project-import') ? 'projects' : 'contracts'))->firstWhere('id', $id);
 
         return ['id' => $id, 'token' => $row['token'], 'starts_on' => $row['starts_on'], 'ends_on' => $row['ends_on'], 'expense_ids' => $expenses];
     }
@@ -156,5 +156,112 @@ class AnnualContractImportTest extends TestCase
         $this->patchJson('/t/annual/contracts/'.$legacy->id, ['name' => 'Non modificare lo storico condiviso'])->assertUnprocessable();
         $this->assertNull($legacy->fresh()->year);
         $this->assertSame(2, $tenant->budgetEntries()->where('contract_id', $legacy->id)->count());
+    }
+
+    public function test_project_import_copies_only_selected_source_allocations_and_preserves_all_history(): void
+    {
+        [$tenant, $year, $contract, $contractPath] = $this->context();
+        $path = str_replace('contract-import', 'project-import', $contractPath);
+        $project = $tenant->projects()->create(['name' => 'Progetto', 'description' => 'Originale', 'status' => 'attivo', 'year' => 2026, 'starts_on' => '2025-01-01', 'ends_on' => '2026-12-31']);
+        $center = $tenant->costCenters()->create(['name' => 'IT']);
+        $vendor = $tenant->vendors()->create(['name' => 'Fornitore']);
+        $project->costCenters()->sync([$center->id]);
+        $previous = $tenant->budgetYears()->create(['year' => 2026]);
+        $previous->entries()->create(['tenant_id' => $tenant->id, 'type' => 'project', 'project_id' => $project->id, 'cost_center_id' => $center->id]);
+        $expense = app(ExpenseWriter::class)->create($tenant, ['title' => 'Previsione', 'notes' => 'Note', 'vendor_id' => $vendor->id, 'project_id' => $project->id, 'contract_id' => $contract->id, 'year' => 2026, 'cost_center_ids' => [$center->id], 'lines' => [
+            ['description' => 'Zero', 'type' => 'allocated', 'unit_price' => '0', 'year' => null],
+            ['description' => 'Rettifica', 'type' => 'allocated', 'unit_price' => '-10', 'quantity' => '2.5', 'year' => 2026, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'],
+            ['description' => 'Futuro', 'type' => 'allocated', 'unit_price' => '100', 'year' => 2027, 'period_starts_on' => null, 'period_ends_on' => null],
+            ['description' => 'Pagato', 'type' => 'actual', 'unit_price' => '80', 'year' => 2026],
+        ]]);
+        $tenant->expenses()->create(['title' => 'Non selezionata', 'year' => 2026, 'allocated_amount' => '50', 'project_id' => $project->id]);
+        $content = ['type' => 'doc', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Storico']]]]];
+        foreach ([$project, $expense] as $owner) {
+            $resource = $owner === $project ? 'projects' : 'expenses';
+            $this->postJson('/t/annual/'.$resource.'/'.$owner->id.'/comments', ['content' => $content])->assertCreated();
+            $attachment = $owner->attachments()->make(['original_name' => 'storico.pdf', 'disk' => 'local', 'path' => 'storico.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1]);
+            $attachment->tenant_id = $tenant->id;
+            $attachment->save();
+        }
+        $before = $expense->fresh()->load('lines', 'costCenters')->toArray();
+        $this->getJson($path)->assertOk()->assertJsonPath('projects.0.expenses.0.allocated', '-25.00')->assertJsonPath('projects.0.expenses.0.has_target_year', true)->assertJsonPath('projects.0.status', 'attivo');
+        $this->assertSame(0, $year->entries()->count());
+        // Separate imports intentionally produce independent forecasts for a shared expense.
+        $this->postJson($contractPath, ['contracts' => [$this->selection($contractPath, $contract->id, [$expense->id])]])->assertOk();
+        $payload = ['projects' => [$this->selection($path, $project->id, [$expense->id])]];
+        $this->postJson($path, $payload)->assertOk();
+        $copy = $tenant->projects()->where('year', 2027)->sole();
+        $copiedExpense = $copy->expenses()->sole();
+        $this->assertNotEquals($project->id, $copy->id);
+        $this->assertSame($project->id, $copy->source_project_id);
+        $this->assertSame('2025-01-01', $copy->starts_on->toDateString());
+        $this->assertSame('Originale', $copy->description);
+        $this->assertSame('attivo', $copy->status);
+        $this->assertSame([$center->id], $copy->costCenters()->pluck('cost_centers.id')->all());
+        $this->assertSame($center->id, $year->entries()->where('type', 'project')->sole()->cost_center_id);
+        $this->assertSame('-25.00', $copiedExpense->allocated_amount);
+        $this->assertNull($copiedExpense->actual_amount);
+        $this->assertNull($copiedExpense->contract_id);
+        $this->assertSame($vendor->id, $copiedExpense->vendor_id);
+        $this->assertSame('Note', $copiedExpense->notes);
+        $this->assertSame([$center->id], $copiedExpense->costCenters()->pluck('cost_centers.id')->all());
+        $this->assertSame(['0.00', '-25.00'], $copiedExpense->lines()->pluck('total')->all());
+        $this->assertSame([2027, 2027], $copiedExpense->lines()->pluck('year')->all());
+        $this->assertSame([null, null], $copiedExpense->lines()->pluck('period_starts_on')->all());
+        foreach ([$copy, $copiedExpense] as $owner) {
+            $this->assertSame(0, $owner->comments()->count());
+            $this->assertSame(0, $owner->attachments()->count());
+        }
+        $this->assertSame($before, $expense->fresh()->load('lines', 'costCenters')->toArray());
+        $this->assertSame(2, $tenant->expenses()->where('year', 2027)->count());
+        $this->postJson($path, $payload)->assertUnprocessable();
+        $this->getJson($path)->assertJsonPath('projects.0.already_imported', true);
+        $this->patchJson('/t/annual/projects/'.$copy->id, ['name' => 'Versione 2027', 'status' => null, 'cost_center_ids' => [], 'starts_on' => '2027-01-01', 'ends_on' => null])->assertOk();
+        $this->assertSame('Progetto', $project->fresh()->name);
+        $this->assertSame('attivo', $project->fresh()->status);
+        $this->assertSame(1, $project->costCenters()->count());
+        $next = $tenant->budgetYears()->create(['year' => 2028]);
+        $nextPath = '/t/annual/budget/years/'.$next->id.'/project-import';
+        $this->getJson($nextPath)->assertJsonCount(1, 'projects')->assertJsonPath('projects.0.id', $copy->id);
+        $this->postJson($nextPath, ['projects' => [$this->selection($nextPath, $copy->id)]])->assertOk();
+        $nextCopy = $tenant->projects()->where('year', 2028)->sole();
+        $this->assertSame('Versione 2027', $nextCopy->name);
+        $this->assertSame(0, $nextCopy->expenses()->count());
+        $this->deleteJson('/t/annual/projects/'.$copy->id)->assertConflict();
+        $this->patchJson('/t/annual/projects/'.$copy->id, ['year' => 2028])->assertUnprocessable();
+        $this->patchJson('/t/annual/projects/'.$copy->id, ['source_project_id' => null])->assertUnprocessable();
+        $this->postJson('/t/annual/budget/years/'.$next->id.'/entries', ['entries' => [['type' => 'project', 'source_id' => $project->id]]])->assertUnprocessable();
+    }
+
+    public function test_project_import_rejects_stale_foreign_unallocated_and_legacy_sources_atomically(): void
+    {
+        [$tenant, $year, $contract, $path] = $this->context();
+        $path = str_replace('contract-import', 'project-import', $path);
+        $project = $tenant->projects()->create(['name' => 'Primo', 'year' => 2026]);
+        $other = $tenant->projects()->create(['name' => 'Secondo', 'year' => 2026]);
+        $zero = $tenant->expenses()->create(['title' => 'Zero esplicito', 'project_id' => $project->id, 'year' => 2026, 'allocated_amount' => '0']);
+        $actual = $tenant->expenses()->create(['title' => 'Solo effettivi', 'project_id' => $other->id, 'year' => 2026, 'actual_amount' => '12']);
+        $first = $this->selection($path, $project->id, [$zero->id]);
+        $this->postJson($path, ['projects' => [$first, $this->selection($path, $other->id, [$actual->id])]])->assertUnprocessable();
+        $this->assertSame(0, $tenant->projects()->where('year', 2027)->count());
+        $zero->update(['allocated_amount' => '-1']);
+        $this->postJson($path, ['projects' => [$first]])->assertUnprocessable();
+        $legacy = $tenant->projects()->create(['name' => 'Storico condiviso']);
+        foreach ([2025, 2026] as $number) {
+            $tenant->budgetYears()->create(['year' => $number])->entries()->create(['tenant_id' => $tenant->id, 'type' => 'project', 'project_id' => $legacy->id]);
+        }
+        $foreign = Tenant::create(['name' => 'Altro', 'slug' => 'altro'])->projects()->create(['name' => 'Esterno', 'year' => 2026]);
+        foreach ([$foreign, $legacy] as $invalid) {
+            $this->postJson($path, ['projects' => [[...$first, 'id' => $invalid->id]]])->assertUnprocessable();
+        }
+        $this->getJson($path)->assertOk()->assertJsonPath('legacy_count', 1)->assertJsonCount(2, 'projects');
+        $this->get('/t/annual/projects?year=2027')->assertInertia(fn (AssertableInertia $page) => $page->where('records.data.0.id', $legacy->id));
+        $this->patchJson('/t/annual/projects/'.$legacy->id, ['name' => 'Alterato'])->assertUnprocessable();
+        $this->assertSame(2, $tenant->budgetEntries()->where('project_id', $legacy->id)->count());
+        $this->assertSame(0, $year->entries()->count());
+        $zero->update(['allocated_amount' => '0']);
+        $this->postJson($path, ['projects' => [$this->selection($path, $project->id, [$zero->id])]])->assertOk()->assertJsonPath('budget.totals.allocated', '0.00')->assertJsonPath('budget.totals.actual', null);
+        $this->postJson('/t/annual/projects', ['name' => 'Manuale', 'year' => 2029])->assertCreated()->assertJsonPath('record.year', 2029);
+        $this->getJson('/t/annual/projects/options?year=2029')->assertOk()->assertJsonCount(2, 'records');
     }
 }

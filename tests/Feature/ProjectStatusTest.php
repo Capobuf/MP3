@@ -80,7 +80,7 @@ class ProjectStatusTest extends TestCase
         $tenant = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa']);
         $other = Tenant::create(['name' => 'Beta', 'slug' => 'beta']);
         $foreignStatus = $other->projectStatuses()->create(['name' => 'Esterno']);
-        $project = $tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
+        $project = $tenant->projects()->create(['year' => 2026, 'name' => 'Progetto', 'status' => 'attivo']);
         $this->actingAs(User::factory()->create(['is_super_admin' => true]));
         $this->patchJson('/t/alfa/settings/project-statuses/'.$foreignStatus->id, ['name' => 'Cambio'])->assertNotFound();
         $this->deleteJson('/t/alfa/settings/project-statuses/'.$foreignStatus->id, ['replacement' => null])->assertNotFound();

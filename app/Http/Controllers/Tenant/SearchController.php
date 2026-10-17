@@ -14,7 +14,6 @@ use App\Support\EconomicYearContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Carbon;
 use ProtoneMedia\LaravelCrossEloquentSearch\Search;
 
 class SearchController extends Controller
@@ -30,7 +29,7 @@ class SearchController extends Controller
         $search = Search::new()
             ->add(Expense::where('tenant_id', $tenant->id)->with('lines:id,expense_id,year'), ['title', 'notes', 'lines.description', 'vendor.name', 'contract.name', 'project.name', 'attachments.original_name'])
             ->add(Contract::where('tenant_id', $tenant->id)->forYear(EconomicYearContext::year($tenant, $request))->with('vendor:id,name'), ['name', 'notes', 'vendor.name', 'attachments.original_name'])
-            ->add(Project::where('tenant_id', $tenant->id), ['name', 'description', 'status', 'attachments.original_name'])
+            ->add(Project::where('tenant_id', $tenant->id)->forYear(EconomicYearContext::year($tenant, $request)), ['name', 'description', 'status', 'attachments.original_name'])
             ->add(Vendor::where('tenant_id', $tenant->id), ['name', 'vat_number', 'email', 'phone', 'notes'])
             ->add(CostCenter::where('tenant_id', $tenant->id)->with('parent:id,name'), ['name', 'parent.name']);
         if (preg_match('/^[0-9]{4}$/', $term)) {
@@ -75,19 +74,12 @@ class SearchController extends Controller
                 $params['year'] = $record->year;
             } elseif ($record instanceof CostCenter) {
                 $params['search'] = $record->name;
-            } elseif ($record instanceof Contract) {
+            } elseif ($record instanceof Contract || $record instanceof Project) {
                 if ($record->year !== null) {
                     $params['year'] = $record->year;
                 }
-            } elseif ($record instanceof Project) {
-                /** @var Carbon|null $start */
-                $start = $record->starts_on;
-                /** @var Carbon|null $end */
-                $end = $record->ends_on;
-                if ($start !== null && $end !== null && $start->year === $end->year && $start->year >= 2000 && $start->year <= 2100) {
-                    $params['year'] = $start->year;
-                }
             }
+
             $href = '/t/'.$tenant->slug.'/'.$type;
             if (! $record instanceof CostCenter && ! $record instanceof BudgetYear) {
                 $href .= '/'.$record->id;

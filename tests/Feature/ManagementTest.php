@@ -58,7 +58,7 @@ class ManagementTest extends TestCase
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore', 'email' => 'originale@example.com']);
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto', 'vendor_id' => $vendor->id, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31']);
-        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo', 'starts_on' => '2026-01-01']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Progetto', 'status' => 'attivo', 'starts_on' => '2026-01-01']);
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
         $contract->costCenters()->attach($center);
 
@@ -81,7 +81,7 @@ class ManagementTest extends TestCase
 
     public function test_inline_catalog_changes_still_validate_required_values_and_tenant_links(): void
     {
-        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
+        $project = $this->tenant->projects()->create(['year' => 2026, 'name' => 'Progetto', 'status' => 'attivo']);
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $foreignVendor = $this->other->vendors()->create(['name' => 'Altro fornitore']);
         $this->patchJson('/t/alfa/projects/'.$project->id, ['name' => ''])->assertUnprocessable()->assertJsonValidationErrors('name');
@@ -95,7 +95,7 @@ class ManagementTest extends TestCase
     public function test_inline_date_changes_are_checked_against_the_other_saved_date(): void
     {
         foreach (['contracts', 'projects'] as $catalog) {
-            $record = $this->tenant->{$catalog}()->create(['name' => 'Elemento', 'starts_on' => '2026-04-01', 'ends_on' => '2026-08-31', ...($catalog === 'projects' ? ['status' => 'attivo'] : ['year' => 2026])]);
+            $record = $this->tenant->{$catalog}()->create(['name' => 'Elemento', 'starts_on' => '2026-04-01', 'ends_on' => '2026-08-31', 'year' => 2026, ...($catalog === 'projects' ? ['status' => 'attivo'] : [])]);
             $path = '/t/alfa/'.$catalog.'/'.$record->id;
             $this->patchJson($path, ['ends_on' => '2026-03-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
             $this->patchJson($path, ['starts_on' => '2026-09-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
@@ -359,7 +359,7 @@ class ManagementTest extends TestCase
     public function test_cross_tenant_records_cannot_be_read_modified_deleted_or_linked(): void
     {
         foreach (['vendors', 'contracts', 'projects'] as $catalog) {
-            $data = ['name' => 'Segreto', ...($catalog === 'projects' ? ['status' => 'attivo'] : ['year' => 2026])];
+            $data = ['name' => 'Segreto', 'year' => 2026, ...($catalog === 'projects' ? ['status' => 'attivo'] : [])];
             $record = $this->other->{$catalog}()->create($data);
             $this->get('/t/alfa/'.$catalog.'/'.$record->id)->assertNotFound();
             $this->patchJson('/t/alfa/'.$catalog.'/'.$record->id, $data)->assertNotFound();

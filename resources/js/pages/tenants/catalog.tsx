@@ -198,15 +198,17 @@ export default function CatalogPage({
                         }
                     </p>
                 </DetailHero>
-                {catalog === 'contracts' &&
+                {catalog !== 'vendors' &&
                     records.data.some((record) => record.year == null) && (
                         <p
                             role="note"
                             className="text-sm text-muted-foreground"
                         >
-                            Sono presenti contratti storici senza anno. Restano
-                            consultabili; la modifica e l’importazione annuale
-                            richiedono una classificazione esplicita.
+                            Sono presenti{' '}
+                            {catalog === 'contracts' ? 'contratti' : 'progetti'}{' '}
+                            storici senza anno. Restano consultabili; la
+                            modifica e l’importazione annuale richiedono una
+                            classificazione esplicita.
                         </p>
                     )}
                 <Card>
