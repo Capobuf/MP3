@@ -66,15 +66,13 @@ export function BudgetPrintDialog({
     const [order, setOrder] = useState(
         Object.keys(budgetReportColumns) as BudgetReportColumn[],
     );
-    const [initialDate] = useState(() => new Date().toLocaleString('it-IT'));
-    const [createdAt, setCreatedAt] = useState(initialDate);
+    const [createdAt] = useState(() => new Date().toLocaleString('it-IT'));
     const [error, setError] = useState('');
     const [printing, setPrinting] = useState(false);
     const contentRef = useRef<HTMLElement>(null);
     const visibleColumns = order.filter((id) => options.columns.includes(id));
     const invalid =
         !options.title.trim() ||
-        (options.showDate && !createdAt.trim()) ||
         options.blocks.every((block) => options.hiddenBlocks.includes(block)) ||
         (!options.hiddenBlocks.includes('table') &&
             visibleColumns.length === 0) ||
@@ -478,27 +476,10 @@ export function BudgetPrintDialog({
                             <FieldSet>
                                 {heading(PanelBottom, 'Footer', () => {
                                     setOptions({ ...options, showDate: true });
-                                    setCreatedAt(initialDate);
                                 })}
                                 {check(
                                     'showDate',
                                     'Mostra data di elaborazione',
-                                )}
-                                {options.showDate && (
-                                    <Field>
-                                        <FieldLabel htmlFor="report-date">
-                                            Data di elaborazione
-                                        </FieldLabel>
-                                        <Input
-                                            id="report-date"
-                                            value={createdAt}
-                                            maxLength={80}
-                                            disabled={printing}
-                                            onChange={(event) =>
-                                                setCreatedAt(event.target.value)
-                                            }
-                                        />
-                                    </Field>
                                 )}
                             </FieldSet>
                         </FieldGroup>
@@ -528,7 +509,7 @@ export function BudgetPrintDialog({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
                         {invalid
-                            ? 'Compila i titoli e la data visibile; seleziona almeno un blocco e una colonna per la tabella.'
+                            ? 'Compila i titoli; seleziona almeno un blocco e una colonna per la tabella.'
                             : 'Controlla l’impaginazione nell’anteprima di Chrome prima di salvare. Scala 100%, carta A4.'}
                     </p>
                     <Button

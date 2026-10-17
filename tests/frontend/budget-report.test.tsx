@@ -324,7 +324,7 @@ it('keeps the overview selection of five overruns and five savings, omitting zer
     ]);
 });
 
-it('defaults to portrait, removes obsolete charts and places the editable date only in the footer', () => {
+it('defaults to portrait, removes obsolete charts and places the processing date only in the footer', () => {
     const options = defaultBudgetReportOptions('Azienda');
     expect(options.orientation).toBe('portrait');
     expect(options.blocks).not.toContain('completeness');
@@ -341,10 +341,10 @@ it('defaults to portrait, removes obsolete charts and places the editable date o
             }}
             tenantName="Azienda"
             year={2027}
-            createdAt="DATA PERSONALIZZATA"
+            createdAt="17/10/2026, 12:00:00"
         />,
     );
-    expect(html.indexOf('DATA PERSONALIZZATA')).toBeGreaterThan(
+    expect(html.indexOf('17/10/2026, 12:00:00')).toBeGreaterThan(
         html.indexOf('<footer'),
     );
     const sankey = html.slice(

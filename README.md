@@ -362,7 +362,8 @@ Il configuratore permette di modificare titolo, nome azienda, sottotitolo e tito
 dei blocchi; nascondere anno, logo, data, filtri/conteggi; riordinare e selezionare
 blocchi e colonne. Il formato iniziale è A4 verticale. Tutto è attivo inizialmente
 tranne la colonna Stato. Titolo, reset e opzioni sono accanto al rispettivo blocco;
-disattivandolo si nascondono le sue opzioni. La data modificabile è nel Footer. La tabella
+disattivandolo si nascondono le sue opzioni. La data nel Footer è automatica, rilevata
+all’apertura del report, e può essere mostrata o nascosta. La tabella
 può raggruppare per tipo con subtotali facoltativi, rispettando l’ordine delle voci
 all’interno dei gruppi. Ogni sezione del configuratore ha un reset indipendente.
 Le impostazioni valgono per il report aperto. I grafici aggiuntivi sono Distribuzione Fornitore (barre di allocato/effettivo),
