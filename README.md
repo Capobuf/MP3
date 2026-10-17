@@ -348,7 +348,9 @@ sopra si eseguono localmente, senza introdurre infrastruttura CI.
 
 ## Prototipo di stampa Budget (issue #29)
 
-Nel Budget, **Stampa report** apre il configuratore con anteprima del documento.
+Nel Budget, il menu **Importa, esporta e stampa** in alto a destra contiene
+**Importa Excel**, **Esporta Excel** e **Stampa report**. Quest’ultimo apre il
+configuratore con anteprima del documento.
 Usa tutte le righe risultanti dai filtri della tabella, anche nei gruppi chiusi,
 e l’ordinamento corrente; la selezione delle caselle di riga non limita il report.
 KPI e ripartizione provengono dallo snapshot Budget esistente. Il grafico mostra

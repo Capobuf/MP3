@@ -7,6 +7,8 @@ import {
     useCallback,
     useEffect,
     useId,
+    useImperativeHandle,
+    type Ref,
     useMemo,
     useState,
 } from 'react';
@@ -58,7 +60,6 @@ import {
     GripVertical,
     Ellipsis,
     TriangleAlert,
-    Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -707,7 +708,10 @@ function EntryDetail({
     );
 }
 
+export type BudgetTableHandle = { printReport: () => void };
+
 export function BudgetTable({
+    ref,
     budget,
     tenantName,
     slug,
@@ -724,6 +728,7 @@ export function BudgetTable({
     typeFilter,
     setTypeFilter,
 }: {
+    ref?: Ref<BudgetTableHandle>;
     budget: BudgetSnapshot;
     tenantName: string;
     slug: string;
@@ -1597,6 +1602,49 @@ export function BudgetTable({
             </Button>
         </TableColumnSettings>
     );
+    useImperativeHandle(ref, () => ({
+        printReport() {
+            if (busy || loading || !summary) {
+                toast.error(
+                    'Il Budget non è pronto per la stampa. Attendi il caricamento dei totali o aggiorna il Budget.',
+                );
+                return;
+            }
+            try {
+                setReport(
+                    captureBudgetReport(table, summary, [
+                        status === 'included'
+                            ? 'Voci incluse'
+                            : status === 'excluded'
+                              ? 'Voci escluse'
+                              : 'Incluse ed escluse',
+                        ...(search ? [`Ricerca: ${search}`] : []),
+                        ...(typeFilter !== 'all'
+                            ? [
+                                  `Tipo: ${budgetLabels[typeFilter as BudgetType]}`,
+                              ]
+                            : []),
+                        ...(vendor !== 'all'
+                            ? [
+                                  `Fornitore: ${vendors.find((item) => String(item.id) === vendor)?.name ?? 'Senza fornitore'}`,
+                              ]
+                            : []),
+                        ...(center !== 'all'
+                            ? [
+                                  `Centro: ${centers.find((item) => String(item.id) === center)?.name ?? 'Senza centro di costo'}`,
+                              ]
+                            : []),
+                    ]),
+                );
+            } catch (error) {
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : 'Report non disponibile.',
+                );
+            }
+        },
+    }));
     return (
         <section
             className="flex min-w-0 flex-col gap-4"
@@ -1612,50 +1660,6 @@ export function BudgetTable({
                 />
             )}
             <div className="flex flex-wrap items-center gap-2">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={busy || loading || !summary}
-                    onClick={() => {
-                        if (!summary) return;
-                        try {
-                            setReport(
-                                captureBudgetReport(table, summary, [
-                                    status === 'included'
-                                        ? 'Voci incluse'
-                                        : status === 'excluded'
-                                          ? 'Voci escluse'
-                                          : 'Incluse ed escluse',
-                                    ...(search ? [`Ricerca: ${search}`] : []),
-                                    ...(typeFilter !== 'all'
-                                        ? [
-                                              `Tipo: ${budgetLabels[typeFilter as BudgetType]}`,
-                                          ]
-                                        : []),
-                                    ...(vendor !== 'all'
-                                        ? [
-                                              `Fornitore: ${vendors.find((item) => String(item.id) === vendor)?.name ?? 'Senza fornitore'}`,
-                                          ]
-                                        : []),
-                                    ...(center !== 'all'
-                                        ? [
-                                              `Centro: ${centers.find((item) => String(item.id) === center)?.name ?? 'Senza centro di costo'}`,
-                                          ]
-                                        : []),
-                                ]),
-                            );
-                        } catch (error) {
-                            toast.error(
-                                error instanceof Error
-                                    ? error.message
-                                    : 'Report non disponibile.',
-                            );
-                        }
-                    }}
-                >
-                    <Printer data-icon="inline-start" />
-                    Stampa report
-                </Button>
                 <TableFilters
                     title="Filtri del Budget"
                     count={activeFilterCount}
