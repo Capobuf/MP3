@@ -108,18 +108,16 @@ class TenantSearchTest extends TestCase
         $this->getJson('/t/alfa/search?q=Comune')->assertJsonCount(20, 'results');
     }
 
-    public function test_catalog_links_set_only_an_identifiable_valid_year(): void
+    public function test_contract_links_use_economic_year_and_project_links_keep_their_period(): void
     {
-        foreach (['contracts', 'projects'] as $type) {
-            $record = $this->tenant->{$type}()->create(['name' => 'Datato '.$type, 'starts_on' => '2023-01-01', 'ends_on' => '2023-12-31']);
-            $href = '/t/alfa/'.$type.'/'.$record->id;
-            $this->getJson('/t/alfa/search?q=Datato%20'.$type)->assertJsonPath('results.0.href', $href.'?year=2023');
-            $this->get($href.'?year=2023')->assertInertia(fn (Assert $page) => $page->where('economicContext.year', 2023));
-            $record->update(['ends_on' => '2025-12-31']);
-            $this->getJson('/t/alfa/search?q=Datato%20'.$type)->assertJsonPath('results.0.href', $href);
-            $record->update(['starts_on' => '1999-01-01', 'ends_on' => '1999-12-31']);
-            $this->getJson('/t/alfa/search?q=Datato%20'.$type)->assertJsonPath('results.0.href', $href);
-        }
+        $contract = $this->tenant->contracts()->create(['name' => 'Datato contratto', 'year' => 2026, 'starts_on' => '2023-01-01', 'ends_on' => '2023-12-31']);
+        $this->getJson('/t/alfa/search?q=Datato&year=2026')->assertJsonPath('results.0.href', '/t/alfa/contracts/'.$contract->id.'?year=2026');
+        $this->getJson('/t/alfa/search?q=Datato&year=2027')->assertJsonCount(0, 'results');
+        $project = $this->tenant->projects()->create(['name' => 'Datato progetto', 'starts_on' => '2023-01-01', 'ends_on' => '2023-12-31']);
+        $href = '/t/alfa/projects/'.$project->id;
+        $this->getJson('/t/alfa/search?q=Datato%20progetto')->assertJsonPath('results.0.href', $href.'?year=2023');
+        $project->update(['ends_on' => '2025-12-31']);
+        $this->getJson('/t/alfa/search?q=Datato%20progetto')->assertJsonPath('results.0.href', $href);
     }
 
     public function test_search_crosses_years_and_links_use_line_years_without_changing_context(): void

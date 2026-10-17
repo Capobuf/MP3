@@ -30,7 +30,7 @@ class TenantCsvTransferTest extends TestCase
     public function test_unnamed_contracts_and_overlapping_expenses_round_trip_without_changing_values(): void
     {
         [$source, $target] = $this->setupTenants();
-        $contract = $source->contracts()->create([]);
+        $contract = $source->contracts()->create(['year' => 2026]);
         foreach (['Canone' => '1000', 'Formazione' => '500'] as $title => $amount) {
             $source->expenses()->create(['contract_id' => $contract->id, 'title' => $title, 'year' => 2026,
                 'period_starts_on' => '2026-06-13', 'period_ends_on' => '2027-06-13', 'allocated_amount' => $amount]);
@@ -116,7 +116,7 @@ class TenantCsvTransferTest extends TestCase
         $vendor = $source->vendors()->create(['name' => '=Alfa', 'vat_number' => '001234', 'notes' => "Note, con virgole\nseconda riga", 'email' => 'a@example.com']);
         $parent = $source->costCenters()->create(['name' => 'IT']);
         $child = $source->costCenters()->create(['name' => 'Cloud', 'parent_id' => $parent->id]);
-        $contract = $source->contracts()->create(['name' => 'Canone', 'vendor_id' => $vendor->id, 'reference_amount' => '-100.25', 'starts_on' => '2026-01-01', 'ends_on' => '2027-12-31']);
+        $contract = $source->contracts()->create(['year' => 2026, 'name' => 'Canone', 'vendor_id' => $vendor->id, 'reference_amount' => '-100.25', 'starts_on' => '2026-01-01', 'ends_on' => '2027-12-31']);
         $contract->costCenters()->sync([$parent->id]);
         $project = $source->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $project->costCenters()->sync([$child->id]);
@@ -169,7 +169,7 @@ class TenantCsvTransferTest extends TestCase
     public function test_invalid_archive_nonempty_destination_and_nonmember_are_rejected(): void
     {
         [$source, $target] = $this->setupTenants();
-        $source->contracts()->create(['name' => 'Contratto']);
+        $source->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $csv = $this->get('/t/origine/settings/data/export.csv')->streamedContent();
         // CSV doubles JSON quotation marks, so mutate the parsed payload instead.
         $stream = fopen('php://temp', 'w+');
@@ -301,6 +301,7 @@ class TenantCsvTransferTest extends TestCase
     {
         [$source, $target] = $this->setupTenants();
         $source->projects()->create(['name' => 'Legacy', 'status' => 'attivo']);
+        $source->contracts()->create(['name' => 'Contratto storico']);
         $target->projectStatuses()->delete();
         $stream = fopen('php://temp', 'w+');
         fwrite($stream, $this->get('/t/origine/settings/data/export.csv')->streamedContent());
@@ -310,7 +311,13 @@ class TenantCsvTransferTest extends TestCase
             if ($row[0] === 'meta') {
                 $meta = json_decode($row[2], true);
                 unset($meta['project_statuses']);
+                $meta['version'] = 1;
                 $row[2] = json_encode($meta);
+            }
+            if ($row[0] === 'contract') {
+                $data = json_decode($row[2], true);
+                unset($data['year'], $data['source_contract_ref']);
+                $row[2] = json_encode($data);
             }
             $rows[] = $row;
         }
@@ -326,5 +333,28 @@ class TenantCsvTransferTest extends TestCase
         $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
         $this->assertSame('attivo', $target->projects()->firstOrFail()->status);
         $this->assertSame(3, $target->projectStatuses()->count());
+        $this->assertCount(1, $preview->json('warnings'));
+        $this->assertNull($target->contracts()->sole()->year);
+        $this->assertNull($target->contracts()->sole()->source_contract_id);
+    }
+
+    public function test_annual_contract_references_round_trip_and_wrong_budget_year_is_rejected(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $original = $source->contracts()->create(['name' => 'Canone', 'year' => 2026]);
+        $copy = $source->contracts()->create(['name' => 'Canone aggiornato', 'year' => 2027, 'source_contract_id' => $original->id]);
+        $budget = $source->budgetYears()->create(['year' => 2027]);
+        $entry = $budget->entries()->create(['tenant_id' => $source->id, 'type' => 'contract', 'contract_id' => $copy->id]);
+        $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+        $restored = $target->contracts()->where('year', 2027)->sole();
+        $this->assertSame($target->contracts()->where('year', 2026)->sole()->id, $restored->source_contract_id);
+        $this->assertSame($restored->id, $target->budgetEntries()->sole()->contract_id);
+        $entry->update(['contract_id' => $original->id]);
+        $invalid = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
+        $empty = Tenant::create(['name' => 'Vuoto', 'slug' => 'vuoto']);
+        $this->postJson('/t/vuoto/settings/data/import/preview', ['file' => $invalid])->assertOk()->assertJsonPath('error_count', 1);
+        $this->assertSame(0, $empty->contracts()->count());
     }
 }

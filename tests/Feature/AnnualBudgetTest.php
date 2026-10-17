@@ -235,7 +235,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_sources_are_references_and_removal_keeps_originals(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto', 'reference_amount' => '90000']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto', 'reference_amount' => '90000']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026, 'allocated_amount' => '20']);
         $this->add('contract', $contract->id);
@@ -253,7 +253,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_contract_conditions_follow_attribution_year_and_refresh_from_source(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Pluriennale', 'reference_amount' => '9999']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Pluriennale', 'reference_amount' => '9999']);
         $response = $this->postJson('/t/budget/expenses', ['title' => 'Servizio', 'year' => 2026, 'contract_id' => $contract->id, 'lines' => [
             ['description' => 'Primo anno', 'type' => 'allocated', 'unit_price' => '120.25', 'year' => 2026, 'period_starts_on' => '2026-03-01', 'period_ends_on' => '2027-02-28'],
             ['description' => 'Fattura', 'type' => 'actual', 'unit_price' => '100.01', 'year' => 2026],
@@ -264,7 +264,8 @@ class AnnualBudgetTest extends TestCase
         $this->assertSame('-20.24', $state['totals']['variance']);
         $this->assertCount(2, $state['entries'][0]['expenses'][0]['lines']);
         $future = $this->tenant->budgetYears()->create(['year' => 2027]);
-        $this->postJson($this->url('entries', $future), ['entries' => [['type' => 'contract', 'source_id' => $contract->id]]])->assertOk()->assertJsonPath('budget.totals.allocated', '300.00');
+        $this->postJson($this->url('entries', $future), ['entries' => [['type' => 'contract', 'source_id' => $contract->id]]])->assertUnprocessable();
+        $this->postJson($this->url('entries', $future), ['entries' => [['type' => 'expense', 'source_id' => $response->json('record.id')]]])->assertOk()->assertJsonPath('budget.totals.allocated', '300.00');
         $this->patchJson('/t/budget/expenses/'.$response->json('record.id'), ['lines' => [
             ['description' => 'Aggiornata', 'type' => 'allocated', 'unit_price' => '400.33', 'year' => 2026],
         ]])->assertOk();
@@ -274,7 +275,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_null_zero_negatives_comparable_variance_and_sankey_reconcile(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Parziale']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Parziale']);
         foreach ([['100', null], [null, '50'], ['0', '10'], ['-20.12', '-15.11']] as $index => [$allocated, $actual]) {
             $this->tenant->expenses()->create(['title' => 'Spesa '.$index, 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
         }
@@ -295,7 +296,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_deduplication_exclusion_reactivation_and_reassignment(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Condivisa', 'year' => 2026, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
         $this->add('expense', $expense->id);
@@ -313,7 +314,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_missing_suggestions_and_idempotent_assisted_insertion(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto']);
         foreach ([['contract_id' => $contract->id], ['contract_id' => $contract->id, 'project_id' => $project->id], ['project_id' => $project->id], []] as $index => $links) {
             $this->tenant->expenses()->create(['title' => 'Spesa '.$index, 'year' => 2026, 'allocated_amount' => '10', ...$links]);
@@ -339,27 +340,13 @@ class AnnualBudgetTest extends TestCase
         $this->assertSame(2, $this->year->entries()->count());
     }
 
-    public function test_structure_copy_keeps_only_sources_attributed_to_the_destination_year_once(): void
+    public function test_old_structure_copy_is_unavailable_and_new_year_stays_empty(): void
     {
-        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
-        $expense = $this->tenant->expenses()->create(['title' => 'Solo 2026', 'year' => 2026, 'allocated_amount' => '100']);
-        $this->add('expense', $expense->id);
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
-        $project = $this->tenant->projects()->create(['name' => 'Progetto']);
-        $this->add('contract', $contract->id, ['cost_center_id' => $center->id]);
-        $this->add('project', $project->id);
-        $annual = $this->postJson('/t/budget/expenses', ['title' => 'Due anni', 'year' => 2026, 'lines' => [
-            ['description' => '2026', 'type' => 'allocated', 'unit_price' => '10', 'year' => 2026],
-            ['description' => '2027', 'type' => 'allocated', 'unit_price' => '20', 'year' => 2027],
-        ]])->assertCreated();
-        $this->add('expense', $annual->json('record.id'));
+        $contract = $this->tenant->contracts()->create(['name' => 'Contratto', 'year' => 2026]);
+        $this->add('contract', $contract->id);
         $future = $this->tenant->budgetYears()->create(['year' => 2027]);
-        $this->postJson($this->url('copy', $future))->assertOk()->assertJsonPath('budget.entries.0.type', 'contract')
-            ->assertJsonPath('budget.entries.0.cost_center_id', $center->id)->assertJsonPath('budget.entries.1.type', 'project')
-            ->assertJsonPath('budget.entries.2.allocated', '20.00');
-        $this->postJson($this->url('copy', $future))->assertOk();
-        $this->assertSame(3, $future->entries()->count());
-        $this->assertDatabaseCount('expenses', 2);
+        $this->postJson($this->url('copy', $future))->assertNotFound();
+        $this->assertSame(0, $future->entries()->count());
     }
 
     public function test_tenant_isolation_authorization_and_batch_rollback(): void
@@ -385,7 +372,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_referenced_sources_and_centers_cannot_be_deleted_even_when_excluded(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026]);
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
@@ -420,7 +407,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_reordering_preserves_amounts_attribution_and_excluded_entries(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Condivisa', 'year' => 2026, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
         $this->add('contract', $contract->id);
@@ -452,7 +439,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_assisted_insertion_preserves_intentionally_excluded_expenses(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $first = $this->tenant->expenses()->create(['title' => 'Esclusa', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '100']);
         $second = $this->tenant->expenses()->create(['title' => 'Mancante', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '20']);
         $state = $this->add('expense', $first->id);
@@ -466,7 +453,7 @@ class AnnualBudgetTest extends TestCase
     public function test_cost_center_totals_and_comparable_counts_do_not_duplicate_covered_expenses(): void
     {
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '0', 'actual_amount' => '10']);
         $this->add('expense', $expense->id, ['cost_center_id' => $center->id]);
         $this->add('contract', $contract->id, ['cost_center_id' => $center->id]);
@@ -479,7 +466,7 @@ class AnnualBudgetTest extends TestCase
 
     public function test_undated_lines_retain_the_original_expense_year_in_expanded_details(): void
     {
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $expense = $this->tenant->expenses()->create(['title' => 'Mista', 'year' => 2026, 'contract_id' => $contract->id]);
         foreach ([[null, '40'], [2027, '100']] as [$year, $total]) {
             $expense->lines()->create(['description' => 'Condizione', 'type' => 'allocated', 'unit_price' => $total, 'total' => $total, 'quantity' => '1', 'position' => 0, 'year' => $year]);
@@ -488,7 +475,7 @@ class AnnualBudgetTest extends TestCase
         $this->assertSame('40.00', $state['entries'][0]['allocated']);
         $this->assertCount(1, $state['entries'][0]['expenses'][0]['lines']);
         $future = $this->tenant->budgetYears()->create(['year' => 2027]);
-        $this->postJson($this->url('entries', $future), ['entries' => [['type' => 'contract', 'source_id' => $contract->id]]])->assertOk()->assertJsonCount(1, 'budget.entries.0.expenses.0.lines')->assertJsonPath('budget.entries.0.expenses.0.lines.0.year', 2027);
+        $this->postJson($this->url('entries', $future), ['entries' => [['type' => 'expense', 'source_id' => $expense->id]]])->assertOk()->assertJsonCount(1, 'budget.entries.0.expenses.0.lines')->assertJsonPath('budget.entries.0.expenses.0.lines.0.year', 2027);
     }
 
     public function test_database_rejects_cross_tenant_source_references(): void

@@ -24,7 +24,7 @@ class TenantDataTransferController extends Controller
 
     public function export(Tenant $tenant, TenantCsvTransfer $transfer): StreamedResponse
     {
-        $name = 'MP3_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $tenant->slug).'-tenant-v1_'.now()->toDateString().'.csv';
+        $name = 'MP3_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $tenant->slug).'-tenant-v2_'.now()->toDateString().'.csv';
 
         return response()->streamDownload(function () use ($tenant, $transfer): void {
             $stream = fopen('php://output', 'wb');

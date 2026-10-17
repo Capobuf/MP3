@@ -31,7 +31,7 @@ class SectionSpreadsheet
     {
         return match ($resource) {
             'vendors' => ['Nome' => 'name', 'Partita IVA' => 'vat_number', 'Email' => 'email', 'Telefono' => 'phone', 'Note' => 'notes'],
-            'contracts' => ['Nome' => 'name', 'Fornitore' => 'vendor_id', 'Data iniziale' => 'starts_on', 'Data finale' => 'ends_on', 'Importo di riferimento' => 'reference_amount', 'Centri di costo' => 'cost_center_ids', 'Note' => 'notes'],
+            'contracts' => ['Nome' => 'name', 'Fornitore' => 'vendor_id', 'Data iniziale' => 'starts_on', 'Data finale' => 'ends_on', 'Importo di riferimento' => 'reference_amount', 'Centri di costo' => 'cost_center_ids', 'Note' => 'notes', 'Anno' => 'year'],
             'projects' => ['Nome' => 'name', 'Descrizione' => 'description', 'Stato' => 'status', 'Data iniziale' => 'starts_on', 'Data finale' => 'ends_on', 'Centri di costo' => 'cost_center_ids'],
             'expenses' => ['Descrizione' => 'title', 'Anno' => 'year', 'Fornitore' => 'vendor_id', 'Contratto' => 'contract_id', 'Progetto' => 'project_id', 'Centri di costo' => 'cost_center_ids', 'Periodo iniziale' => 'period_starts_on', 'Periodo finale' => 'period_ends_on', 'Importo allocato' => 'allocated_amount', 'Importo effettivo' => 'actual_amount', 'Note' => 'notes'],
             'cost-centers' => ['Nome' => 'name', 'Centro padre' => 'parent_id'],
@@ -127,7 +127,7 @@ class SectionSpreadsheet
                 return [$item->name, $item->vat_number, $item->email, $item->phone, $item->notes];
             }
             if ($item instanceof Contract) {
-                return [$item->name, $item->vendor?->name, self::excelDate($item->starts_on), self::excelDate($item->ends_on), self::amount($item->reference_amount), self::centers($item->costCenters), $item->notes];
+                return [$item->name, $item->vendor?->name, self::excelDate($item->starts_on), self::excelDate($item->ends_on), self::amount($item->reference_amount), self::centers($item->costCenters), $item->notes, $item->year];
             }
 
             return [$item->name, $item->description, $statusNames[$item->status] ?? null, self::excelDate($item->starts_on), self::excelDate($item->ends_on), self::centers($item->costCenters)];

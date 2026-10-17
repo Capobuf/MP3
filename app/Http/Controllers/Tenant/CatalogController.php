@@ -54,6 +54,9 @@ class CatalogController extends Controller
     public function options(Request $request, Tenant $tenant, string $catalog): JsonResponse
     {
         $query = $this->records($tenant, $catalog);
+        if ($catalog === 'contracts') {
+            $query->where(fn ($q) => $q->where('year', EconomicYearContext::year($tenant, $request))->orWhereNull('year'));
+        }
         if ($search = $request->string('search')->trim()->toString()) {
             $query->where('name', 'like', '%'.$search.'%');
         }
@@ -61,7 +64,7 @@ class CatalogController extends Controller
         return response()->json(['records' => $query->orderBy('name')->limit(50)->get(['id', 'name'])->map(fn ($record) => ['id' => $record->id, 'name' => $record instanceof Contract ? $record->display_name : $record->name])]);
     }
 
-    public function show(Request $request, Tenant $tenant, string $catalog, int $record): Response
+    public function show(Request $request, Tenant $tenant, string $catalog, int $record): Response|\Symfony\Component\HttpFoundation\Response
     {
         $item = $this->records($tenant, $catalog)->findOrFail($record);
         if ($catalog !== 'vendors') {
@@ -72,6 +75,9 @@ class CatalogController extends Controller
             $item->setAttribute('has_period_expenses', $item->expenses()->whereNotNull('period_starts_on')->exists());
         }
         $year = EconomicYearContext::year($tenant, $request);
+        if ($item instanceof Contract && $item->year !== null && $year !== $item->year) {
+            return Inertia::location($request->url().'?'.http_build_query([...$request->query(), 'year' => $item->year]));
+        }
         $history = $request->query('history') === '1';
         $field = match ($catalog) {
             'contracts' => 'contract_id', 'projects' => 'project_id', 'vendors' => 'vendor_id',
@@ -114,7 +120,7 @@ class CatalogController extends Controller
             'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id]), aggregateVariance: $catalog === 'projects'),
             'breakdown' => $item instanceof Contract && (clone $annual)->count() < 3 ? null : ExpenseOverview::breakdown($annual),
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
-            'contracts' => $item instanceof Vendor ? $item->contracts()->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
+            'contracts' => $item instanceof Vendor ? $item->contracts()->forYear($year)->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,
         ]);
     }
 
@@ -135,6 +141,8 @@ class CatalogController extends Controller
                 'notes' => ['nullable', 'string', 'max:10000'],
             ],
             'contracts' => [
+                'year' => $request->isMethod('post') ? ['sometimes', 'required', 'integer', 'between:2000,2100'] : ['missing'],
+                'source_contract_id' => ['missing'],
                 'vendor_id' => ['nullable', 'integer', Rule::exists('vendors', 'id')->where('tenant_id', $tenant->id)],
                 'reference_amount' => ['nullable', 'regex:/^-?\d{1,12}(\.\d{1,2})?$/'],
                 'starts_on' => ['nullable', 'date_format:Y-m-d'],
@@ -181,7 +189,12 @@ class CatalogController extends Controller
             }
         }
 
-        return $request->validate($rules, $messages);
+        $data = $request->validate($rules, $messages);
+        if ($catalog === 'contracts' && $request->isMethod('post')) {
+            $data['year'] ??= EconomicYearContext::year($tenant, $request);
+        }
+
+        return $data;
     }
 
     public function store(Request $request, Tenant $tenant, string $catalog): JsonResponse
@@ -230,6 +243,9 @@ class CatalogController extends Controller
                 'ends_on' => $item->getRawOriginal('ends_on'),
             ]);
         }
+        if ($item instanceof Contract && $item->year === null) {
+            throw ValidationException::withMessages(['year' => 'Contratto storico senza anno: occorre una classificazione esplicita prima della modifica.']);
+        }
         $data = $this->validated($request, $tenant, $catalog);
         DB::transaction(function () use ($item, $data) {
             $ids = $data['cost_center_ids'] ?? null;
@@ -251,6 +267,9 @@ class CatalogController extends Controller
     {
         $response = DB::transaction(function () use ($tenant, $catalog, $record, $files): JsonResponse {
             $item = $this->records($tenant, $catalog)->lockForUpdate()->findOrFail($record);
+            if ($item instanceof Contract && $tenant->contracts()->where('source_contract_id', $item->id)->exists()) {
+                return response()->json(['message' => 'Eliminazione bloccata: il contratto è sorgente di copie annuali.'], 409);
+            }
             $expenseCount = $item->expenses()->count();
             $contractCount = $item instanceof Vendor ? $item->contracts()->count() : 0;
             if ($expenseCount || $contractCount) {

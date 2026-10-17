@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Models\Contract;
 use App\Models\Expense;
 use App\Models\Tenant;
 use App\Support\EconomicYearContext;
@@ -21,7 +22,7 @@ class CreationOptionsController extends Controller
         return $this->form($request, $tenant, $kind);
     }
 
-    public function edit(Request $request, Tenant $tenant, string $kind, int $record): Response
+    public function edit(Request $request, Tenant $tenant, string $kind, int $record): Response|\Symfony\Component\HttpFoundation\Response
     {
         $relation = match ($kind) {
             'cost-centers' => $tenant->costCenters(),
@@ -32,6 +33,9 @@ class CreationOptionsController extends Controller
             default => abort(404),
         };
         $item = $relation->whereKey($record)->firstOrFail();
+        if ($item instanceof Contract && $item->year !== null && EconomicYearContext::year($tenant, $request) !== $item->year) {
+            return Inertia::location($request->url().'?'.http_build_query([...$request->query(), 'year' => $item->year]));
+        }
         $item->load(match ($kind) {
             'cost-centers' => ['parent:id,name', 'children'],
             'expenses' => ['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'],
@@ -70,7 +74,7 @@ class CreationOptionsController extends Controller
             'tenant' => $tenant->only('id', 'name', 'slug'),
             'kind' => $kind,
             'record' => $record,
-            'year' => $record instanceof Expense ? $record->year : EconomicYearContext::year($tenant, $request),
+            'year' => $record instanceof Expense || ($record instanceof Contract && $record->year !== null) ? $record->year : EconomicYearContext::year($tenant, $request),
             'options' => ExpenseOverview::options($tenant),
             'contractContext' => $contract,
             'projectContext' => $project,

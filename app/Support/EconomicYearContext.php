@@ -38,6 +38,7 @@ final class EconomicYearContext
                 ->where('expenses.tenant_id', $tenant->id)->whereNotNull('expense_lines.year')
                 ->select('expense_lines.year')->distinct()->pluck('year'))
             ->merge($tenant->budgetYears()->select('year')->distinct()->pluck('year'))
+            ->merge($tenant->contracts()->whereNotNull('year')->pluck('year'))
             ->push(now()->year, $selected);
 
         return array_values($years->map(fn ($year) => (int) $year)->filter(fn ($year) => $year >= 2000 && $year <= 2100)

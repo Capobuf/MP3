@@ -6,6 +6,7 @@ use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
 use App\Http\Controllers\Platform\TenantUserController;
 use App\Http\Controllers\Platform\UserController as PlatformUserController;
+use App\Http\Controllers\Tenant\AnnualContractImportController;
 use App\Http\Controllers\Tenant\AttachmentController;
 use App\Http\Controllers\Tenant\BudgetController;
 use App\Http\Controllers\Tenant\CatalogController;
@@ -101,7 +102,8 @@ Route::middleware('auth')->group(function () {
             Route::post('entries/assist', [BudgetController::class, 'assist'])->name('budget.entries.assist');
             Route::post('entries', [BudgetController::class, 'store'])->name('budget.entries.store');
             Route::patch('entries', [BudgetController::class, 'batch'])->name('budget.entries.batch');
-            Route::post('copy', [BudgetController::class, 'copy'])->name('budget.copy');
+            Route::get('contract-import', [AnnualContractImportController::class, 'preview'])->name('budget.contract-import.preview');
+            Route::post('contract-import', [AnnualContractImportController::class, 'store'])->name('budget.contract-import.store');
         });
         Route::get('expenses', [ExpenseController::class, 'index'])->name('expenses.index');
         Route::get('expenses/options', [ExpenseController::class, 'options'])->name('expenses.options');

@@ -89,11 +89,13 @@ export function BudgetCenterSelect({
 
 function SourcePicker({
     slug,
+    year,
     type,
     value,
     onChange,
 }: {
     slug: string;
+    year: number;
     type: BudgetType;
     value: Option | null;
     onChange: (value: Option) => void;
@@ -112,7 +114,7 @@ function SourcePicker({
         setError('');
         const timer = setTimeout(() => {
             void api<{ records: Option[]; last_page: number }>(
-                `/t/${slug}/budget/options?type=${type}&search=${encodeURIComponent(search)}&page=${page}`,
+                `/t/${slug}/budget/options?year=${year}&type=${type}&search=${encodeURIComponent(search)}&page=${page}`,
             )
                 .then((data) => {
                     if (current) {
@@ -136,7 +138,7 @@ function SourcePicker({
             current = false;
             clearTimeout(timer);
         };
-    }, [slug, type, search, page, open]);
+    }, [slug, year, type, search, page, open]);
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -296,6 +298,7 @@ export function BudgetEntrySheet({
                         <Field>
                             <FieldLabel>Sorgente esistente</FieldLabel>
                             <SourcePicker
+                                year={budgetYear.year}
                                 key={type}
                                 slug={slug}
                                 type={type}

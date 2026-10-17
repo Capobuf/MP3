@@ -18,7 +18,7 @@ class AnnualBudget
     private function expenses(Tenant $tenant, int $year): Collection
     {
         return ExpenseOverview::economicQuery($tenant)->where('year', $year)
-            ->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'costCenters.parent:id,name',
+            ->with(['vendor:id,name', 'contract:id,name,year', 'project:id,name', 'costCenters.parent:id,name',
                 'lines' => fn ($query) => $query->where(fn ($query) => $query->where('expense_lines.year', $year)
                     ->orWhere(fn ($query) => $query->whereNull('expense_lines.year')->whereIn('expense_id', $tenant->expenses()->where('year', $year)->select('id')))),
             ])
@@ -169,7 +169,7 @@ class AnnualBudget
             $type = $expense->contract_id !== null ? 'contract' : ($expense->project_id !== null ? 'project' : 'expense');
             $id = $type === 'expense' ? $expense->id : $expense->getAttribute($type.'_id');
             $key = $type.':'.$id;
-            if (isset($protectedContainers[$key])) {
+            if (isset($protectedContainers[$key]) || ($type === 'contract' && $expense->contract?->year !== $year->year)) {
                 $type = 'expense';
                 $id = $expense->id;
                 $key = $type.':'.$id;
