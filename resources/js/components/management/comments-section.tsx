@@ -484,16 +484,24 @@ export function CommentsSection({
                             {list.data.map((thread) => (
                                 <li
                                     key={thread.id}
-                                    className="relative min-w-0"
+                                    className="relative min-w-0 pl-5"
                                     data-thread-id={thread.id}
                                 >
                                     {(thread.replies.length > 0 ||
                                         replying === thread.id) && (
                                         <div
-                                            className="pointer-events-none absolute top-9 bottom-4 left-4 border-l border-border"
+                                            className="pointer-events-none absolute top-4 bottom-4 left-1 border-l border-border"
                                             aria-hidden="true"
                                         />
                                     )}
+                                    <span
+                                        className="pointer-events-none absolute top-4 left-1 w-4 border-t border-border"
+                                        aria-hidden="true"
+                                    />
+                                    <span
+                                        className="pointer-events-none absolute top-4 left-1 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary"
+                                        aria-hidden="true"
+                                    />
                                     {message(thread, true)}
                                     {(thread.replies.length > 0 ||
                                         replying === thread.id) && (
@@ -501,13 +509,21 @@ export function CommentsSection({
                                             {thread.replies.map((reply) => (
                                                 <div
                                                     key={reply.id}
-                                                    className="relative min-w-0 before:absolute before:top-4 before:-left-6 before:w-6 before:border-t before:border-border last:after:absolute last:after:top-4 last:after:bottom-0 last:after:-left-6 last:after:w-px last:after:bg-card sm:before:-left-7 sm:before:w-7 sm:last:after:-left-7"
+                                                    className="relative min-w-0 before:absolute before:top-4 before:-left-14 before:w-14 before:border-t before:border-border last:after:absolute last:after:top-5 last:after:bottom-0 last:after:-left-14 last:after:w-px last:after:bg-card sm:before:-left-15 sm:before:w-15 sm:last:after:-left-15"
                                                 >
+                                                    <span
+                                                        className="pointer-events-none absolute top-4 -left-14 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary sm:-left-15"
+                                                        aria-hidden="true"
+                                                    />
                                                     {message(reply, false)}
                                                 </div>
                                             ))}
                                             {replying === thread.id && (
-                                                <div className="relative min-w-0 before:absolute before:top-4 before:-left-6 before:w-6 before:border-t before:border-border last:after:absolute last:after:top-4 last:after:bottom-0 last:after:-left-6 last:after:w-px last:after:bg-card sm:before:-left-7 sm:before:w-7 sm:last:after:-left-7">
+                                                <div className="relative min-w-0 before:absolute before:top-4 before:-left-14 before:w-14 before:border-t before:border-border last:after:absolute last:after:top-5 last:after:bottom-0 last:after:-left-14 last:after:w-px last:after:bg-card sm:before:-left-15 sm:before:w-15 sm:last:after:-left-15">
+                                                    <span
+                                                        className="pointer-events-none absolute top-4 -left-14 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary sm:-left-15"
+                                                        aria-hidden="true"
+                                                    />
                                                     <CommentEditor
                                                         key={`reply:${thread.id}`}
                                                         label={`Rispondi a ${thread.author?.name}`}
