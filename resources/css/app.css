@@ -216,6 +216,84 @@
     @apply text-2xl font-semibold tracking-tight text-balance sm:text-3xl;
 }
 
+.detail-hero {
+    --detail-hero-accent: var(--economic-actual);
+    --detail-hero-x: 50%;
+    --detail-hero-y: 50%;
+}
+
+.detail-hero[data-accent='contract'] {
+    --detail-hero-accent: var(--chart-1);
+}
+
+.detail-hero[data-accent='project'] {
+    --detail-hero-accent: var(--chart-2);
+}
+
+.detail-hero[data-accent='budget'] {
+    --detail-hero-accent: var(--chart-3);
+}
+
+/* Mask both decorative layers to the one-pixel rim; controls remain unobstructed. */
+.detail-hero::before,
+.detail-hero::after {
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    content: '';
+    pointer-events: none;
+    mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+}
+
+.detail-hero::before {
+    background: linear-gradient(
+        115deg,
+        color-mix(in oklab, var(--detail-hero-accent) 35%, transparent),
+        transparent 45%,
+        color-mix(in oklab, var(--foreground) 10%, transparent)
+    );
+}
+
+.detail-hero::after {
+    background: radial-gradient(
+        260px circle at var(--detail-hero-x) var(--detail-hero-y),
+        var(--detail-hero-accent),
+        transparent 75%
+    );
+    opacity: 0;
+    transition: opacity 300ms ease;
+}
+
+.detail-hero-ambient {
+    background: linear-gradient(
+        180deg,
+        color-mix(in oklab, var(--detail-hero-accent) 12%, transparent),
+        color-mix(in oklab, var(--detail-hero-accent) 3%, transparent)
+    );
+}
+
+.detail-hero-watermark {
+    color: var(--detail-hero-accent);
+    opacity: 0.16;
+    filter: drop-shadow(0 -8px 12px var(--detail-hero-accent));
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+    .detail-hero:hover::after {
+        opacity: 0.8;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .detail-hero::after {
+        transition: none;
+    }
+}
+
 @utility financial-value {
     @apply font-sans font-medium tracking-normal tabular-nums;
 }

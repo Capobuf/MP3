@@ -1,8 +1,9 @@
+import { DetailHero } from '@/components/management/detail-hero';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { changeEconomicYear } from '@/lib/economic-year';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { Ellipsis, Plus, RefreshCw } from 'lucide-react';
+import { ChartNoAxesCombined, Ellipsis, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { BudgetSankey } from '@/components/management/budget-sankey';
 import { BudgetTable } from '@/components/management/budget-table';
@@ -69,58 +70,65 @@ function BudgetHeader({
     onCopy?: () => void;
 }) {
     return (
-        <header className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-                <p className="text-sm text-muted-foreground">
-                    {props.tenant.name}
-                </p>
-                <h1 className="page-title">Budget</h1>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-                <Button
-                    variant="outline"
-                    onClick={() =>
-                        onNewYear(
-                            props.budgetYear
-                                ? Math.min(2100, props.selectedYear + 1)
-                                : props.selectedYear,
-                        )
-                    }
-                >
-                    <Plus data-icon="inline-start" />
-                    Nuovo anno
-                </Button>
-                {onCopy && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" disabled={busy}>
-                                Gestisci anno{' '}
-                                <Ellipsis data-icon="inline-end" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuGroup>
-                                <DropdownMenuItem
+        <DetailHero
+            icon={ChartNoAxesCombined}
+            accent="budget"
+            actions={
+                <>
+                    <Button
+                        variant="outline"
+                        onClick={() =>
+                            onNewYear(
+                                props.budgetYear
+                                    ? Math.min(2100, props.selectedYear + 1)
+                                    : props.selectedYear,
+                            )
+                        }
+                    >
+                        <Plus data-icon="inline-start" />
+                        Nuovo anno
+                    </Button>
+                    {onCopy && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
                                     disabled={busy}
-                                    onSelect={() => {
-                                        onCopy?.();
-                                    }}
                                 >
-                                    Copia struttura dall’anno precedente
-                                </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )}
-                <SpreadsheetActions
-                    slug={props.tenant.slug}
-                    resource="budget"
-                    label="Budget"
-                    filters={{ year: props.selectedYear }}
-                    disabled={busy}
-                />
-            </div>
-        </header>
+                                    Gestisci anno{' '}
+                                    <Ellipsis data-icon="inline-end" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuGroup>
+                                    <DropdownMenuItem
+                                        disabled={busy}
+                                        onSelect={() => {
+                                            onCopy?.();
+                                        }}
+                                    >
+                                        Copia struttura dall’anno precedente
+                                    </DropdownMenuItem>
+                                </DropdownMenuGroup>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
+                    <SpreadsheetActions
+                        slug={props.tenant.slug}
+                        resource="budget"
+                        label="Budget"
+                        filters={{ year: props.selectedYear }}
+                        disabled={busy}
+                    />
+                </>
+            }
+        >
+            <h1 className="page-title">Budget</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+                {props.tenant.name}
+            </p>
+        </DetailHero>
     );
 }
 
