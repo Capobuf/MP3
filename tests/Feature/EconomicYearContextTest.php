@@ -65,10 +65,12 @@ class EconomicYearContextTest extends TestCase
         $expense = $this->tenant->expenses()->create(['title' => 'Quote', 'year' => 2023]);
         $expense->lines()->create(['description' => 'Quota', 'type' => 'allocated', 'quantity' => 1, 'unit_price' => 1, 'total' => 1, 'year' => 2024, 'position' => 0]);
         $this->tenant->budgetYears()->create(['year' => 2022]);
+        $this->tenant->projects()->create(['name' => 'Solo progetto', 'year' => 2028]);
+        $this->other->projects()->create(['name' => 'Riservato', 'year' => 2030]);
         $this->other->expenses()->create(['title' => 'Altra', 'year' => 2021]);
         $this->other->budgetYears()->create(['year' => 2020]);
         $this->get('/t/alfa/expenses?year=2027')->assertInertia(fn (Assert $page) => $page
-            ->where('economicContext.years', [2027, 2026, 2024, 2023, 2022]));
+            ->where('economicContext.years', [2028, 2027, 2026, 2024, 2023, 2022]));
         $this->assertDatabaseCount('budget_years', 2);
     }
 
@@ -216,5 +218,20 @@ class EconomicYearContextTest extends TestCase
         $this->assertSame($full, $selected);
         $this->assertStringContainsString('Solo 2025', $selected);
         $this->assertStringContainsString('Previsto 2026', $selected);
+    }
+
+    public function test_annual_projects_use_their_own_year_in_lists_selectors_search_and_details(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Progetto annuale', 'year' => 2027, 'starts_on' => '2020-01-01', 'ends_on' => '2020-12-31']);
+        $this->tenant->projects()->create(['name' => 'Progetto precedente', 'year' => 2026]);
+        $this->get('/t/alfa/projects?year=2027')->assertInertia(fn (Assert $page) => $page->has('records.data', 1)->where('records.data.0.id', $project->id));
+        $this->getJson('/t/alfa/projects/options?year=2027')->assertJsonCount(1, 'records')->assertJsonPath('records.0.id', $project->id);
+        $this->getJson('/t/alfa/budget/options?type=project&year=2027')->assertJsonCount(1, 'records')->assertJsonPath('records.0.id', $project->id);
+        $this->getJson('/t/alfa/search?q=Progetto&year=2027')->assertJsonCount(1, 'results')->assertJsonPath('results.0.href', '/t/alfa/projects/'.$project->id.'?year=2027');
+        foreach (['', '/edit'] as $suffix) {
+            $this->get('/t/alfa/projects/'.$project->id.$suffix.'?year=2026')->assertRedirect('/t/alfa/projects/'.$project->id.$suffix.'?year=2027');
+        }
+        $this->get('/t/alfa/projects/create?year=2029')->assertInertia(fn (Assert $page) => $page->where('year', 2029));
+        $this->postJson('/t/alfa/projects', ['name' => 'Manuale'])->assertCreated()->assertJsonPath('record.year', 2029);
     }
 }

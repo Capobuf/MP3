@@ -145,7 +145,7 @@ class SpreadsheetImport
             }
             $data['status'] = $matches->first()->key;
         }
-        if ($resource === 'contracts') {
+        if (in_array($resource, ['contracts', 'projects'], true)) {
             Validator::make($data, ['year' => ['required', 'integer', 'between:2000,2100']])->validate();
         }
         if (in_array($resource, ['vendors', 'contracts', 'projects'], true)) {
@@ -199,7 +199,7 @@ class SpreadsheetImport
             $matches = $tenant->costCenters()->with('parent')->get()->filter(fn ($center) => ($center->name === $value || SectionSpreadsheet::path($center) === $value));
         } else {
             $query = $tenant->{$resource}();
-            if ($resource === 'contracts') {
+            if (in_array($resource, ['contracts', 'projects'], true)) {
                 $query->where('year', $year ?? EconomicYearContext::year($tenant, request()));
             }
             $name = $resource === 'expenses' ? 'title' : 'name';
@@ -234,7 +234,7 @@ class SpreadsheetImport
                 'cost-centers' => 'costCenters', default => $resource
             };
             $matches = $tenant->{$relation}()->where($resource === 'expenses' ? 'title' : 'name', $data[$resource === 'expenses' ? 'title' : 'name'])->get();
-            if (in_array($resource, ['expenses', 'contracts'], true)) {
+            if (in_array($resource, ['expenses', 'contracts', 'projects'], true)) {
                 $matches = $matches->filter(fn ($r) => $r->year == $data['year']);
             }
             if ($resource === 'cost-centers') {

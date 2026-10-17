@@ -21,10 +21,10 @@ final class CatalogQuery
             default => abort(404),
         })->withCount('expenses');
         if ($catalog !== 'vendors') {
-            $query->with('costCenters.parent:id,name');
+            $query->with('costCenters.parent:id,name')->where(fn ($q) => $q->where('year', EconomicYearContext::year($tenant, $request))->orWhereNull('year'));
         }
         if ($catalog === 'contracts') {
-            $query->where(fn ($q) => $q->where('year', EconomicYearContext::year($tenant, $request))->orWhereNull('year'))->with('vendor:id,name');
+            $query->with('vendor:id,name');
             if ($request->filled('vendor_id')) {
                 $query->where('vendor_id', $request->integer('vendor_id'));
             }

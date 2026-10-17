@@ -197,7 +197,7 @@ class SpreadsheetTransferTest extends TestCase
             'vendors' => [['Alfa', '001', 'alfa@example.com', '+39000', null]],
             'cost-centers' => [['IT', null]],
             'contracts' => [['Canone', '001', '01/01/2026', '31/12/2026', 100, 'IT', null, 2026]],
-            'projects' => [['Progetto', 'Descrizione', 'attivo', null, null, 'IT']],
+            'projects' => [['Progetto', 'Descrizione', 'attivo', null, null, 'IT', 2026]],
             'budget' => [[2026, 'new-expense', null, 'Budget libero', 0, null, 'IT'], [2026, 'contract', 'Canone', null, null, null, 'IT']],
         ];
         foreach ($files as $resource => $rows) {
@@ -255,5 +255,27 @@ class SpreadsheetTransferTest extends TestCase
         } finally {
             Vendor::flushEventListeners();
         }
+    }
+
+    public function test_project_spreadsheets_require_year_and_resolve_annual_copies_independently(): void
+    {
+        $tenant = $this->tenant();
+        $original = $tenant->projects()->create(['name' => 'Stesso nome', 'year' => 2026]);
+        $file = $this->file('projects', [['Stesso nome', 'Nuova versione', null, null, null, null, 2027]]);
+        $preview = $this->postJson('/t/ambiente/projects/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0)->assertJsonPath('new', 1);
+        $this->postJson('/t/ambiente/projects/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+        $copy = $tenant->projects()->where('year', 2027)->sole();
+        $this->assertNotEquals($original->id, $copy->id);
+        $this->assertSame('Nuova versione', $copy->description);
+        $book = $this->workbook('/t/ambiente/projects/export.xlsx?year=2027');
+        $this->assertSame('Anno', $book->getSheet(0)->getCell('G1')->getValue());
+        $this->assertSame(2027, $book->getSheet(0)->getCell('G2')->getValue());
+        $tenant->budgetYears()->create(['year' => 2027]);
+        $budgetFile = $this->file('budget', [[2027, 'project', 'Stesso nome', null, null, null, null]]);
+        $preview = $this->postJson('/t/ambiente/budget/import/preview', ['file' => $budgetFile])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/ambiente/budget/import/commit', ['file' => $budgetFile, 'token' => $preview->json('token')])->assertOk();
+        $this->assertSame($copy->id, $tenant->budgetEntries()->sole()->project_id);
+        $missing = $this->file('projects', [['Senza anno', null, null, null, null, null, null]]);
+        $this->postJson('/t/ambiente/projects/import/preview', ['file' => $missing])->assertOk()->assertJsonPath('error_count', 1);
     }
 }

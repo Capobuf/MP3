@@ -9,6 +9,7 @@ use App\Services\ExpenseWriter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class TenantCsvTransferTest extends TestCase
@@ -297,7 +298,8 @@ class TenantCsvTransferTest extends TestCase
         $this->assertNull($target->projects()->firstOrFail()->status);
     }
 
-    public function test_legacy_csv_without_status_configuration_remains_importable(): void
+    #[DataProvider('legacyVersions')]
+    public function test_legacy_csv_without_status_configuration_remains_importable(int $version): void
     {
         [$source, $target] = $this->setupTenants();
         $source->projects()->create(['name' => 'Legacy', 'status' => 'attivo']);
@@ -311,12 +313,12 @@ class TenantCsvTransferTest extends TestCase
             if ($row[0] === 'meta') {
                 $meta = json_decode($row[2], true);
                 unset($meta['project_statuses']);
-                $meta['version'] = 1;
+                $meta['version'] = $version;
                 $row[2] = json_encode($meta);
             }
-            if ($row[0] === 'contract') {
+            if ($row[0] === 'project' || ($version === 1 && $row[0] === 'contract')) {
                 $data = json_decode($row[2], true);
-                unset($data['year'], $data['source_contract_ref']);
+                unset($data['year'], $data['source_'.$row[0].'_ref']);
                 $row[2] = json_encode($data);
             }
             $rows[] = $row;
@@ -333,28 +335,40 @@ class TenantCsvTransferTest extends TestCase
         $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
         $this->assertSame('attivo', $target->projects()->firstOrFail()->status);
         $this->assertSame(3, $target->projectStatuses()->count());
-        $this->assertCount(1, $preview->json('warnings'));
+        $this->assertCount(2, $preview->json('warnings'));
+        $this->assertNull($target->projects()->sole()->year);
         $this->assertNull($target->contracts()->sole()->year);
         $this->assertNull($target->contracts()->sole()->source_contract_id);
     }
 
-    public function test_annual_contract_references_round_trip_and_wrong_budget_year_is_rejected(): void
+    #[DataProvider('annualTypes')]
+    public function test_annual_references_round_trip_and_wrong_budget_year_is_rejected(string $type): void
     {
         [$source, $target] = $this->setupTenants();
-        $original = $source->contracts()->create(['name' => 'Canone', 'year' => 2026]);
-        $copy = $source->contracts()->create(['name' => 'Canone aggiornato', 'year' => 2027, 'source_contract_id' => $original->id]);
+        $original = $source->{$type.'s'}()->create(['name' => 'Canone', 'year' => 2026]);
+        $copy = $source->{$type.'s'}()->create(['name' => 'Canone aggiornato', 'year' => 2027, 'source_'.$type.'_id' => $original->id]);
         $budget = $source->budgetYears()->create(['year' => 2027]);
-        $entry = $budget->entries()->create(['tenant_id' => $source->id, 'type' => 'contract', 'contract_id' => $copy->id]);
+        $entry = $budget->entries()->create(['tenant_id' => $source->id, 'type' => $type, $type.'_id' => $copy->id]);
         $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
         $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
         $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
-        $restored = $target->contracts()->where('year', 2027)->sole();
-        $this->assertSame($target->contracts()->where('year', 2026)->sole()->id, $restored->source_contract_id);
-        $this->assertSame($restored->id, $target->budgetEntries()->sole()->contract_id);
-        $entry->update(['contract_id' => $original->id]);
+        $restored = $target->{$type.'s'}()->where('year', 2027)->sole();
+        $this->assertSame($target->{$type.'s'}()->where('year', 2026)->sole()->id, $restored->getAttribute('source_'.$type.'_id'));
+        $this->assertSame($restored->id, $target->budgetEntries()->sole()->getAttribute($type.'_id'));
+        $entry->update([$type.'_id' => $original->id]);
         $invalid = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
         $empty = Tenant::create(['name' => 'Vuoto', 'slug' => 'vuoto']);
         $this->postJson('/t/vuoto/settings/data/import/preview', ['file' => $invalid])->assertOk()->assertJsonPath('error_count', 1);
-        $this->assertSame(0, $empty->contracts()->count());
+        $this->assertSame(0, $empty->{$type.'s'}()->count());
+    }
+
+    public static function legacyVersions(): array
+    {
+        return [[1], [2]];
+    }
+
+    public static function annualTypes(): array
+    {
+        return [['contract'], ['project']];
     }
 }
