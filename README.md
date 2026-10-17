@@ -345,3 +345,35 @@ sopra si eseguono localmente, senza introdurre infrastruttura CI.
   alla cancellazione dei proprietari. Verificate visualizzazione desktop/light
   e mobile/dark senza overflow; nessun errore JavaScript dell’applicazione.
   Istanza e dati temporanei rimossi al termine.
+
+## Prototipo di stampa Budget (issue #29)
+
+Nel Budget, **Stampa report** apre il configuratore con anteprima del documento.
+Usa tutte le righe risultanti dai filtri della tabella, anche nei gruppi chiusi,
+e l’ordinamento corrente; la selezione delle caselle di riga non limita il report.
+KPI e ripartizione provengono dallo snapshot Budget esistente. Il grafico mostra
+l’allocato positivo, affiancato da rettifiche e netto. Le voci escluse sono indicate
+e non contribuiscono ai totali; gli importi mancanti restano distinti da zero.
+
+Si possono modificare titolo, orientamento A4, sezioni e ordine/visibilità delle
+colonne. Il logo PNG/JPG (massimo 2 MB) rimane nel browser per il singolo report.
+**Stampa / Salva PDF** apre la stampa del browser tramite `react-to-print`:
+in Chrome scegliere **Salva come PDF**, carta A4, scala 100% e controllare tutte
+le pagine. L’anteprima nell’app mostra il documento continuo; quella di Chrome
+mostra l’impaginazione effettiva. Le impostazioni del browser possono prevalere
+su formato e margini CSS. Il POC riguarda esclusivamente il Budget.
+
+Controlli del prototipo, con database PHP separato `testing`:
+
+```bash
+npx vp test tests/frontend/budget-report.test.tsx --bail=1
+npm run check
+npm run types:check
+npm run build
+php artisan test --filter='AnnualBudgetTest|SpreadsheetTransferTest|EconomicYearContextTest' --stop-on-failure
+```
+
+Prima dell’approvazione verificare nell’app: filtri singoli e combinati, zero/una/
+molte righe, colonne nascoste e riordinate, descrizioni lunghe, due anni, logo sì/no,
+A4 verticale/orizzontale e tema light/dark. Confrontare i totali e controllare nel
+PDF grafico, intestazioni ripetute e righe complete su tutte le pagine.

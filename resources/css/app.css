@@ -475,3 +475,138 @@
         @apply pointer-events-none float-left h-0 text-muted-foreground;
     }
 }
+
+/* The report owns its paper palette, independently of the application theme. */
+.budget-report {
+    --foreground: #172033;
+    --economic-allocated: #516a8b;
+    box-sizing: border-box;
+    width: 297mm;
+    padding: 12mm;
+    background: #fff;
+    color: #172033;
+    color-scheme: light;
+    font:
+        9pt/1.45 Arial,
+        sans-serif;
+    overflow-wrap: anywhere;
+}
+.budget-report[data-orientation='portrait'] {
+    width: 210mm;
+}
+.budget-report h1 {
+    margin: 4mm 0 2mm;
+    font-size: 23pt;
+    font-weight: 700;
+    line-height: 1.15;
+}
+.budget-report h2 {
+    margin: 7mm 0 3mm;
+    font-size: 12pt;
+    font-weight: 700;
+    break-after: avoid;
+}
+.budget-report h3 {
+    margin-bottom: 2mm;
+    font-weight: 700;
+}
+.budget-report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8mm;
+    border-bottom: 0.5mm solid #516a8b;
+    padding-bottom: 5mm;
+    break-inside: avoid;
+}
+.budget-report-header img {
+    width: 32mm;
+    height: 18mm;
+    object-fit: contain;
+}
+.budget-report-eyebrow {
+    font-size: 9pt;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+.budget-report-scope {
+    margin: 4mm 0;
+    color: #465265;
+}
+.budget-report-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5mm;
+}
+.budget-report-kpis dt {
+    color: #465265;
+}
+.budget-report-kpis dd {
+    font-size: 15pt;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.budget-report table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 8pt;
+}
+.budget-report th,
+.budget-report td {
+    padding: 2.5mm 2mm;
+    border-bottom: 0.2mm solid #ccd2da;
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+}
+.budget-report th {
+    font-weight: 700;
+    background: #edf0f4;
+}
+.budget-report small {
+    display: block;
+    font-size: 7pt;
+}
+.budget-report .budget-report-status {
+    width: 17mm;
+}
+.budget-report .budget-report-money {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.budget-report-note {
+    margin-top: 4mm;
+    color: #465265;
+    font-size: 8pt;
+}
+.budget-report-totals {
+    margin-top: 5mm;
+    padding-top: 3mm;
+    border-top: 0.5mm solid #516a8b;
+}
+.budget-report-block {
+    break-inside: avoid;
+}
+@media print {
+    html:has(.budget-report),
+    body:has(.budget-report) {
+        height: auto;
+        overflow: visible;
+        background: #fff;
+    }
+    .budget-report,
+    .budget-report[data-orientation='portrait'] {
+        width: 100%;
+        padding: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+    .budget-report thead {
+        display: table-header-group;
+    }
+    .budget-report tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+}

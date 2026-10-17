@@ -1,3 +1,6 @@
+import { BudgetPrintDialog } from './budget-print-dialog';
+import { captureBudgetReport } from './budget-report';
+import type { BudgetReportData } from './budget-report';
 import { InlineEdit } from './inline-edit';
 import {
     Fragment,
@@ -55,6 +58,7 @@ import {
     GripVertical,
     Ellipsis,
     TriangleAlert,
+    Printer,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -705,6 +709,7 @@ function EntryDetail({
 
 export function BudgetTable({
     budget,
+    tenantName,
     slug,
     year,
     budgetYearId,
@@ -720,6 +725,7 @@ export function BudgetTable({
     setTypeFilter,
 }: {
     budget: BudgetSnapshot;
+    tenantName: string;
     slug: string;
     year: number;
     budgetYearId: number;
@@ -739,6 +745,7 @@ export function BudgetTable({
     setTypeFilter: (value: string) => void;
 }) {
     'use no memo'; // TanStack v8 exposes a mutable table instance to the renderer.
+    const [report, setReport] = useState<BudgetReportData | null>(null);
     const key = `mp3:budget:grid:v1:${slug}`;
     const [preferences, setPreferences] = useState(() => readPreferences(key));
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -1596,7 +1603,59 @@ export function BudgetTable({
             aria-label="Voci del Budget"
             aria-busy={busy || loading}
         >
+            {report && (
+                <BudgetPrintDialog
+                    data={report}
+                    tenantName={tenantName}
+                    year={year}
+                    onClose={() => setReport(null)}
+                />
+            )}
             <div className="flex flex-wrap items-center gap-2">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy || loading || !summary}
+                    onClick={() => {
+                        if (!summary) return;
+                        try {
+                            setReport(
+                                captureBudgetReport(table, summary, [
+                                    status === 'included'
+                                        ? 'Voci incluse'
+                                        : status === 'excluded'
+                                          ? 'Voci escluse'
+                                          : 'Incluse ed escluse',
+                                    ...(search ? [`Ricerca: ${search}`] : []),
+                                    ...(typeFilter !== 'all'
+                                        ? [
+                                              `Tipo: ${budgetLabels[typeFilter as BudgetType]}`,
+                                          ]
+                                        : []),
+                                    ...(vendor !== 'all'
+                                        ? [
+                                              `Fornitore: ${vendors.find((item) => String(item.id) === vendor)?.name ?? 'Senza fornitore'}`,
+                                          ]
+                                        : []),
+                                    ...(center !== 'all'
+                                        ? [
+                                              `Centro: ${centers.find((item) => String(item.id) === center)?.name ?? 'Senza centro di costo'}`,
+                                          ]
+                                        : []),
+                                ]),
+                            );
+                        } catch (error) {
+                            toast.error(
+                                error instanceof Error
+                                    ? error.message
+                                    : 'Report non disponibile.',
+                            );
+                        }
+                    }}
+                >
+                    <Printer data-icon="inline-start" />
+                    Stampa report
+                </Button>
                 <TableFilters
                     title="Filtri del Budget"
                     count={activeFilterCount}

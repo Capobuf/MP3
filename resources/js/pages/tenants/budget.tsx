@@ -301,6 +301,7 @@ function BudgetWorkspace({
                 </Alert>
             )}
             <BudgetTable
+                tenantName={props.tenant.name}
                 budgetYearId={year.id}
                 budget={budget}
                 slug={props.tenant.slug}
