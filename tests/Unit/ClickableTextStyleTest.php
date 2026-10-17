@@ -22,7 +22,17 @@ class ClickableTextStyleTest extends TestCase
                 continue;
             }
 
+            $relative = substr($file->getPathname(), strlen($root) + 1);
+            // Email content has its own template styling, outside the application UI.
+            if (str_starts_with($relative, 'resources/views/mail/')) {
+                continue;
+            }
+
             foreach (file($file->getPathname()) as $index => $line) {
+                // Tiptap's supported underline mark is content, not a UI styling utility.
+                if ($relative === 'resources/js/components/management/comment-editor.tsx') {
+                    $line = str_replace(["editor?.isActive('underline')", 'underline:', 'state?.underline'], '', $line);
+                }
                 // Covers utilities (including hover/focus), CSS and inline styles.
                 if (preg_match('/(?<![\w-])underline(?![\w-])/', $line)) {
                     $violations[] = substr($file->getPathname(), strlen($root) + 1).':'.($index + 1);

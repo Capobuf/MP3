@@ -7,10 +7,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use RyanChandler\Comments\Concerns\HasComments;
 
 #[Fillable(['name', 'parent_id'])]
 class CostCenter extends Model
 {
+    use HasComments;
+
     /** @return BelongsTo<Tenant, $this> */
     public function tenant(): BelongsTo
     {

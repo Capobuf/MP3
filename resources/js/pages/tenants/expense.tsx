@@ -1,3 +1,4 @@
+import { CommentsSection } from '@/components/management/comments-section';
 import { ArrowUpRight } from 'lucide-react';
 import { useState } from 'react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
@@ -239,6 +240,12 @@ export default function ExpenseDetail({
                     text={expense.notes ?? ''}
                     onSave={(value) => save('notes', value || null)}
                     disabled={editingLines}
+                />
+                <CommentsSection
+                    key={`comments:${tenant.id}:${expense.id}`}
+                    tenant={tenant}
+                    resource="expenses"
+                    recordId={expense.id}
                 />
                 <AttachmentsSection
                     compact

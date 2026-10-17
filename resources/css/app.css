@@ -356,3 +356,36 @@
         animation: none;
     }
 }
+
+/* Shared typography for the Tiptap editor and static comment renderer. */
+@layer components {
+    .comment-rich-text {
+        @apply min-w-0 text-sm leading-relaxed break-words whitespace-pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    .comment-rich-text p + p {
+        margin-top: 0.5rem;
+    }
+    .comment-rich-text ul {
+        @apply list-disc pl-6;
+    }
+    .comment-rich-text ol {
+        @apply list-decimal pl-6;
+    }
+    .comment-rich-text li > p {
+        margin: 0;
+    }
+    .comment-rich-text a {
+        @apply text-primary;
+    }
+    .comment-rich-text strong {
+        @apply font-semibold;
+    }
+}
+
+@layer components {
+    .tiptap.comment-rich-text:has(> p:only-child > br:only-child)::before {
+        content: attr(data-placeholder);
+        @apply pointer-events-none float-left h-0 text-muted-foreground;
+    }
+}

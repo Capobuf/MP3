@@ -8,10 +8,12 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use RyanChandler\Comments\Concerns\HasComments;
 
 #[Fillable(['vendor_id', 'name', 'reference_amount', 'starts_on', 'ends_on', 'notes'])]
 class Contract extends Model
 {
+    use HasComments;
     use HasCostCenters;
 
     /** @var list<string> */

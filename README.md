@@ -208,6 +208,52 @@ dettaglio del progetto. Gli editor delle tabelle usano **Invio** per salvare e
 **Esc** per annullare, senza pulsanti ✓ e ×. Filtri, grafici e trasferimenti
 CSV/XLSX utilizzano gli stati configurati.
 
+## Commenti dei record
+
+Spese, contratti, progetti e fornitori hanno una sezione **Commenti** nel
+proprio dettaglio. Per i centri di costo usare **Commenti** nel menu della
+riga: la sezione si apre in un pannello laterale. I commenti sono disponibili
+dopo il salvataggio e appartengono al record, indipendentemente dall’anno.
+Dal Budget si raggiungono tramite il collegamento al record originale.
+
+La timeline raggruppa ogni commento principale con le proprie risposte,
+limitate a un livello. **Rispondi** apre un editor inline; l’aeroplanino invia
+nuovi messaggi e risposte, mentre le modifiche usano **Salva/Annulla**.
+Tutti i membri possono leggere e inviare; soltanto l’autore può modificare
+o eliminare il proprio messaggio, anche rispetto ai super admin.
+Il conteggio nell’header include tutti i messaggi attivi. Il server pagina
+10 thread principali per volta, ordinati per data di creazione e ID;
+le risposte di ogni thread sono in ordine cronologico. Le modifiche non
+cambiano posizione; **Modificato** segnala timestamp differenti.
+
+Sono ammessi grassetto, corsivo, sottolineato, liste puntate/numerate e link
+HTTP/HTTPS. Il server valida il JSON Tiptap: massimo 5.000 caratteri di testo,
+64 KiB di JSON e limiti a profondità e numero di nodi. Il contenuto rimane
+nella colonna `content` e i collegamenti nella colonna `parent_id` del
+pacchetto `ryangjchandler/laravel-comments`. La visualizzazione usa il renderer
+React statico di Tiptap, senza HTML arbitrario né un editor per ogni messaggio.
+
+Eliminando un commento principale con risposte rimane **Commento eliminato**,
+senza restituire autore o contenuto cancellati. Le risposte rimangono leggibili;
+un thread cancellato senza risposte attive scompare. La cancellazione della
+singola risposta la nasconde. Sono soft-delete indipendenti dall’Undo gestionale.
+Eliminando il record i commenti rimangono conservati ma inaccessibili; tornano
+visibili quando Undo ripristina lo stesso record. Il CSV non li include.
+
+In **Impostazioni → Profilo** ciascun utente può caricare, sostituire o rimuovere
+la propria foto JPG/PNG/WebP, fino a 2 MB, con verifica MIME server. Senza foto
+compaiono le iniziali. Le foto sono sul disco privato `local`, sotto
+`storage/app/private/profile-photos`; il percorso non viene esposto e la lettura
+passa da una rotta autenticata. Sostituzione, rimozione e cancellazione del
+profilo eliminano la vecchia foto. Includere questa directory nei backup;
+non occorre un link pubblico allo storage. Gli URL relativi funzionano anche
+accedendo all’app da un hostname diverso da `APP_URL`.
+
+L’installazione richiede `composer install`, `npm ci`, `php artisan migrate`
+(per commenti e colonna foto utente), `npm run build` e
+`php artisan optimize:clear` nell’ambiente applicativo. I test dedicati sono
+`CommentTest` e `Settings/ProfileUpdateTest`; usare un database separato.
+
 ## Allegati di contratti, spese e progetti
 
 Le pagine di dettaglio e i pannelli laterali di modifica includono una sezione

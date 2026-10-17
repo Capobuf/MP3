@@ -1,3 +1,4 @@
+import { CommentsSection } from '@/components/management/comments-section';
 import { ProjectStatusSelect } from '@/components/management/project-status-select';
 import { ArrowUpRight, ChevronDown } from 'lucide-react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
@@ -542,6 +543,12 @@ export default function CatalogDetail({
                         }
                     />
                 }
+                <CommentsSection
+                    key={`comments:${tenant.id}:${catalog}:${record.id}`}
+                    tenant={tenant}
+                    resource={catalog}
+                    recordId={record.id}
+                />
                 {catalog !== 'vendors' && (
                     <AttachmentsSection
                         compact
