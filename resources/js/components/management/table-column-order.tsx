@@ -151,6 +151,7 @@ export function TableColumnOrder({
         <DndContext
             id={id}
             sensors={sensors}
+            modifiers={[({ transform }) => ({ ...transform, x: 0 })]}
             collisionDetection={
                 hasContent
                     ? (args) =>
