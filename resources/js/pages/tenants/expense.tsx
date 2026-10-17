@@ -1,14 +1,16 @@
 import { CommentsSection } from '@/components/management/comments-section';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, ReceiptText } from 'lucide-react';
 import { useState } from 'react';
-import { RecordMoreActions } from '@/components/management/record-more-actions';
 import { Head, Link } from '@inertiajs/react';
 import { AttachmentsSection } from '@/components/management/attachments-section';
-import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
 import { expenseBreakdown } from '@/components/management/detail-breakdown';
 import { DetailBreakdownChart } from '@/components/management/detail-breakdown-chart';
 import { DetailKpis } from '@/components/management/detail-kpis';
+import {
+    DetailHero,
+    DetailEditAction,
+} from '@/components/management/detail-hero';
 import { DetailNotes } from '@/components/management/detail-notes';
 import { ExpenseLinesCard } from '@/components/management/expense-lines-card';
 import {
@@ -45,48 +47,45 @@ export default function ExpenseDetail({
         <>
             <Head title={`${expense.title} · ${tenant.name}`} />
             <div className="@container/detail page-shell">
-                <header className="flex detail-enter flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <Link
-                            href={`${path}?year=${expense.year}`}
-                            className="text-sm text-muted-foreground hover:text-foreground"
-                        >
-                            {tenant.name} / Spese / {expense.year}
-                        </Link>
-                        <InlineEdit
-                            value={expense.title}
-                            label="Titolo della spesa"
-                            disabled={editingLines}
-                            as="h1"
-                            className="mt-2 page-title [overflow-wrap:anywhere]"
-                            onSave={(value) => save('title', value)}
-                        />
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                            <Badge variant="secondary">
-                                Imputazione {years}
+                <DetailHero
+                    icon={ReceiptText}
+                    actions={
+                        <>
+                            <Badge
+                                variant="secondary"
+                                aria-label={`Anno di imputazione: ${years}`}
+                            >
+                                {years}
                             </Badge>
-                            {expense.period_starts_on &&
-                                expense.period_ends_on && (
-                                    <span>
-                                        {dateLabel(expense.period_starts_on)} –{' '}
-                                        {dateLabel(expense.period_ends_on)}
-                                    </span>
-                                )}
+                            <DetailEditAction
+                                href={`${path}/${expense.id}/edit`}
+                                label="Modifica spesa"
+                                disabled={editingLines}
+                            />
+                        </>
+                    }
+                >
+                    <InlineEdit
+                        value={expense.title}
+                        label="Titolo della spesa"
+                        disabled={editingLines}
+                        as="h1"
+                        className="page-title [overflow-wrap:anywhere]"
+                        onSave={(value) => save('title', value)}
+                    />
+                    <Link
+                        href={`${path}?year=${expense.year}`}
+                        className="mt-2 inline-block text-sm text-muted-foreground hover:text-foreground"
+                    >
+                        {tenant.name} / Spese / {expense.year}
+                    </Link>
+                    {expense.period_starts_on && expense.period_ends_on && (
+                        <div className="mt-3 text-sm text-muted-foreground">
+                            {dateLabel(expense.period_starts_on)} –{' '}
+                            {dateLabel(expense.period_ends_on)}
                         </div>
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                        <RecordMoreActions
-                            href={`${path}/${expense.id}/edit`}
-                            disabled={editingLines}
-                        />
-                        <DeleteRecord
-                            url={`${path}/${expense.id}`}
-                            redirect={`${path}?year=${expense.year}`}
-                            label={expense.title}
-                            disabled={editingLines}
-                        />
-                    </div>
-                </header>
+                    )}
+                </DetailHero>
                 <DetailKpis
                     allocated={expense.allocated_amount}
                     actual={expense.actual_amount}

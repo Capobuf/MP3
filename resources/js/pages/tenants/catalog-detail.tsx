@@ -1,6 +1,15 @@
+import {
+    DetailHero,
+    DetailEditAction,
+} from '@/components/management/detail-hero';
 import { CommentsSection } from '@/components/management/comments-section';
 import { ProjectStatusSelect } from '@/components/management/project-status-select';
-import { ArrowUpRight, ChevronDown } from 'lucide-react';
+import {
+    ArrowUpRight,
+    ChevronDown,
+    FileText,
+    FolderKanban,
+} from 'lucide-react';
 import { RecordMoreActions } from '@/components/management/record-more-actions';
 import {
     InlineEdit,
@@ -240,136 +249,169 @@ export default function CatalogDetail({
             </section>
         </>
     );
+    const hasHero = catalog === 'contracts' || catalog === 'projects';
+    const breadcrumb = (
+        <Link
+            href={path}
+            className={cn(
+                'text-sm text-muted-foreground',
+                hasHero && 'mt-2 inline-block hover:text-foreground',
+            )}
+        >
+            {tenant.name} / {labels[catalog]}
+        </Link>
+    );
+    const headerContent = (
+        <>
+            {!hasHero && breadcrumb}
+            <InlineEdit
+                value={record.name}
+                display={record.display_name ?? record.name}
+                label="Nome"
+                disabled={tableBusy}
+                as="h1"
+                className={cn(
+                    'page-title [overflow-wrap:anywhere]',
+                    !hasHero && 'mt-2',
+                )}
+                onSave={(value) => save('name', value)}
+            />
+            {hasHero && breadcrumb}
+            {catalog === 'contracts' && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                    <span>Periodo:</span>
+                    {(['starts_on', 'ends_on'] as const).map((field, index) => (
+                        <div
+                            key={field}
+                            className="flex min-w-0 items-center gap-2"
+                        >
+                            {index === 1 && <span aria-hidden="true">–</span>}
+                            <InlineEdit
+                                value={record[field]}
+                                label={
+                                    field === 'starts_on'
+                                        ? 'Inizio contratto'
+                                        : 'Fine contratto'
+                                }
+                                type="date"
+                                display={
+                                    record[field]
+                                        ? dateLabel(record[field])
+                                        : 'Non indicata'
+                                }
+                                className="w-auto tabular-nums"
+                                disabled={tableBusy}
+                                onSave={(value) => save(field, value || null)}
+                            />
+                        </div>
+                    ))}
+                </div>
+            )}
+            {catalog === 'projects' && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                    <InlineEdit
+                        value={record.status}
+                        label="Stato del progetto"
+                        activation="click"
+                        disabled={tableBusy}
+                        className="w-auto"
+                        display={
+                            <Badge variant="secondary">
+                                {projectStatusLabel(
+                                    record.status,
+                                    options.project_statuses,
+                                )}
+                            </Badge>
+                        }
+                        renderEditor={({
+                            value,
+                            onChange,
+                            disabled,
+                            invalid,
+                            onCancel,
+                        }) => (
+                            <ProjectStatusSelect
+                                statuses={options.project_statuses}
+                                value={value}
+                                onChange={onChange}
+                                disabled={disabled}
+                                invalid={invalid}
+                                autoFocus
+                                onCancel={onCancel}
+                            />
+                        )}
+                        onSave={(value) => save('status', value || null)}
+                    />
+                </div>
+            )}
+        </>
+    );
+    const headerActions = (
+        <>
+            {catalog === 'projects' && (
+                <Badge variant="secondary">{year}</Badge>
+            )}
+            {hasHero ? (
+                <DetailEditAction
+                    href={`${path}/${record.id}/edit`}
+                    label={
+                        catalog === 'contracts'
+                            ? 'Modifica contratto'
+                            : 'Modifica progetto'
+                    }
+                    disabled={tableBusy}
+                />
+            ) : (
+                <>
+                    <RecordMoreActions
+                        href={`${path}/${record.id}/edit`}
+                        disabled={tableBusy}
+                    />
+                    <DeleteRecord
+                        url={`${path}/${record.id}`}
+                        redirect={path}
+                        label={record.display_name ?? record.name ?? ''}
+                        disabled={tableBusy}
+                    />
+                </>
+            )}
+            <SpreadsheetActions
+                slug={tenant.slug}
+                resource={catalog}
+                label={labels[catalog]}
+                filters={{
+                    record: record.id,
+                    year,
+                }}
+                exportOnly
+                disabled={tableBusy}
+            />
+        </>
+    );
     return (
         <>
             <Head
                 title={`${record.display_name ?? record.name} · ${tenant.name}`}
             />
             <div className="@container/detail page-shell">
-                <header className="flex detail-enter flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <Link
-                            href={path}
-                            className="text-sm text-muted-foreground"
-                        >
-                            {tenant.name} / {labels[catalog]}
-                        </Link>
-                        <InlineEdit
-                            value={record.name}
-                            display={record.display_name ?? record.name}
-                            label="Nome"
-                            disabled={tableBusy}
-                            as="h1"
-                            className="mt-2 page-title [overflow-wrap:anywhere]"
-                            onSave={(value) => save('name', value)}
-                        />
-                        {catalog === 'contracts' && (
-                            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                                <span>Periodo:</span>
-                                {(['starts_on', 'ends_on'] as const).map(
-                                    (field, index) => (
-                                        <div
-                                            key={field}
-                                            className="flex min-w-0 items-center gap-2"
-                                        >
-                                            {index === 1 && (
-                                                <span aria-hidden="true">
-                                                    –
-                                                </span>
-                                            )}
-                                            <InlineEdit
-                                                value={record[field]}
-                                                label={
-                                                    field === 'starts_on'
-                                                        ? 'Inizio contratto'
-                                                        : 'Fine contratto'
-                                                }
-                                                type="date"
-                                                display={
-                                                    record[field]
-                                                        ? dateLabel(
-                                                              record[field],
-                                                          )
-                                                        : 'Non indicata'
-                                                }
-                                                className="w-auto tabular-nums"
-                                                disabled={tableBusy}
-                                                onSave={(value) =>
-                                                    save(field, value || null)
-                                                }
-                                            />
-                                        </div>
-                                    ),
-                                )}
-                            </div>
-                        )}
-                        {catalog === 'projects' && (
-                            <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                                <InlineEdit
-                                    value={record.status}
-                                    label="Stato del progetto"
-                                    activation="click"
-                                    disabled={tableBusy}
-                                    className="w-auto"
-                                    display={
-                                        <Badge variant="secondary">
-                                            {projectStatusLabel(
-                                                record.status,
-                                                options.project_statuses,
-                                            )}
-                                        </Badge>
-                                    }
-                                    renderEditor={({
-                                        value,
-                                        onChange,
-                                        disabled,
-                                        invalid,
-                                        onCancel,
-                                    }) => (
-                                        <ProjectStatusSelect
-                                            statuses={options.project_statuses}
-                                            value={value}
-                                            onChange={onChange}
-                                            disabled={disabled}
-                                            invalid={invalid}
-                                            autoFocus
-                                            onCancel={onCancel}
-                                        />
-                                    )}
-                                    onSave={(value) =>
-                                        save('status', value || null)
-                                    }
-                                />
-                                <span>{year}</span>
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
-                        {catalog !== 'projects' && (
-                            <RecordMoreActions
-                                href={`${path}/${record.id}/edit`}
-                                disabled={tableBusy}
-                            />
-                        )}
-                        <DeleteRecord
-                            url={`${path}/${record.id}`}
-                            redirect={path}
-                            label={record.display_name ?? record.name ?? ''}
-                            disabled={tableBusy}
-                        />
-                        <SpreadsheetActions
-                            slug={tenant.slug}
-                            resource={catalog}
-                            label={labels[catalog]}
-                            filters={{
-                                record: record.id,
-                                year,
-                            }}
-                            exportOnly
-                            disabled={tableBusy}
-                        />
-                    </div>
-                </header>
+                {hasHero ? (
+                    <DetailHero
+                        icon={catalog === 'contracts' ? FileText : FolderKanban}
+                        accent={
+                            catalog === 'contracts' ? 'contract' : 'project'
+                        }
+                        actions={headerActions}
+                    >
+                        {headerContent}
+                    </DetailHero>
+                ) : (
+                    <header className="flex detail-enter flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1">{headerContent}</div>
+                        <div className="flex shrink-0 flex-wrap items-center gap-2">
+                            {headerActions}
+                        </div>
+                    </header>
+                )}
                 {catalog !== 'vendors' && economics}
                 <Card className="min-w-0 gap-4">
                     <CardHeader>

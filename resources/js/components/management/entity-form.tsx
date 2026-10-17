@@ -1226,23 +1226,29 @@ export function EntityForm({
                             ))}
                     </div>
                     <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-popover p-4 sm:px-6">
-                        {current.kind === 'expenses' &&
+                        {['expenses', 'contracts', 'projects'].includes(
+                            current.kind,
+                        ) &&
                             current.record &&
                             frames.length === 1 && (
                                 <div className="mr-auto">
                                     <DeleteRecord
-                                        url={`/t/${tenant.slug}/expenses/${current.record.id}`}
+                                        url={`/t/${tenant.slug}/${current.kind}/${current.record.id}`}
                                         label={
                                             current.record.title ??
-                                            'questa spesa'
+                                            current.record.display_name ??
+                                            current.record.name ??
+                                            'questo elemento'
                                         }
                                         disabled={formBusy}
                                         onDeleted={() => {
                                             navigation.allow();
                                             router.visit(
-                                                contractContext
-                                                    ? `/t/${tenant.slug}/contracts/${contractContext.id}`
-                                                    : `/t/${tenant.slug}/expenses?year=${economicContext!.year}`,
+                                                current.kind === 'expenses'
+                                                    ? contractContext
+                                                        ? `/t/${tenant.slug}/contracts/${contractContext.id}`
+                                                        : `/t/${tenant.slug}/expenses?year=${economicContext!.year}`
+                                                    : `/t/${tenant.slug}/${current.kind}`,
                                             );
                                         }}
                                     />
