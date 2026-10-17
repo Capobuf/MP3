@@ -208,6 +208,36 @@ dettaglio del progetto. Gli editor delle tabelle usano **Invio** per salvare e
 **Esc** per annullare, senza pulsanti ✓ e ×. Filtri, grafici e trasferimenti
 CSV/XLSX utilizzano gli stati configurati.
 
+## Commenti dei record
+
+Spese, contratti, progetti e fornitori hanno una sezione **Commenti** nel
+proprio dettaglio. Per i centri di costo usare **Commenti** nel menu della
+riga: la sezione si apre in un pannello laterale. I commenti sono disponibili
+dopo il salvataggio e appartengono al record, indipendentemente dall’anno.
+Dal Budget si raggiungono tramite il collegamento al record originale.
+
+Tutti i membri possono leggere e pubblicare; soltanto l’autore può modificare
+o eliminare il proprio commento, anche rispetto ai super admin. Sono ammessi
+grassetto, corsivo, sottolineato, liste puntate/numerate e link HTTP/HTTPS.
+Il server valida il JSON Tiptap e limita ogni commento a 5.000 caratteri di
+testo e 64 KiB di JSON, con limiti a profondità e numero di nodi. Il contenuto
+si conserva nella sola colonna `content` del pacchetto
+`ryangjchandler/laravel-comments` e viene visualizzato con il renderer React
+statico di Tiptap, senza HTML arbitrario né editor per ciascun commento.
+
+L’elenco carica 10 commenti per pagina dal server e si ordina per data di
+creazione, con ID come secondo criterio. Le modifiche non cambiano questa
+posizione; la dicitura **Modificato** segnala timestamp differenti.
+L’eliminazione del commento è un soft-delete, indipendente dall’Undo
+gestionale. Eliminando un record i commenti rimangono conservati ma
+inaccessibili; tornano visibili quando Undo ripristina lo stesso record.
+I trasferimenti CSV non includono commenti.
+
+L’installazione richiede `composer install`, `npm ci`, `php artisan migrate`
+(per la migration registrata dal pacchetto), `npm run build` e
+`php artisan optimize:clear` nell’ambiente applicativo. I test dedicati sono
+in `tests/Feature/CommentTest.php` e usano il database separato `testing`.
+
 ## Allegati di contratti, spese e progetti
 
 Le pagine di dettaglio e i pannelli laterali di modifica includono una sezione

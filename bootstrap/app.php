@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // Preserve rich-text whitespace and validate link URLs exactly as submitted.
+        $commentRequest = fn (Request $request) => $request->is('t/*/*/*/comments', 't/*/*/*/comments/*');
+        $middleware->trimStrings(except: [$commentRequest]);
+        $middleware->convertEmptyStringsToNull(except: [$commentRequest]);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,

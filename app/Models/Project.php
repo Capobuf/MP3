@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use RyanChandler\Comments\Concerns\HasComments;
 
 #[Fillable(['name', 'description', 'status', 'starts_on', 'ends_on'])]
 class Project extends Model
 {
+    use HasComments;
     use HasCostCenters;
 
     /** @return HasMany<Attachment, $this> */

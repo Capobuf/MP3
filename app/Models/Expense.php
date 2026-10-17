@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use RyanChandler\Comments\Concerns\HasComments;
 
 /**
  * @property string|null $allocated_amount
@@ -19,6 +20,7 @@ use Illuminate\Support\Carbon;
 #[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'notes', 'period_starts_on', 'period_ends_on'])]
 class Expense extends Model
 {
+    use HasComments;
     use HasCostCenters;
 
     /** @return HasMany<Attachment, $this> */

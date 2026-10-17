@@ -1,0 +1,25 @@
+<?php
+
+// The package omits its column types and declares IsComment instead of the Eloquent model.
+namespace Illuminate\Support {
+    class Carbon {}
+}
+
+namespace RyanChandler\Comments\Models {
+    /**
+     * @property int $id
+     * @property int|null $user_id
+     * @property string $content
+     * @property \Illuminate\Support\Carbon|null $created_at
+     * @property \Illuminate\Support\Carbon|null $updated_at
+     */
+    class Comment extends \Illuminate\Database\Eloquent\Model {}
+}
+
+namespace RyanChandler\Comments\Concerns {
+    trait HasComments
+    {
+        /** @return \Illuminate\Database\Eloquent\Relations\MorphMany<\RyanChandler\Comments\Models\Comment, $this> */
+        public function comments(): \Illuminate\Database\Eloquent\Relations\MorphMany {}
+    }
+}

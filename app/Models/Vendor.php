@@ -6,10 +6,13 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use RyanChandler\Comments\Concerns\HasComments;
 
 #[Fillable(['name', 'vat_number', 'email', 'phone', 'notes'])]
 class Vendor extends Model
 {
+    use HasComments;
+
     /** @return BelongsTo<Tenant, $this> */
     public function tenant(): BelongsTo
     {

@@ -9,6 +9,7 @@ use App\Http\Controllers\Platform\UserController as PlatformUserController;
 use App\Http\Controllers\Tenant\AttachmentController;
 use App\Http\Controllers\Tenant\BudgetController;
 use App\Http\Controllers\Tenant\CatalogController;
+use App\Http\Controllers\Tenant\CommentController;
 use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
@@ -74,6 +75,12 @@ Route::middleware('auth')->group(function () {
             Route::get('{attachment}/download', [AttachmentController::class, 'download'])->whereNumber('attachment')->name('attachments.download');
             Route::get('{attachment}/view', [AttachmentController::class, 'view'])->whereNumber('attachment')->name('attachments.view');
             Route::delete('{attachment}', [AttachmentController::class, 'destroy'])->whereNumber('attachment')->name('attachments.destroy');
+        });
+        Route::prefix('{resource}/{record}/comments')->where(['resource' => 'contracts|cost-centers|expenses|projects|vendors', 'record' => '[0-9]+'])->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('/', [CommentController::class, 'index'])->name('comments.index');
+            Route::post('/', [CommentController::class, 'store'])->name('comments.store');
+            Route::patch('{comment}', [CommentController::class, 'update'])->whereNumber('comment')->name('comments.update');
+            Route::delete('{comment}', [CommentController::class, 'destroy'])->whereNumber('comment')->name('comments.destroy');
         });
         Route::get('creation-options', CreationOptionsController::class)->name('creation-options');
         Route::get('{kind}/create', [CreationOptionsController::class, 'create'])->whereIn('kind', ['vendors', 'contracts', 'projects', 'expenses', 'cost-centers'])->name('create');

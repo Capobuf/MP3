@@ -1,4 +1,12 @@
 import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
+import { CommentsSection } from '@/components/management/comments-section';
+import {
     InlineEdit,
     saveInlineRecord,
 } from '@/components/management/inline-edit';
@@ -65,6 +73,8 @@ export default function CostCenters({
 }) {
     'use no memo'; // TanStack v8 exposes mutable table and column instances.
 
+    const [commenting, setCommenting] = useState<CostCenter | null>(null);
+    const [commentsBusy, setCommentsBusy] = useState(false);
     const [search, setSearch] = useState(filters.search ?? '');
     const [deleting, setDeleting] = useState<CostCenter | null>(null);
     const [deleteChildren, setDeleteChildren] = useState(false);
@@ -218,6 +228,11 @@ export default function CostCenters({
                                         >
                                             Altri dati e collegamenti
                                         </Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        onSelect={() => setCommenting(center)}
+                                    >
+                                        Commenti
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -380,6 +395,41 @@ export default function CostCenters({
                 </Card>
                 <Pagination page={records} />
             </div>
+            <Sheet
+                open={commenting !== null}
+                onOpenChange={(open) => {
+                    if (!open && !commentsBusy) setCommenting(null);
+                }}
+            >
+                <SheetContent
+                    closeDisabled={commentsBusy}
+                    className="w-full overflow-y-auto sm:max-w-2xl"
+                    onEscapeKeyDown={(event) => {
+                        if (commentsBusy) event.preventDefault();
+                    }}
+                    onInteractOutside={(event) => {
+                        if (commentsBusy) event.preventDefault();
+                    }}
+                >
+                    <SheetHeader>
+                        <SheetTitle>Commenti · {commenting?.name}</SheetTitle>
+                        <SheetDescription>
+                            Commenti del centro di costo.
+                        </SheetDescription>
+                    </SheetHeader>
+                    <div className="min-w-0 px-4 pb-6">
+                        {commenting && (
+                            <CommentsSection
+                                key={commenting.id}
+                                tenant={tenant}
+                                resource="cost-centers"
+                                recordId={commenting.id}
+                                onBusyChange={setCommentsBusy}
+                            />
+                        )}
+                    </div>
+                </SheetContent>
+            </Sheet>
             <AlertDialog
                 open={deleting !== null}
                 onOpenChange={(open) => {
