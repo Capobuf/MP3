@@ -714,6 +714,7 @@ export function BudgetTable({
     mutate,
     onAdd,
     onMissing,
+    onImport,
     onExpenseEdit,
     onRecordSave,
     typeFilter,
@@ -729,6 +730,7 @@ export function BudgetTable({
     mutate: BudgetMutate;
     onAdd: () => void;
     onMissing: () => void;
+    onImport: () => void;
     onExpenseEdit: (id: number) => void;
     onRecordSave: (
         resource: string,
@@ -1912,18 +1914,27 @@ export function BudgetTable({
                                 <TableRow>
                                     <TableCell colSpan={visibleColumns.length}>
                                         <Empty>
-                                            <EmptyHeader>
-                                                <EmptyTitle>
-                                                    {budget.entries.length
-                                                        ? 'Nessuna voce corrisponde ai filtri'
-                                                        : 'Un anno da costruire'}
-                                                </EmptyTitle>
-                                                <EmptyDescription>
-                                                    Aggiungi contratti,
-                                                    progetti, spese o voci
-                                                    libere al Budget.
-                                                </EmptyDescription>
-                                            </EmptyHeader>
+                                            {budget.entries.length ? (
+                                                <EmptyHeader>
+                                                    <EmptyTitle>
+                                                        Nessuna voce corrisponde
+                                                        ai filtri
+                                                    </EmptyTitle>
+                                                    <EmptyDescription>
+                                                        Aggiungi contratti,
+                                                        progetti, spese o voci
+                                                        libere al Budget.
+                                                    </EmptyDescription>
+                                                </EmptyHeader>
+                                            ) : (
+                                                <Button
+                                                    variant="outline"
+                                                    disabled={busy}
+                                                    onClick={onImport}
+                                                >
+                                                    Importa dall’anno precedente
+                                                </Button>
+                                            )}
                                         </Empty>
                                     </TableCell>
                                 </TableRow>

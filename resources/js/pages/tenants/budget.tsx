@@ -1,3 +1,4 @@
+import { AnnualContractImport } from '@/components/management/annual-contract-import';
 import { DetailHero } from '@/components/management/detail-hero';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { changeEconomicYear } from '@/lib/economic-year';
@@ -108,7 +109,7 @@ function BudgetHeader({
                                             onCopy?.();
                                         }}
                                     >
-                                        Copia struttura dall’anno precedente
+                                        Importa dall’anno precedente
                                     </DropdownMenuItem>
                                 </DropdownMenuGroup>
                             </DropdownMenuContent>
@@ -150,6 +151,7 @@ function BudgetWorkspace({
     const [loading, setLoading] = useState(false);
     const [add, setAdd] = useState(false);
     const [missing, setMissing] = useState(false);
+    const [importing, setImporting] = useState(false);
     const [typeFilter, setTypeFilter] = useState('all');
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
@@ -258,9 +260,7 @@ function BudgetWorkspace({
                 props={props}
                 busy={busy || loading || pending}
                 onNewYear={onNewYear}
-                onCopy={() => {
-                    void mutate('copy', 'POST');
-                }}
+                onCopy={() => setImporting(true)}
             />
             <section aria-label="Riepilogo budget">
                 <DashboardSummary
@@ -313,11 +313,19 @@ function BudgetWorkspace({
                 setTypeFilter={setTypeFilter}
                 onAdd={() => setAdd(true)}
                 onMissing={() => setMissing(true)}
+                onImport={() => setImporting(true)}
                 onRecordSave={saveRecord}
                 onExpenseEdit={(id) => {
                     void editExpense(id);
                 }}
             />
+            {importing && (
+                <AnnualContractImport
+                    path={base}
+                    onClose={() => setImporting(false)}
+                    onImported={setBudget}
+                />
+            )}
             <BudgetEntrySheet
                 budgetYear={props.budgetYear!}
                 open={add}

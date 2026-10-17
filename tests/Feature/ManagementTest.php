@@ -57,7 +57,7 @@ class ManagementTest extends TestCase
     public function test_catalog_fields_can_be_patched_without_resending_required_fields(): void
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore', 'email' => 'originale@example.com']);
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto', 'vendor_id' => $vendor->id, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto', 'vendor_id' => $vendor->id, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo', 'starts_on' => '2026-01-01']);
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
         $contract->costCenters()->attach($center);
@@ -82,7 +82,7 @@ class ManagementTest extends TestCase
     public function test_inline_catalog_changes_still_validate_required_values_and_tenant_links(): void
     {
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $foreignVendor = $this->other->vendors()->create(['name' => 'Altro fornitore']);
         $this->patchJson('/t/alfa/projects/'.$project->id, ['name' => ''])->assertUnprocessable()->assertJsonValidationErrors('name');
         $this->patchJson('/t/alfa/projects/'.$project->id, ['status' => 'inesistente'])->assertUnprocessable()->assertJsonValidationErrors('status');
@@ -95,7 +95,7 @@ class ManagementTest extends TestCase
     public function test_inline_date_changes_are_checked_against_the_other_saved_date(): void
     {
         foreach (['contracts', 'projects'] as $catalog) {
-            $record = $this->tenant->{$catalog}()->create(['name' => 'Elemento', 'starts_on' => '2026-04-01', 'ends_on' => '2026-08-31', ...($catalog === 'projects' ? ['status' => 'attivo'] : [])]);
+            $record = $this->tenant->{$catalog}()->create(['name' => 'Elemento', 'starts_on' => '2026-04-01', 'ends_on' => '2026-08-31', ...($catalog === 'projects' ? ['status' => 'attivo'] : ['year' => 2026])]);
             $path = '/t/alfa/'.$catalog.'/'.$record->id;
             $this->patchJson($path, ['ends_on' => '2026-03-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
             $this->patchJson($path, ['starts_on' => '2026-09-01'])->assertUnprocessable()->assertJsonValidationErrors('ends_on');
@@ -136,14 +136,14 @@ class ManagementTest extends TestCase
                 ->where('year', 2026)->where('contractContext', null)->where('parentId', null));
         }
         $center = $this->tenant->costCenters()->create(['name' => 'Centro Alfa']);
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto Alfa']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto Alfa']);
         $contract->costCenters()->attach($center);
         $this->get('/t/alfa/expenses/create?contract_id='.$contract->id)->assertInertia(fn (Assert $page) => $page
             ->where('contractContext.id', $contract->id)->where('contractContext.cost_centers.0.id', $center->id)
             ->where('contractContext.has_period_expenses', false));
         $this->get('/t/alfa/cost-centers/create?parent_id='.$center->id)->assertInertia(fn (Assert $page) => $page
             ->where('parentId', $center->id));
-        $foreign = $this->other->contracts()->create(['name' => 'Contratto Beta']);
+        $foreign = $this->other->contracts()->create(['year' => 2026, 'name' => 'Contratto Beta']);
         $this->getJson('/t/alfa/expenses/create?contract_id='.$foreign->id)->assertUnprocessable()->assertJsonValidationErrors('contract_id');
         $this->getJson('/t/alfa/projects/create?year=1999')->assertUnprocessable()->assertJsonValidationErrors('year');
         $this->actingAs(User::factory()->create())->get('/t/alfa/contracts/create')->assertForbidden();
@@ -163,7 +163,7 @@ class ManagementTest extends TestCase
         $expense = $this->tenant->expenses()->create(['title' => 'Spesa collegata', 'year' => 2027, 'contract_id' => $contract->id]);
         $this->get('/t/alfa/expenses/'.$expense->id.'/edit?contract_id='.$contract->id)->assertInertia(fn (Assert $page) => $page
             ->where('record.contract.id', $contract->id)->where('contractContext.id', $contract->id)->where('year', 2027));
-        $otherContract = $this->tenant->contracts()->create(['name' => 'Altro contratto']);
+        $otherContract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Altro contratto']);
         $this->get('/t/alfa/expenses/'.$expense->id.'/edit?contract_id='.$otherContract->id)->assertNotFound();
         $this->actingAs(User::factory()->create())->get('/t/alfa/expenses/'.$expense->id.'/edit')->assertForbidden();
     }
@@ -182,7 +182,7 @@ class ManagementTest extends TestCase
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore']);
         $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
-        $response = $this->postJson('/t/alfa/contracts', ['name' => 'Nuovo contratto', 'vendor_id' => $vendor->id,
+        $response = $this->postJson('/t/alfa/contracts', ['name' => 'Nuovo contratto', 'year' => 2027, 'vendor_id' => $vendor->id,
             'starts_on' => '2026-01-01', 'ends_on' => '2027-12-31', 'cost_center_ids' => [$center->id],
             'initial_expense' => $this->initialExpense(),
         ])->assertCreated();
@@ -234,8 +234,8 @@ class ManagementTest extends TestCase
         $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page
             ->where('analytics.current.actual', '280.00')->where('analytics.current.allocated', null)
             ->where('analytics.previous.allocated', '500.00')->where('analytics.previous.actual', null));
-        $this->get('/t/alfa/contracts/'.$response->json('record.id'))->assertInertia(fn (Assert $page) => $page
-            ->where('totals.allocated', '0.00')->where('totals.actual', '280.00')->has('expenses.data', 1));
+        $this->get('/t/alfa/contracts/'.$response->json('record.id').'?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '500.00')->where('totals.actual', '0.00')->has('expenses.data', 1));
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $expense->update(['project_id' => $project->id]);
         $this->get('/t/alfa/projects/'.$project->id.'?year=2027')->assertInertia(fn (Assert $page) => $page
@@ -311,7 +311,7 @@ class ManagementTest extends TestCase
         foreach ([['vendor_id' => $vendor->id], ['cost_center_ids' => [$center->id]]] as $foreign) {
             $this->postJson('/t/alfa/contracts', ['name' => 'Non salvare', 'initial_expense' => $this->initialExpense(), ...$foreign])->assertUnprocessable();
         }
-        $contract = $this->tenant->contracts()->create(['name' => 'Esistente', 'reference_amount' => '123']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Esistente', 'reference_amount' => '123']);
         $this->patchJson('/t/alfa/contracts/'.$contract->id, ['name' => 'Non salvare', 'initial_expense' => $this->initialExpense()])
             ->assertUnprocessable()->assertJsonValidationErrors('initial_expense');
         $this->assertSame('Esistente', $contract->refresh()->name);
@@ -324,7 +324,7 @@ class ManagementTest extends TestCase
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Scelto']);
         $otherVendor = $this->tenant->vendors()->create(['name' => 'Contrattuale']);
-        $contract = $this->tenant->contracts()->create(['name' => 'Contratto', 'vendor_id' => $otherVendor->id, 'starts_on' => '2025-01-01', 'reference_amount' => '99999.99']);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto', 'vendor_id' => $otherVendor->id, 'starts_on' => '2025-01-01', 'reference_amount' => '99999.99']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $this->postJson('/t/alfa/expenses', [])->assertUnprocessable()->assertJsonValidationErrors(['title', 'year']);
         $response = $this->postJson('/t/alfa/expenses', ['title' => 'Costo', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '0', 'actual_amount' => null])->assertCreated();
@@ -359,7 +359,7 @@ class ManagementTest extends TestCase
     public function test_cross_tenant_records_cannot_be_read_modified_deleted_or_linked(): void
     {
         foreach (['vendors', 'contracts', 'projects'] as $catalog) {
-            $data = ['name' => 'Segreto', ...($catalog === 'projects' ? ['status' => 'attivo'] : [])];
+            $data = ['name' => 'Segreto', ...($catalog === 'projects' ? ['status' => 'attivo'] : ['year' => 2026])];
             $record = $this->other->{$catalog}()->create($data);
             $this->get('/t/alfa/'.$catalog.'/'.$record->id)->assertNotFound();
             $this->patchJson('/t/alfa/'.$catalog.'/'.$record->id, $data)->assertNotFound();
@@ -392,7 +392,7 @@ class ManagementTest extends TestCase
     public function test_dependencies_block_deletion_until_explicitly_removed(): void
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Vendor']);
-        $contract = $this->tenant->contracts()->create(['name' => 'Contract', 'vendor_id' => $vendor->id]);
+        $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contract', 'vendor_id' => $vendor->id]);
         $project = $this->tenant->projects()->create(['name' => 'Project', 'status' => 'attivo']);
         $expense = $this->tenant->expenses()->create(['title' => 'Costo', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id]);
         foreach (['vendors' => $vendor, 'contracts' => $contract, 'projects' => $project] as $catalog => $record) {

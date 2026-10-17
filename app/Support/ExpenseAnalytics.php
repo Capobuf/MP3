@@ -127,7 +127,7 @@ final class ExpenseAnalytics
         return [
             ...$kpis,
             ...$groups, 'projectStatuses' => $projectStatuses, 'pairs' => $pairs,
-            'variances' => self::variances($selected, $tenant), 'expiry' => self::expiry($tenant),
+            'variances' => self::variances($selected, $tenant), 'expiry' => self::expiry($tenant, EconomicYearContext::year($tenant, $request)),
         ];
     }
 
@@ -149,10 +149,10 @@ final class ExpenseAnalytics
     }
 
     /** @return array<string, mixed> */
-    private static function expiry(Tenant $tenant): array
+    private static function expiry(Tenant $tenant, int $year): array
     {
         $today = now()->startOfDay();
-        $row = $tenant->contracts()->toBase()->selectRaw('COUNT(CASE WHEN ends_on < ? THEN 1 END) AS expired, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within30, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within60, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within90, COUNT(CASE WHEN ends_on IS NULL THEN 1 END) AS undated', [
+        $row = $tenant->contracts()->forYear($year)->toBase()->selectRaw('COUNT(CASE WHEN ends_on < ? THEN 1 END) AS expired, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within30, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within60, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within90, COUNT(CASE WHEN ends_on IS NULL THEN 1 END) AS undated', [
             $today->toDateString(), $today->toDateString(), $today->copy()->addDays(30)->toDateString(), $today->copy()->addDays(31)->toDateString(), $today->copy()->addDays(60)->toDateString(), $today->copy()->addDays(61)->toDateString(), $today->copy()->addDays(90)->toDateString(),
         ])->sole();
 

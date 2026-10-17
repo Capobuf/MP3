@@ -65,7 +65,7 @@ class AttachmentTest extends TestCase
         $tenant ??= $this->tenant;
 
         return match ($resource) {
-            'contracts' => $tenant->contracts()->create(['name' => 'Contratto']),
+            'contracts' => $tenant->contracts()->create(['name' => 'Contratto', 'year' => 2026]),
             'projects' => $tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']),
             'expenses' => $tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026, 'allocated_amount' => '10']),
         };

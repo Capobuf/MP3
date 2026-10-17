@@ -10,6 +10,7 @@ use App\Models\Expense;
 use App\Models\Project;
 use App\Models\Tenant;
 use App\Models\Vendor;
+use App\Support\EconomicYearContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -28,7 +29,7 @@ class SearchController extends Controller
 
         $search = Search::new()
             ->add(Expense::where('tenant_id', $tenant->id)->with('lines:id,expense_id,year'), ['title', 'notes', 'lines.description', 'vendor.name', 'contract.name', 'project.name', 'attachments.original_name'])
-            ->add(Contract::where('tenant_id', $tenant->id)->with('vendor:id,name'), ['name', 'notes', 'vendor.name', 'attachments.original_name'])
+            ->add(Contract::where('tenant_id', $tenant->id)->forYear(EconomicYearContext::year($tenant, $request))->with('vendor:id,name'), ['name', 'notes', 'vendor.name', 'attachments.original_name'])
             ->add(Project::where('tenant_id', $tenant->id), ['name', 'description', 'status', 'attachments.original_name'])
             ->add(Vendor::where('tenant_id', $tenant->id), ['name', 'vat_number', 'email', 'phone', 'notes'])
             ->add(CostCenter::where('tenant_id', $tenant->id)->with('parent:id,name'), ['name', 'parent.name']);
@@ -74,7 +75,11 @@ class SearchController extends Controller
                 $params['year'] = $record->year;
             } elseif ($record instanceof CostCenter) {
                 $params['search'] = $record->name;
-            } elseif ($record instanceof Contract || $record instanceof Project) {
+            } elseif ($record instanceof Contract) {
+                if ($record->year !== null) {
+                    $params['year'] = $record->year;
+                }
+            } elseif ($record instanceof Project) {
                 /** @var Carbon|null $start */
                 $start = $record->starts_on;
                 /** @var Carbon|null $end */

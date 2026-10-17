@@ -70,7 +70,7 @@ class SpreadsheetTransferTest extends TestCase
     public function test_contract_and_annual_expense_exports_preserve_multiyear_lines_and_null_zero(): void
     {
         $tenant = $this->tenant();
-        $contract = $tenant->contracts()->create(['name' => 'Canone', 'reference_amount' => '900.00']);
+        $contract = $tenant->contracts()->create(['year' => 2026, 'name' => 'Canone', 'reference_amount' => '900.00']);
         $expense = app(ExpenseWriter::class)->create($tenant, ['title' => 'Servizio', 'contract_id' => $contract->id, 'year' => 2026, 'lines' => [
             ['description' => 'Anno uno', 'type' => 'allocated', 'unit_price' => '0.00', 'quantity' => '1', 'year' => 2026, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'],
             ['description' => 'Anno due', 'type' => 'allocated', 'unit_price' => '123.45', 'quantity' => '1', 'year' => 2027, 'period_starts_on' => '2027-01-01', 'period_ends_on' => '2027-12-31'],
@@ -84,10 +84,11 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertSame('Anno uno', $book->getSheet(1)->getCell('B2')->getValue());
         $next = $this->workbook('/t/ambiente/expenses/export.xlsx?year=2027');
         $this->assertSame(123.45, $next->getSheet(0)->getCell('I2')->getValue());
-        $contracts = $this->workbook('/t/ambiente/contracts/export.xlsx?record='.$contract->id);
+        $contracts = $this->workbook('/t/ambiente/contracts/export.xlsx?record='.$contract->id.'&year=2026');
         $this->assertSame(900.0, $contracts->getSheet(0)->getCell('E2')->getValue());
         $this->assertSame(2, $contracts->getSheet(1)->getHighestDataRow());
-        $this->assertEquals(2027, $contracts->getSheet(1)->getCell('B2')->getValue());
+        $this->assertEquals(2026, $contracts->getSheet(0)->getCell('H2')->getValue());
+        $this->assertEquals(2026, $contracts->getSheet(1)->getCell('B2')->getValue());
         $this->assertSame(2, $expense->lines()->count());
     }
 
@@ -155,7 +156,7 @@ class SpreadsheetTransferTest extends TestCase
 
     public function test_overlapping_expenses_import_with_warnings(): void
     {
-        $this->tenant()->contracts()->create(['name' => 'Contratto']);
+        $this->tenant()->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $file = $this->file('expenses', [
             ['Canone', 2026, null, 'Contratto', null, null, '2026-01-01', '2026-12-31', 1000, null, null],
             ['Formazione', 2026, null, 'Contratto', null, null, '2026-06-01', '2026-12-31', 500, null, null],
@@ -169,7 +170,7 @@ class SpreadsheetTransferTest extends TestCase
     public function test_invalid_references_block_the_file_while_overlaps_only_warn(): void
     {
         $tenant = $this->tenant();
-        $contract = $tenant->contracts()->create(['name' => 'Contratto']);
+        $contract = $tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $tenant->vendors()->create(['name' => 'Ambiguo']);
         $tenant->vendors()->create(['name' => 'Ambiguo']);
         $file = $this->file('expenses', [
@@ -195,7 +196,7 @@ class SpreadsheetTransferTest extends TestCase
         $files = [
             'vendors' => [['Alfa', '001', 'alfa@example.com', '+39000', null]],
             'cost-centers' => [['IT', null]],
-            'contracts' => [['Canone', '001', '01/01/2026', '31/12/2026', 100, 'IT', null]],
+            'contracts' => [['Canone', '001', '01/01/2026', '31/12/2026', 100, 'IT', null, 2026]],
             'projects' => [['Progetto', 'Descrizione', 'attivo', null, null, 'IT']],
             'budget' => [[2026, 'new-expense', null, 'Budget libero', 0, null, 'IT'], [2026, 'contract', 'Canone', null, null, null, 'IT']],
         ];

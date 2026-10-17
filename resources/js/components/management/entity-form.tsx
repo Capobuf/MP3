@@ -420,6 +420,8 @@ export function EntityForm({
                       : current.values[field.key],
             ]),
         );
+        if (current.kind === 'contracts' && !current.record)
+            payload.year = year;
         if (current.kind === 'expenses') {
             const original = JSON.parse(current.original) as Frame;
             if (current.record) {

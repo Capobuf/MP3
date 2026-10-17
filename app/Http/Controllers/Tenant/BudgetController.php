@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BudgetEntriesRequest;
 use App\Models\BudgetYear;
+use App\Models\Contract;
 use App\Models\Tenant;
 use App\Services\AnnualBudget;
 use App\Services\AttachmentFiles;
@@ -67,6 +68,9 @@ class BudgetController extends Controller
     {
         $data = $request->validate(['type' => ['required', Rule::in(['contract', 'project', 'expense'])], 'search' => ['nullable', 'string', 'max:255'], 'page' => ['nullable', 'integer', 'min:1'], 'id' => ['nullable', 'integer']]);
         $relation = $tenant->{$data['type'].'s'}();
+        if ($data['type'] === 'contract') {
+            $relation->where('year', EconomicYearContext::year($tenant, $request));
+        }
         if (isset($data['id'])) {
             $record = $relation->findOrFail($data['id']);
             $record->load($data['type'] === 'expense' ? ['vendor', 'contract', 'project', 'lines', 'costCenters.parent'] : ($data['type'] === 'contract' ? ['vendor', 'costCenters.parent'] : ['costCenters.parent']));
@@ -122,6 +126,9 @@ class BudgetController extends Controller
         $source = $tenant->{$type.'s'}()->whereKey($data['source_id'])->lockForUpdate()->first();
         if ($source === null) {
             throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La sorgente non appartiene a questo ambiente o è stata eliminata.']);
+        }
+        if ($source instanceof Contract && $source->year !== $year->year) {
+            throw ValidationException::withMessages(['entries' => 'Seleziona un contratto di questo anno. Per lo storico senza anno occorre prima una classificazione esplicita.']);
         }
         $existing = $year->entries()->where($type.'_id', $source->id)->first();
         if ($existing !== null) {
@@ -200,33 +207,6 @@ class BudgetController extends Controller
         }
 
         return $response;
-    }
-
-    public function copy(Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
-    {
-        return $this->mutate($tenant, $budgetYear, $budget, function (BudgetYear $year) use ($tenant): void {
-            if ($year->structure_copied) {
-                return;
-            }
-            $previous = $tenant->budgetYears()->where('year', $year->year - 1)->first();
-            if ($previous === null) {
-                throw ValidationException::withMessages(['year' => 'Non esiste un Budget nell’anno precedente.']);
-            }
-            $position = (int) $year->entries()->max('position');
-            foreach ($previous->entries()->orderBy('position')->orderBy('id')->get() as $entry) {
-                if ($year->entries()->where($entry->type.'_id', $entry->getAttribute($entry->type.'_id'))->exists() || in_array($entry->type.':'.$entry->getAttribute($entry->type.'_id'), $year->dismissed_sources ?? [], true)) {
-                    continue;
-                }
-                if ($entry->type === 'expense' && ! ExpenseOverview::economicQuery($tenant)->whereKey($entry->expense_id)->where('year', $year->year)->exists()) {
-                    continue;
-                }
-                $year->entries()->create([
-                    'tenant_id' => $tenant->id, ...$entry->only('type', 'contract_id', 'project_id', 'expense_id', 'cost_center_id', 'included'),
-                    'position' => ++$position,
-                ]);
-            }
-            $year->update(['structure_copied' => true]);
-        });
     }
 
     /** @param callable(BudgetYear): void $change */

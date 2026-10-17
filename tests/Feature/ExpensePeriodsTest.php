@@ -372,6 +372,7 @@ class ExpensePeriodsTest extends TestCase
 
     public function test_contract_dates_are_suggestions_and_reference_amount_is_excluded(): void
     {
+        $this->contract->update(['year' => 2024]);
         $this->postJson('/t/periodi/expenses', $this->data('2024-01-01', '2024-12-31', 2024))->assertCreated();
         $this->patchJson('/t/periodi/contracts/'.$this->contract->id, ['name' => 'Corretto', 'starts_on' => '2027-01-01', 'ends_on' => '2027-12-31'])->assertOk();
         $this->assertDatabaseCount('expenses', 1);

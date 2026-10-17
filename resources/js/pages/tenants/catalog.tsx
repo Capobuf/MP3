@@ -198,6 +198,17 @@ export default function CatalogPage({
                         }
                     </p>
                 </DetailHero>
+                {catalog === 'contracts' &&
+                    records.data.some((record) => record.year == null) && (
+                        <p
+                            role="note"
+                            className="text-sm text-muted-foreground"
+                        >
+                            Sono presenti contratti storici senza anno. Restano
+                            consultabili; la modifica e l’importazione annuale
+                            richiedono una classificazione esplicita.
+                        </p>
+                    )}
                 <Card>
                     <CardContent className="flex min-w-0 flex-col gap-5">
                         <div className="flex flex-wrap items-center gap-2">

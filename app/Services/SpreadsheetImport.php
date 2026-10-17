@@ -9,6 +9,7 @@ use App\Http\Requests\ExpenseRequest;
 use App\Imports\SectionFile;
 use App\Imports\SectionRows;
 use App\Models\Tenant;
+use App\Support\EconomicYearContext;
 use App\Support\ExpensePeriods;
 use App\Support\Money;
 use App\Support\Transfers\SpreadsheetValues as Values;
@@ -131,7 +132,7 @@ class SpreadsheetImport
         }
         foreach (['vendor_id' => 'vendors', 'contract_id' => 'contracts', 'project_id' => 'projects', 'parent_id' => 'cost-centers', 'cost_center_id' => 'cost-centers'] as $field => $relation) {
             if (array_key_exists($field, $data)) {
-                $data[$field] = $this->resolve($tenant, $relation, $data[$field], $field);
+                $data[$field] = $this->resolve($tenant, $relation, $data[$field], $field, isset($data['year']) ? (int) $data['year'] : null);
             }
         }
         if (array_key_exists('cost_center_ids', $data)) {
@@ -143,6 +144,9 @@ class SpreadsheetImport
                 Values::invalid('status', 'Seleziona uno stato definito nelle impostazioni di questo ambiente.');
             }
             $data['status'] = $matches->first()->key;
+        }
+        if ($resource === 'contracts') {
+            Validator::make($data, ['year' => ['required', 'integer', 'between:2000,2100']])->validate();
         }
         if (in_array($resource, ['vendors', 'contracts', 'projects'], true)) {
             return app(CatalogController::class)->validated(Request::create('/', 'POST', $data), $tenant, $resource);
@@ -164,7 +168,7 @@ class SpreadsheetImport
                 if ($data['description'] !== null || $data['allocated_amount'] !== null || $data['actual_amount'] !== null) {
                     Values::invalid('source_id', 'Le voci collegate richiedono solo la sorgente; lascia vuoti descrizione e importi.');
                 }
-                $data['source_id'] = $this->resolve($tenant, $data['type'].'s', $data['source_id'], 'source_id');
+                $data['source_id'] = $this->resolve($tenant, $data['type'].'s', $data['source_id'], 'source_id', (int) $data['year']);
                 if ($data['source_id'] === null) {
                     Values::invalid('source_id', 'Indica una sorgente.');
                 }
@@ -185,7 +189,7 @@ class SpreadsheetImport
         return Validator::make($data, ExpenseRequest::forTenant($tenant), (new ExpenseRequest)->messages())->validate();
     }
 
-    private function resolve(Tenant $tenant, string $resource, mixed $value, string $field): ?int
+    private function resolve(Tenant $tenant, string $resource, mixed $value, string $field, ?int $year = null): ?int
     {
         if ($value === null || $value === '') {
             return null;
@@ -195,6 +199,9 @@ class SpreadsheetImport
             $matches = $tenant->costCenters()->with('parent')->get()->filter(fn ($center) => ($center->name === $value || SectionSpreadsheet::path($center) === $value));
         } else {
             $query = $tenant->{$resource}();
+            if ($resource === 'contracts') {
+                $query->where('year', $year ?? EconomicYearContext::year($tenant, request()));
+            }
             $name = $resource === 'expenses' ? 'title' : 'name';
             // Compare exact strings in PHP: database collations must not introduce fuzzy/case-insensitive matches.
             $matches = $query->where(fn ($q) => $resource === 'vendors' ? $q->where($name, $value)->orWhere('vat_number', $value) : $q->where($name, $value))->get()->filter(fn ($record) => $record->getAttribute($name) === $value || ($resource === 'vendors' && $record->vat_number === $value));
@@ -227,7 +234,7 @@ class SpreadsheetImport
                 'cost-centers' => 'costCenters', default => $resource
             };
             $matches = $tenant->{$relation}()->where($resource === 'expenses' ? 'title' : 'name', $data[$resource === 'expenses' ? 'title' : 'name'])->get();
-            if ($resource === 'expenses') {
+            if (in_array($resource, ['expenses', 'contracts'], true)) {
                 $matches = $matches->filter(fn ($r) => $r->year == $data['year']);
             }
             if ($resource === 'cost-centers') {

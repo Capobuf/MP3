@@ -24,7 +24,7 @@ final class CatalogQuery
             $query->with('costCenters.parent:id,name');
         }
         if ($catalog === 'contracts') {
-            $query->with('vendor:id,name');
+            $query->where(fn ($q) => $q->where('year', EconomicYearContext::year($tenant, $request))->orWhereNull('year'))->with('vendor:id,name');
             if ($request->filled('vendor_id')) {
                 $query->where('vendor_id', $request->integer('vendor_id'));
             }
