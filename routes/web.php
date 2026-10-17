@@ -13,6 +13,7 @@ use App\Http\Controllers\Tenant\CommentController;
 use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
+use App\Http\Controllers\Tenant\IdentityController;
 use App\Http\Controllers\Tenant\ProjectStatusController;
 use App\Http\Controllers\Tenant\SearchController;
 use App\Http\Controllers\Tenant\SpreadsheetController;
@@ -56,6 +57,12 @@ Route::middleware('auth')->group(function () {
             Route::get('/', [TenantUserSettingsController::class, 'index'])->name('users.index');
             Route::post('/', [TenantUserSettingsController::class, 'store'])->middleware('throttle:10,1')->name('users.store');
             Route::delete('{user}', [TenantUserSettingsController::class, 'destroy'])->name('users.destroy');
+        });
+        Route::prefix('settings/identity')->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('/', [IdentityController::class, 'edit'])->name('identity.edit');
+            Route::post('/', [IdentityController::class, 'update'])->name('identity.update');
+            Route::delete('/', [IdentityController::class, 'destroy'])->name('identity.destroy');
+            Route::get('logo', [IdentityController::class, 'show'])->name('identity.logo');
         });
         Route::get('settings', fn (Tenant $tenant) => to_route('tenant.project-statuses.index', $tenant));
         Route::get('settings/project-statuses', [ProjectStatusController::class, 'index'])->name('project-statuses.index');

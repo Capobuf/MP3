@@ -9,6 +9,7 @@ export function TenantSettingsNav({ slug }: { slug: string }) {
             className="flex flex-wrap gap-2"
         >
             {[
+                ['identity', 'Identità azienda'],
                 ['project-statuses', 'Stati dei progetti'],
                 ['users', 'Utenti'],
                 ['data', 'Importazione ed esportazione'],

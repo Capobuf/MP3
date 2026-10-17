@@ -1,5 +1,11 @@
 import { usePage } from '@inertiajs/react';
-import { Download, FileSpreadsheet, Upload } from 'lucide-react';
+import {
+    Download,
+    FileOutput,
+    FileSpreadsheet,
+    Printer,
+    Upload,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +31,7 @@ export function SpreadsheetActions({
     filters = {},
     disabled = false,
     exportOnly = false,
+    onPrintReport,
 }: {
     slug: string;
     resource: string;
@@ -32,6 +39,7 @@ export function SpreadsheetActions({
     filters?: object;
     disabled?: boolean;
     exportOnly?: boolean;
+    onPrintReport?: () => void;
 }) {
     const { transferLimits, economicContext } = usePage<{
         transferLimits: { xlsxMaxKb: number; xlsxMaxRows: number };
@@ -53,6 +61,10 @@ export function SpreadsheetActions({
     ) {
         query.set('year', String(economicContext.year));
     }
+    const menuLabel = onPrintReport
+        ? 'Importa, esporta e stampa'
+        : 'Opzioni Excel';
+    const MenuIcon = onPrintReport ? FileOutput : FileSpreadsheet;
     return (
         <>
             <DropdownMenu>
@@ -62,10 +74,10 @@ export function SpreadsheetActions({
                         variant="outline"
                         size="icon"
                         disabled={disabled || busy}
-                        aria-label={`Opzioni Excel · ${label}`}
-                        title="Opzioni Excel"
+                        aria-label={`${menuLabel} · ${label}`}
+                        title={menuLabel}
                     >
-                        <FileSpreadsheet aria-hidden="true" />
+                        <MenuIcon aria-hidden="true" />
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -91,6 +103,15 @@ export function SpreadsheetActions({
                                 Esporta Excel
                             </a>
                         </DropdownMenuItem>
+                        {onPrintReport && (
+                            <DropdownMenuItem
+                                disabled={disabled || busy}
+                                onSelect={onPrintReport}
+                            >
+                                <Printer aria-hidden="true" />
+                                Stampa report
+                            </DropdownMenuItem>
+                        )}
                     </DropdownMenuGroup>
                 </DropdownMenuContent>
             </DropdownMenu>

@@ -180,9 +180,48 @@ class AnnualBudgetTest extends TestCase
         $state = $this->add('expense', $forecast->id);
         $this->assertSame('-20.00', $state['totals']['variance']);
         $this->assertSame('-20.00', $state['groups']['expense']['variance']);
+        $this->assertSame('-20.00', $state['vendor_groups']['none']['variance']);
         $this->assertNull($state['entries'][0]['variance']);
         $this->assertNull($state['entries'][1]['variance']);
         $this->getJson($this->url('').'?entry_ids='.$state['entries'][1]['id'])->assertOk()->assertJsonPath('budget.totals.variance', null);
+    }
+
+    public function test_report_snapshot_preserves_empty_excluded_zero_and_foreign_selections(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Report vendor']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Report']);
+        $zero = $this->tenant->expenses()->create(['title' => 'Zero', 'vendor_id' => $vendor->id, 'year' => 2026, 'allocated_amount' => '0', 'actual_amount' => null]);
+        $missing = $this->tenant->expenses()->create(['title' => 'Mancante', 'year' => 2026]);
+        $excluded = $this->tenant->expenses()->create(['title' => 'Esclusa', 'year' => 2026, 'allocated_amount' => '999', 'actual_amount' => '999']);
+        foreach ([$zero, $missing, $excluded] as $expense) {
+            $this->add('expense', $expense->id, ['cost_center_id' => $center->id]);
+        }
+        $ids = $this->year->entries()->orderBy('id')->pluck('id')->all();
+        $this->patchJson($this->url(), ['action' => 'exclude', 'ids' => [$ids[2]]])->assertOk();
+        $snapshot = $this->getJson($this->url('').'?entry_ids='.implode(',', $ids))->assertOk()
+            ->assertJsonCount(3, 'budget.entries')->assertJsonPath('budget.totals.count', 2)
+            ->assertJsonPath('budget.totals.allocated', '0.00')->assertJsonPath('budget.totals.actual', null)
+            ->assertJsonPath('budget.totals.variance', null)->assertJsonPath('budget.entries.2.included', false)
+            ->json('budget');
+        $this->assertSame('0.00', $snapshot['groups']['expense']['allocated']);
+        $this->assertSame('0.00', $snapshot['cost_center_groups'][$center->id]['allocated']);
+        $this->assertNull($snapshot['entries'][1]['allocated']);
+        $this->assertSame('0.00', $snapshot['vendor_groups'][$vendor->id]['allocated']);
+        $this->assertSame(1, $snapshot['vendor_groups'][$vendor->id]['count']);
+        $this->assertNull($snapshot['vendor_groups']['none']['allocated']);
+        $this->getJson($this->url('').'?entry_ids='.$ids[2])->assertOk()
+            ->assertJsonCount(1, 'budget.entries')->assertJsonPath('budget.totals.count', 0)
+            ->assertJsonPath('budget.totals.allocated', null)->assertJsonCount(0, 'budget.vendor_groups');
+        $other = Tenant::create(['name' => 'Altro', 'slug' => 'altro']);
+        $otherYear = $other->budgetYears()->create(['year' => 2026]);
+        $otherExpense = $other->expenses()->create(['title' => 'Privata', 'year' => 2026]);
+        $foreign = $otherYear->entries()->create(['tenant_id' => $other->id, 'type' => 'expense', 'expense_id' => $otherExpense->id]);
+        foreach (['', (string) $foreign->id] as $selection) {
+            $this->getJson($this->url('').'?entry_ids='.$selection)->assertOk()
+                ->assertJsonCount(0, 'budget.entries')->assertJsonPath('budget.totals.count', 0)
+                ->assertJsonPath('budget.totals.allocated', null)->assertJsonCount(0, 'budget.vendor_groups');
+        }
+        $this->getJson($this->url('', $otherYear).'?entry_ids='.$foreign->id)->assertNotFound();
     }
 
     public function test_variance_preserves_missing_sides_explicit_zero_and_negative_adjustments(): void

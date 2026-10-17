@@ -1,9 +1,14 @@
+import { BudgetPrintDialog } from './budget-print-dialog';
+import { captureBudgetReport } from './budget-report';
+import type { BudgetReportData } from './budget-report';
 import { InlineEdit } from './inline-edit';
 import {
     Fragment,
     useCallback,
     useEffect,
     useId,
+    useImperativeHandle,
+    type Ref,
     useMemo,
     useState,
 } from 'react';
@@ -703,8 +708,13 @@ function EntryDetail({
     );
 }
 
+export type BudgetTableHandle = { printReport: () => void };
+
 export function BudgetTable({
+    ref,
     budget,
+    tenantName,
+    logoUrl,
     slug,
     year,
     budgetYearId,
@@ -719,7 +729,10 @@ export function BudgetTable({
     typeFilter,
     setTypeFilter,
 }: {
+    ref?: Ref<BudgetTableHandle>;
     budget: BudgetSnapshot;
+    tenantName: string;
+    logoUrl?: string | null;
     slug: string;
     year: number;
     budgetYearId: number;
@@ -739,6 +752,7 @@ export function BudgetTable({
     setTypeFilter: (value: string) => void;
 }) {
     'use no memo'; // TanStack v8 exposes a mutable table instance to the renderer.
+    const [report, setReport] = useState<BudgetReportData | null>(null);
     const key = `mp3:budget:grid:v1:${slug}`;
     const [preferences, setPreferences] = useState(() => readPreferences(key));
     const [sorting, setSorting] = useState<SortingState>([]);
@@ -1590,12 +1604,65 @@ export function BudgetTable({
             </Button>
         </TableColumnSettings>
     );
+    useImperativeHandle(ref, () => ({
+        printReport() {
+            if (busy || loading || !summary) {
+                toast.error(
+                    'Il Budget non è pronto per la stampa. Attendi il caricamento dei totali o aggiorna il Budget.',
+                );
+                return;
+            }
+            try {
+                setReport(
+                    captureBudgetReport(table, summary, [
+                        status === 'included'
+                            ? 'Voci incluse'
+                            : status === 'excluded'
+                              ? 'Voci escluse'
+                              : 'Incluse ed escluse',
+                        ...(search ? [`Ricerca: ${search}`] : []),
+                        ...(typeFilter !== 'all'
+                            ? [
+                                  `Tipo: ${budgetLabels[typeFilter as BudgetType]}`,
+                              ]
+                            : []),
+                        ...(vendor !== 'all'
+                            ? [
+                                  `Fornitore: ${vendors.find((item) => String(item.id) === vendor)?.name ?? 'Senza fornitore'}`,
+                              ]
+                            : []),
+                        ...(center !== 'all'
+                            ? [
+                                  `Centro: ${centers.find((item) => String(item.id) === center)?.name ?? 'Senza centro di costo'}`,
+                              ]
+                            : []),
+                    ]),
+                );
+            } catch (error) {
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : 'Report non disponibile.',
+                );
+            }
+        },
+    }));
     return (
         <section
             className="flex min-w-0 flex-col gap-4"
             aria-label="Voci del Budget"
             aria-busy={busy || loading}
         >
+            {report && (
+                <BudgetPrintDialog
+                    data={report}
+                    tenantName={tenantName}
+                    tenantSlug={slug}
+                    logoUrl={logoUrl}
+                    year={year}
+                    onClose={() => setReport(null)}
+                />
+            )}
             <div className="flex flex-wrap items-center gap-2">
                 <TableFilters
                     title="Filtri del Budget"

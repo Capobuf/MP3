@@ -475,3 +475,330 @@
         @apply pointer-events-none float-left h-0 text-muted-foreground;
     }
 }
+
+/* The report owns its paper palette, independently of the application theme. */
+.budget-report {
+    --foreground: #182841;
+    --economic-allocated: #637fa9;
+    --economic-actual: #aa7744;
+    --report-ink: #182841;
+    --report-muted: #52647d;
+    --report-line: #dbe3ed;
+    --report-accent: #41649b;
+    box-sizing: border-box;
+    width: 297mm;
+    padding: 12mm;
+    background: #fff;
+    color: var(--report-ink);
+    color-scheme: light;
+    font: 9pt/1.5 var(--theme-font-sans);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    overflow-wrap: anywhere;
+}
+.budget-report[data-orientation='portrait'] {
+    width: 210mm;
+}
+.budget-report h1 {
+    margin: 3mm 0 1.5mm;
+    font-size: 29pt;
+    font-weight: 650;
+    letter-spacing: -0.045em;
+    line-height: 1.12;
+}
+.budget-report h2 {
+    display: flex;
+    align-items: center;
+    gap: 2mm;
+    margin: 5mm 0 3mm;
+    border-left: 0.8mm solid var(--report-accent);
+    padding-left: 3mm;
+    font-size: 11pt;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    break-after: avoid;
+}
+.budget-report h2 > svg {
+    width: 4mm;
+    height: 4mm;
+    flex-shrink: 0;
+}
+.budget-report-date {
+    margin-bottom: 2mm;
+}
+.budget-report h3 {
+    margin-bottom: 3mm;
+    font-size: 9pt;
+    font-weight: 600;
+}
+.budget-report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8mm;
+    border-top: 1mm solid var(--report-ink);
+    border-bottom: 0.25mm solid var(--report-line);
+    padding: 4mm 0;
+    break-inside: avoid;
+}
+.budget-report-heading {
+    min-width: 0;
+}
+.budget-report-eyebrow {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+    font-size: 9pt;
+    font-weight: 500;
+    color: var(--report-muted);
+}
+.budget-report-brand {
+    border-right: 0.3mm solid var(--report-line);
+    padding-right: 3mm;
+    color: var(--report-ink);
+    font-weight: 800;
+    letter-spacing: -0.06em;
+}
+.budget-report-subtitle {
+    color: var(--report-muted);
+    font-size: 8pt;
+}
+.budget-report-identity {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-end;
+    gap: 4mm;
+}
+.budget-report-identity img {
+    width: 28mm;
+    height: 17mm;
+    object-fit: contain;
+}
+.budget-report-year {
+    text-align: right;
+}
+.budget-report-year span {
+    display: block;
+    color: var(--report-muted);
+    font-size: 7pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+.budget-report-year strong {
+    display: block;
+    font-size: 24pt;
+    font-weight: 550;
+    letter-spacing: -0.06em;
+    line-height: 1.25;
+}
+.budget-report-scope {
+    margin: 3mm 0;
+    font-size: 8pt;
+    color: var(--report-muted);
+}
+.budget-report-scope-heading {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1mm 5mm;
+    margin-bottom: 1mm;
+}
+.budget-report-scope-heading strong {
+    color: var(--report-ink);
+    font-weight: 600;
+}
+.budget-report-counts {
+    margin-top: 1mm;
+}
+.budget-report-counts strong {
+    color: var(--report-ink);
+    font-weight: 600;
+}
+.budget-report-kpis {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3mm;
+}
+.budget-report-kpis > div {
+    padding: 3.5mm 4mm;
+    border: 0.2mm solid var(--report-line);
+    border-top: 0.7mm solid var(--report-accent);
+    border-radius: 1.5mm;
+    background: #f3f6fa;
+}
+.budget-report-kpis > [data-metric='allocated'] {
+    border-top-color: #71865a;
+}
+.budget-report-kpis > [data-metric='actual'] {
+    border-top-color: #b17b41;
+}
+.budget-report-kpis dt {
+    margin-bottom: 1.5mm;
+    color: var(--report-muted);
+    font-size: 8pt;
+    font-weight: 500;
+}
+.budget-report-kpis dd {
+    font-size: 17pt;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.04em;
+    font-variant-numeric: tabular-nums;
+}
+.budget-report[data-orientation='portrait'] .budget-report-kpis dd {
+    font-size: 14pt;
+}
+.budget-report table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 8pt;
+    line-height: 1.45;
+}
+.budget-report th,
+.budget-report td {
+    padding: 2mm;
+    border-bottom: 0.2mm solid var(--report-line);
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+}
+.budget-report thead th {
+    padding-top: 3mm;
+    padding-bottom: 3mm;
+    background: #eaf0f7;
+    border-top: 0.3mm solid #b8c8df;
+    border-bottom: 0.3mm solid #b8c8df;
+    font-size: 7.5pt;
+    font-weight: 650;
+}
+.budget-report tbody th {
+    font-weight: 550;
+}
+.budget-report tbody tr:nth-child(even) {
+    background: #f6f8fb;
+}
+.budget-report small {
+    display: block;
+    margin-top: 1mm;
+    color: var(--report-muted);
+    font-size: 6.5pt;
+}
+.budget-report-status-label {
+    display: inline-block;
+    padding: 0.5mm 1.2mm;
+    border: 0.2mm solid #c9d5c3;
+    border-radius: 1mm;
+    color: #445d3b;
+    font-size: 6.5pt;
+    font-weight: 550;
+}
+.budget-report [data-included='false'] .budget-report-status-label {
+    color: #626b7b;
+    border-color: #cdd3dc;
+}
+.budget-report
+    :is(
+        [data-column='allocated'],
+        [data-column='actual'],
+        [data-column='variance']
+    ),
+.budget-report-distribution :is(td, th:not(:first-child)) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.budget-report td[data-column='description'] {
+    font-weight: 550;
+}
+.budget-report th[data-column='description'] {
+    width: 24%;
+}
+.budget-report td[data-column='variance'] {
+    font-weight: 600;
+}
+.budget-report [data-column='variance'] {
+    padding-inline: 1mm;
+}
+.budget-report-note {
+    margin-top: 3mm;
+    color: var(--report-muted);
+    font-size: 7pt;
+    line-height: 1.55;
+}
+.budget-report-totals {
+    margin-top: 5mm;
+    padding: 4mm;
+    border: 0.3mm solid #b8c8df;
+    border-radius: 1.5mm;
+    background: #edf2f8;
+}
+.budget-report-totals .budget-report-kpis > div {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+.budget-report-totals .budget-report-kpis dd {
+    font-size: 13pt;
+}
+.budget-report-block {
+    break-inside: avoid;
+}
+.budget-report-footer {
+    margin-top: 5mm;
+    padding-top: 3mm;
+    border-top: 0.2mm solid var(--report-line);
+}
+.budget-report-signature {
+    display: flex;
+    justify-content: space-between;
+    gap: 4mm;
+    margin-top: 3mm;
+    color: var(--report-ink);
+}
+.budget-report-signature strong {
+    letter-spacing: -0.06em;
+}
+.budget-report-group-title {
+    margin-top: 4mm;
+    break-after: avoid;
+}
+.budget-report-subtotal {
+    padding: 3mm 0 5mm;
+}
+.budget-report-subtotal .budget-report-kpis dd {
+    font-size: 12pt;
+}
+.budget-report-chart-batch {
+    margin: 4mm 0;
+    break-inside: avoid;
+}
+.budget-report section > .budget-report-note,
+.budget-report-chart-batch > .budget-report-note {
+    break-after: avoid;
+}
+.budget-report th[data-column='status'] {
+    width: 17mm;
+}
+@media print {
+    html:has(.budget-report),
+    body:has(.budget-report) {
+        height: auto;
+        overflow: visible;
+        background: #fff;
+    }
+    .budget-report,
+    .budget-report[data-orientation='portrait'] {
+        width: 100%;
+        padding: 0;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+    .budget-report thead {
+        display: table-header-group;
+    }
+    .budget-report tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+}

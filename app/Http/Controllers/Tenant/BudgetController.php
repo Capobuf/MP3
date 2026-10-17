@@ -28,6 +28,7 @@ class BudgetController extends Controller
 
         return Inertia::render('tenants/budget', [
             'tenant' => $tenant->only('id', 'name', 'slug'), 'selectedYear' => $selected,
+            'logoUrl' => $tenant->logoUrl(),
             'budgetYear' => $year?->only('id', 'year', 'structure_copied'),
             'budget' => $year ? $budget->snapshot($tenant, $year) : null,
             'previousBudget' => $previous ? ['year' => $previous->year, 'totals' => $budget->snapshot($tenant, $previous)['totals']] : null,
