@@ -5,13 +5,14 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import type { NavItem } from '@/types';
 
 export function NavMain({
     items,
-    label = 'Navigazione',
+    label,
 }: {
     items: NavItem[];
     label?: string;
@@ -20,7 +21,7 @@ export function NavMain({
 
     return (
         <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel>{label}</SidebarGroupLabel>
+            {label && <SidebarGroupLabel>{label}</SidebarGroupLabel>}
             <SidebarMenu>
                 {items.map((item) => {
                     const isActive = isCurrentOrParentUrl(item.href);
@@ -41,6 +42,9 @@ export function NavMain({
                                     <span>{item.title}</span>
                                 </Link>
                             </SidebarMenuButton>
+                            {item.separatorAfter && (
+                                <SidebarSeparator className="mx-0 my-2" />
+                            )}
                         </SidebarMenuItem>
                     );
                 })}

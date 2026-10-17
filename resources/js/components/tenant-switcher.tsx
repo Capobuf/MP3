@@ -26,26 +26,23 @@ export function TenantSwitcher() {
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="h-14 rounded-xl border border-sidebar-border bg-card p-2 shadow-xs group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent"
+                            className="h-12 rounded-xl border border-sidebar-border bg-card p-2 shadow-xs group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent"
                             aria-label={
                                 currentTenant
                                     ? `Cambia ambiente: ${currentTenant.name}`
                                     : 'Seleziona ambiente'
                             }
                         >
-                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent">
+                            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent">
                                 <Building2
                                     className="size-4"
                                     aria-hidden="true"
                                 />
                             </div>
                             <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                                <span className="truncate font-medium">
+                                <span className="truncate text-base font-medium">
                                     {currentTenant?.name ??
                                         'Seleziona ambiente'}
-                                </span>
-                                <span className="truncate text-xs text-muted-foreground">
-                                    Ambiente
                                 </span>
                             </div>
                             <ChevronsUpDown

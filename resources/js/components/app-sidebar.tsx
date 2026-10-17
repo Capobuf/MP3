@@ -54,26 +54,29 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain
-                    items={getPrimaryNavItems(
-                        currentTenant,
-                        auth.user.is_super_admin,
-                    )}
-                    label="Navigazione"
-                />
-                {currentTenant && (
+                {(currentTenant || !auth.user.is_super_admin) && (
                     <NavMain
-                        items={getAdministrativeNavItems(
+                        items={getPrimaryNavItems(
                             currentTenant,
                             auth.user.is_super_admin,
                         )}
+                    />
+                )}
+                {currentTenant && (
+                    <NavMain
+                        items={getAdministrativeNavItems(currentTenant, false)}
                         label="Amministrazione"
                     />
                 )}
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-sidebar-border p-3">
-                <NavUser />
+            <SidebarFooter className="border-t border-sidebar-border px-0 py-3">
+                {auth.user.is_super_admin && (
+                    <NavMain items={getAdministrativeNavItems(null, true)} />
+                )}
+                <div className="px-3">
+                    <NavUser />
+                </div>
             </SidebarFooter>
         </Sidebar>
     );

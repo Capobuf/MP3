@@ -31,6 +31,7 @@ export function getPrimaryNavItems(
             title: 'Panoramica',
             href: `/t/${tenant.slug}/dashboard`,
             icon: LayoutGrid,
+            separatorAfter: true,
         },
         { title: 'Budget', href: `/t/${tenant.slug}/budget`, icon: Calculator },
         {
@@ -47,6 +48,7 @@ export function getPrimaryNavItems(
             title: 'Progetti',
             href: `/t/${tenant.slug}/projects`,
             icon: FolderKanban,
+            separatorAfter: true,
         },
         {
             title: 'Fornitori',
