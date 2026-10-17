@@ -19,11 +19,16 @@ import { economicConfig } from './analytics-helpers';
 export function BudgetSankey({
     budget,
     printWidth,
+    printMetric,
 }: {
     budget: BudgetSnapshot;
     printWidth?: number;
+    printMetric?: 'allocated' | 'actual';
 }) {
-    const [metric, setMetric] = useState<'allocated' | 'actual'>('allocated');
+    const [selectedMetric, setMetric] = useState<'allocated' | 'actual'>(
+        'allocated',
+    );
+    const metric = printMetric ?? selectedMetric;
     const color = economicConfig[metric].color;
     const [selected, setSelected] = useState<BudgetType | null>(null);
     const onSelect = (type: BudgetType) =>

@@ -714,6 +714,7 @@ export function BudgetTable({
     ref,
     budget,
     tenantName,
+    logoUrl,
     slug,
     year,
     budgetYearId,
@@ -731,6 +732,7 @@ export function BudgetTable({
     ref?: Ref<BudgetTableHandle>;
     budget: BudgetSnapshot;
     tenantName: string;
+    logoUrl?: string | null;
     slug: string;
     year: number;
     budgetYearId: number;
@@ -1655,6 +1657,8 @@ export function BudgetTable({
                 <BudgetPrintDialog
                     data={report}
                     tenantName={tenantName}
+                    tenantSlug={slug}
+                    logoUrl={logoUrl}
                     year={year}
                     onClose={() => setReport(null)}
                 />

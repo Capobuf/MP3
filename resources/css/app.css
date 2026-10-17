@@ -476,19 +476,11 @@
     }
 }
 
-/* Inter is served locally so the preview and PDF use the same typeface. */
-@font-face {
-    font-family: 'MP3 Report';
-    src: url('/fonts/inter/InterVariable.woff2') format('woff2');
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-}
-
 /* The report owns its paper palette, independently of the application theme. */
 .budget-report {
     --foreground: #182841;
     --economic-allocated: #637fa9;
+    --economic-actual: #aa7744;
     --report-ink: #182841;
     --report-muted: #52647d;
     --report-line: #dbe3ed;
@@ -499,9 +491,7 @@
     background: #fff;
     color: var(--report-ink);
     color-scheme: light;
-    font:
-        9pt/1.5 'MP3 Report',
-        var(--theme-font-sans);
+    font: 9pt/1.5 var(--theme-font-sans);
     font-optical-sizing: auto;
     -webkit-font-smoothing: antialiased;
     overflow-wrap: anywhere;
@@ -686,9 +676,6 @@
     color: var(--report-muted);
     font-size: 6.5pt;
 }
-.budget-report .budget-report-status {
-    width: 17mm;
-}
 .budget-report-status-label {
     display: inline-block;
     padding: 0.5mm 1.2mm;
@@ -702,12 +689,11 @@
     color: #626b7b;
     border-color: #cdd3dc;
 }
-.budget-report .budget-report-money,
 .budget-report
     :is(
-        th[data-column='allocated'],
-        th[data-column='actual'],
-        th[data-column='variance']
+        [data-column='allocated'],
+        [data-column='actual'],
+        [data-column='variance']
     ),
 .budget-report-distribution :is(td, th:not(:first-child)) {
     text-align: right;
@@ -761,6 +747,33 @@
 }
 .budget-report-signature strong {
     letter-spacing: -0.06em;
+}
+.budget-report-group-title {
+    margin-top: 4mm;
+    break-after: avoid;
+}
+.budget-report-subtotal {
+    padding: 3mm 0 5mm;
+}
+.budget-report-subtotal .budget-report-kpis dd {
+    font-size: 12pt;
+}
+.budget-report-chart-batch {
+    margin: 4mm 0;
+    break-inside: avoid;
+}
+.budget-report section > .budget-report-note,
+.budget-report-chart-batch > .budget-report-note {
+    break-after: avoid;
+}
+.budget-report-chart-key {
+    display: inline-block;
+    width: 2mm;
+    height: 2mm;
+    margin-right: 2mm;
+}
+.budget-report th[data-column='status'] {
+    width: 17mm;
 }
 @media print {
     html:has(.budget-report),

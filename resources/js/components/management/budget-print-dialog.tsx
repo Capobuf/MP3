@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Printer } from 'lucide-react';
+import { Printer, RotateCcw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,9 +22,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { TableColumnOrder } from './table-column-order';
-import { BudgetReport, budgetReportColumns } from './budget-report';
+import {
+    BudgetReport,
+    budgetReportColumns,
+    budgetReportBlocks,
+    defaultBudgetReportOptions,
+} from './budget-report';
 import type {
     BudgetReportColumn,
+    BudgetReportBlock,
     BudgetReportData,
     BudgetReportOptions,
 } from './budget-report';
@@ -32,57 +38,45 @@ import type {
 export function BudgetPrintDialog({
     data,
     tenantName,
+    logoUrl,
+    tenantSlug,
     year,
     onClose,
 }: {
     data: BudgetReportData;
     tenantName: string;
+    logoUrl?: string | null;
+    tenantSlug: string;
     year: number;
     onClose: () => void;
 }) {
-    const [options, setOptions] = useState<BudgetReportOptions>({
-        title: `Budget ${year}`,
-        orientation: 'landscape',
-        kpis: true,
-        chart: true,
-        table: true,
-        columns: data.columns
-            .filter((column) => column.visible)
-            .map((column) => column.id),
-        logo: null,
-    });
-    const [order, setOrder] = useState(data.columns.map((column) => column.id));
+    const defaults = defaultBudgetReportOptions(tenantName);
+    const [options, setOptions] = useState<BudgetReportOptions>(defaults);
+    const [order, setOrder] = useState(
+        Object.keys(budgetReportColumns) as BudgetReportColumn[],
+    );
     const [createdAt] = useState(() => new Date().toLocaleString('it-IT'));
     const [error, setError] = useState('');
-    const [logoLoading, setLogoLoading] = useState(false);
     const [printing, setPrinting] = useState(false);
     const contentRef = useRef<HTMLElement>(null);
-    const logoInput = useRef<HTMLInputElement>(null);
     const visibleColumns = order.filter((id) => options.columns.includes(id));
     const invalid =
         !options.title.trim() ||
-        (!options.kpis && !options.chart && !options.table) ||
-        (options.table && visibleColumns.length === 0);
+        options.blocks.every((block) => options.hiddenBlocks.includes(block)) ||
+        (!options.hiddenBlocks.includes('table') &&
+            visibleColumns.length === 0) ||
+        options.blocks.some(
+            (block) =>
+                !options.hiddenBlocks.includes(block) &&
+                !options.titles[block].trim(),
+        );
     const print = useReactToPrint({
         contentRef,
-        fonts: [
-            {
-                family: 'MP3 Report',
-                source: 'url("/fonts/inter/InterVariable.woff2")',
-                weight: '100 900',
-                style: 'normal',
-            },
-        ],
         documentTitle: `${options.title} - ${tenantName}`,
         pageStyle: `@page { size: A4 ${options.orientation}; margin: 12mm; }`,
         onBeforePrint: async () => {
             if (!contentRef.current)
                 throw new Error('Anteprima non disponibile.');
-            const fonts = await document.fonts.load('400 12px "MP3 Report"');
-            if (fonts.length === 0)
-                throw new Error(
-                    'Font del report non disponibile. Ricarica la pagina e riprova.',
-                );
             await document.fonts.ready;
             await Promise.all(
                 Array.from(contentRef.current.querySelectorAll('img')).map(
@@ -96,45 +90,44 @@ export function BudgetPrintDialog({
             setError(`Stampa non riuscita: ${failure.message}`);
         },
     });
-    async function loadLogo(file?: File) {
-        setOptions((current) => ({ ...current, logo: null }));
-        setError('');
-        if (!file) return;
-        if (
-            !['image/png', 'image/jpeg'].includes(file.type) ||
-            file.size > 2 * 1024 * 1024
-        ) {
-            setError('Scegli un logo PNG o JPG di massimo 2 MB.');
-            if (logoInput.current) logoInput.current.value = '';
-            return;
-        }
-        setLogoLoading(true);
-        const url = URL.createObjectURL(file);
-        try {
-            const image = new Image();
-            image.src = url;
-            await image.decode();
-            const dataUrl = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => {
-                    if (typeof reader.result === 'string')
-                        resolve(reader.result);
-                    else reject(new Error('Impossibile leggere il logo.'));
-                };
-                reader.onerror = () =>
-                    reject(new Error('Impossibile leggere il logo.'));
-                reader.readAsDataURL(file);
-            });
-            setOptions((current) => ({ ...current, logo: dataUrl }));
-        } catch {
-            setError(
-                'Impossibile leggere il logo. Scegli un’immagine PNG o JPG valida.',
-            );
-            if (logoInput.current) logoInput.current.value = '';
-        } finally {
-            URL.revokeObjectURL(url);
-            setLogoLoading(false);
-        }
+    function reset(label: string, action: () => void) {
+        return (
+            <Button
+                variant="ghost"
+                size="sm"
+                disabled={printing}
+                onClick={action}
+                aria-label={`Reset ${label}`}
+            >
+                <RotateCcw data-icon="inline-start" />
+                Reset
+            </Button>
+        );
+    }
+    function check(
+        key:
+            | 'showCompany'
+            | 'showYear'
+            | 'showLogo'
+            | 'showScope'
+            | 'showDate'
+            | 'groupByType'
+            | 'subtotals',
+        label: string,
+    ) {
+        return (
+            <Field orientation="horizontal" key={key}>
+                <Checkbox
+                    id={`report-${key}`}
+                    checked={options[key]}
+                    disabled={printing}
+                    onCheckedChange={(value) =>
+                        setOptions({ ...options, [key]: value === true })
+                    }
+                />
+                <FieldLabel htmlFor={`report-${key}`}>{label}</FieldLabel>
+            </Field>
+        );
     }
     return (
         <Dialog
@@ -158,34 +151,93 @@ export function BudgetPrintDialog({
                 <div className="grid min-h-0 gap-6 overflow-y-auto lg:grid-cols-[17rem_minmax(0,1fr)]">
                     <div className="flex flex-col gap-5 lg:overflow-y-auto">
                         <FieldGroup>
-                            <Field>
-                                <FieldLabel htmlFor="budget-report-title">
-                                    Titolo del report
-                                </FieldLabel>
-                                <Input
-                                    id="budget-report-title"
-                                    value={options.title}
-                                    maxLength={160}
-                                    disabled={printing}
-                                    onChange={(event) =>
-                                        setOptions({
-                                            ...options,
-                                            title: event.target.value,
-                                        })
-                                    }
-                                />
-                                <FieldDescription>
-                                    {tenantName} · Anno {year}
-                                </FieldDescription>
-                            </Field>
-                            <Field>
-                                <FieldLabel>Formato A4</FieldLabel>
+                            <FieldSet>
+                                <FieldLegend>Intestazione</FieldLegend>
+                                {reset('intestazione', () =>
+                                    setOptions({
+                                        ...options,
+                                        title: defaults.title,
+                                        company: defaults.company,
+                                        subtitle: defaults.subtitle,
+                                        showCompany: true,
+                                        showYear: true,
+                                        showLogo: true,
+                                        showScope: true,
+                                        showDate: true,
+                                    }),
+                                )}
+                                <FieldGroup>
+                                    {(
+                                        [
+                                            ['title', 'Titolo del report'],
+                                            ['company', 'Nome azienda'],
+                                            ['subtitle', 'Sottotitolo'],
+                                        ] as const
+                                    ).map(([key, label]) => (
+                                        <Field key={key}>
+                                            <FieldLabel
+                                                htmlFor={`report-${key}`}
+                                            >
+                                                {label}
+                                            </FieldLabel>
+                                            <Input
+                                                id={`report-${key}`}
+                                                value={options[key]}
+                                                disabled={printing}
+                                                maxLength={150}
+                                                onChange={(event) =>
+                                                    setOptions({
+                                                        ...options,
+                                                        [key]: event.target
+                                                            .value,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                    ))}
+                                    {check(
+                                        'showCompany',
+                                        'Mostra nome azienda',
+                                    )}
+                                    {check('showYear', 'Mostra anno')}
+                                    {check('showLogo', 'Mostra logo azienda')}
+                                    <FieldDescription>
+                                        {logoUrl
+                                            ? 'Logo dalle impostazioni del tenant.'
+                                            : 'Nessun logo azienda configurato.'}{' '}
+                                        <a
+                                            href={`/t/${tenantSlug}/settings/identity`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="underline"
+                                        >
+                                            Impostazioni azienda
+                                        </a>
+                                    </FieldDescription>
+                                    {check(
+                                        'showScope',
+                                        'Mostra filtri e conteggio voci',
+                                    )}
+                                    {check(
+                                        'showDate',
+                                        'Mostra data di elaborazione',
+                                    )}
+                                </FieldGroup>
+                            </FieldSet>
+                            <FieldSet>
+                                <FieldLegend>Formato pagina</FieldLegend>
+                                {reset('formato pagina', () =>
+                                    setOptions({
+                                        ...options,
+                                        orientation: defaults.orientation,
+                                    }),
+                                )}
                                 <ToggleGroup
                                     type="single"
                                     variant="outline"
                                     value={options.orientation}
                                     disabled={printing}
-                                    aria-label="Orientamento del report"
+                                    aria-label="Orientamento A4"
                                     onValueChange={(value) => {
                                         if (
                                             value === 'portrait' ||
@@ -204,121 +256,184 @@ export function BudgetPrintDialog({
                                         Orizzontale
                                     </ToggleGroupItem>
                                 </ToggleGroup>
-                            </Field>
+                            </FieldSet>
                             <FieldSet>
-                                <FieldLegend>Sezioni del report</FieldLegend>
-                                <FieldGroup className="gap-3">
-                                    {(
-                                        [
-                                            ['kpis', 'Riepilogo KPI'],
-                                            [
-                                                'chart',
-                                                'Grafico ripartizione Budget',
-                                            ],
-                                            ['table', 'Tabella analitica'],
-                                        ] as const
-                                    ).map(([key, label]) => (
-                                        <Field
-                                            key={key}
-                                            orientation="horizontal"
-                                        >
-                                            <Checkbox
-                                                id={`report-${key}`}
-                                                checked={options[key]}
-                                                disabled={printing}
-                                                onCheckedChange={(value) =>
-                                                    setOptions({
-                                                        ...options,
-                                                        [key]: value === true,
-                                                    })
-                                                }
-                                            />
-                                            <FieldLabel
-                                                htmlFor={`report-${key}`}
-                                            >
-                                                {label}
-                                            </FieldLabel>
-                                        </Field>
-                                    ))}
+                                <FieldLegend>Blocchi del documento</FieldLegend>
+                                {reset('blocchi', () =>
+                                    setOptions({
+                                        ...options,
+                                        blocks: defaults.blocks,
+                                        hiddenBlocks: [],
+                                    }),
+                                )}
+                                <FieldDescription>
+                                    Seleziona e trascina i blocchi nell’ordine
+                                    desiderato. Da tastiera: Spazio e frecce.
+                                </FieldDescription>
+                                <TableColumnOrder
+                                    label="Ordine dei blocchi"
+                                    disabled={printing}
+                                    columns={options.blocks.map((id) => ({
+                                        id,
+                                        label: options.titles[id],
+                                        visible:
+                                            !options.hiddenBlocks.includes(id),
+                                        canHide: true,
+                                    }))}
+                                    onOrderChange={(ids) =>
+                                        setOptions({
+                                            ...options,
+                                            blocks: ids as BudgetReportBlock[],
+                                        })
+                                    }
+                                    onVisibilityChange={(id, visible) =>
+                                        setOptions({
+                                            ...options,
+                                            hiddenBlocks: visible
+                                                ? options.hiddenBlocks.filter(
+                                                      (block) => block !== id,
+                                                  )
+                                                : [
+                                                      ...options.hiddenBlocks,
+                                                      id as BudgetReportBlock,
+                                                  ],
+                                        })
+                                    }
+                                />
+                            </FieldSet>
+                            <FieldSet>
+                                <FieldLegend>Titoli dei blocchi</FieldLegend>
+                                {reset('titoli', () =>
+                                    setOptions({
+                                        ...options,
+                                        titles: defaults.titles,
+                                    }),
+                                )}
+                                <FieldGroup>
+                                    {options.blocks
+                                        .filter(
+                                            (block) =>
+                                                !options.hiddenBlocks.includes(
+                                                    block,
+                                                ),
+                                        )
+                                        .map((block) => (
+                                            <Field key={block}>
+                                                <FieldLabel
+                                                    htmlFor={`report-title-${block}`}
+                                                >
+                                                    {budgetReportBlocks[block]}
+                                                </FieldLabel>
+                                                <Input
+                                                    id={`report-title-${block}`}
+                                                    value={
+                                                        options.titles[block]
+                                                    }
+                                                    maxLength={150}
+                                                    disabled={printing}
+                                                    onChange={(event) =>
+                                                        setOptions({
+                                                            ...options,
+                                                            titles: {
+                                                                ...options.titles,
+                                                                [block]:
+                                                                    event.target
+                                                                        .value,
+                                                            },
+                                                        })
+                                                    }
+                                                />
+                                            </Field>
+                                        ))}
                                 </FieldGroup>
                             </FieldSet>
-                            {options.table && (
-                                <FieldSet>
-                                    <FieldLegend>
-                                        Colonne della tabella
-                                    </FieldLegend>
-                                    <FieldDescription>
-                                        Trascina per riordinare; da tastiera usa
-                                        Spazio e le frecce. Lo stato di
-                                        inclusione è sempre indicato.
-                                    </FieldDescription>
-                                    <TableColumnOrder
-                                        disabled={printing}
-                                        columns={order.map((id) => ({
-                                            id,
-                                            label: budgetReportColumns[id],
-                                            visible:
-                                                options.columns.includes(id),
-                                            canHide: true,
-                                        }))}
-                                        onOrderChange={(ids) =>
-                                            setOrder(
-                                                ids as BudgetReportColumn[],
-                                            )
-                                        }
-                                        onVisibilityChange={(id, visible) =>
-                                            setOptions({
-                                                ...options,
-                                                columns: visible
-                                                    ? [
-                                                          ...options.columns,
-                                                          id as BudgetReportColumn,
-                                                      ]
-                                                    : options.columns.filter(
-                                                          (column) =>
-                                                              column !== id,
-                                                      ),
-                                            })
-                                        }
-                                    />
-                                </FieldSet>
-                            )}
-                            <Field>
-                                <FieldLabel htmlFor="budget-report-logo">
-                                    Logo facoltativo
-                                </FieldLabel>
-                                <Input
-                                    ref={logoInput}
-                                    id="budget-report-logo"
-                                    type="file"
-                                    accept="image/png,image/jpeg"
-                                    disabled={logoLoading || printing}
-                                    onChange={(event) => {
-                                        void loadLogo(event.target.files?.[0]);
-                                    }}
-                                />
-                                <FieldDescription>
-                                    PNG/JPG, massimo 2 MB. Usato solo per questo
-                                    report, senza caricamento sul server.
-                                </FieldDescription>
-                                {options.logo && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={printing}
-                                        onClick={() => {
-                                            setOptions({
-                                                ...options,
-                                                logo: null,
-                                            });
-                                            if (logoInput.current)
-                                                logoInput.current.value = '';
-                                        }}
-                                    >
-                                        Rimuovi logo
-                                    </Button>
+                            <FieldSet>
+                                <FieldLegend>
+                                    Importi della ripartizione
+                                </FieldLegend>
+                                {reset('ripartizione', () =>
+                                    setOptions({
+                                        ...options,
+                                        sankeyMetric: defaults.sankeyMetric,
+                                    }),
                                 )}
-                            </Field>
+                                <ToggleGroup
+                                    type="single"
+                                    variant="outline"
+                                    value={options.sankeyMetric}
+                                    disabled={printing}
+                                    aria-label="Importi della ripartizione"
+                                    onValueChange={(value) => {
+                                        if (
+                                            value === 'allocated' ||
+                                            value === 'actual' ||
+                                            value === 'both'
+                                        )
+                                            setOptions({
+                                                ...options,
+                                                sankeyMetric: value,
+                                            });
+                                    }}
+                                >
+                                    <ToggleGroupItem value="allocated">
+                                        Allocato
+                                    </ToggleGroupItem>
+                                    <ToggleGroupItem value="actual">
+                                        Effettivo
+                                    </ToggleGroupItem>
+                                    <ToggleGroupItem value="both">
+                                        Entrambi
+                                    </ToggleGroupItem>
+                                </ToggleGroup>
+                            </FieldSet>
+                            <FieldSet>
+                                <FieldLegend>Tabella</FieldLegend>
+                                {reset('tabella', () => {
+                                    setOptions({
+                                        ...options,
+                                        columns: defaults.columns,
+                                        groupByType: defaults.groupByType,
+                                        subtotals: defaults.subtotals,
+                                    });
+                                    setOrder(
+                                        Object.keys(
+                                            budgetReportColumns,
+                                        ) as BudgetReportColumn[],
+                                    );
+                                })}
+                                {check('groupByType', 'Raggruppa per tipo')}
+                                {options.groupByType &&
+                                    check(
+                                        'subtotals',
+                                        'Mostra subtotali per tipo',
+                                    )}
+
+                                <TableColumnOrder
+                                    disabled={printing}
+                                    columns={order.map((id) => ({
+                                        id,
+                                        label: budgetReportColumns[id],
+                                        visible: options.columns.includes(id),
+                                        canHide: true,
+                                    }))}
+                                    onOrderChange={(ids) =>
+                                        setOrder(ids as BudgetReportColumn[])
+                                    }
+                                    onVisibilityChange={(id, visible) =>
+                                        setOptions({
+                                            ...options,
+                                            columns: visible
+                                                ? [
+                                                      ...options.columns,
+                                                      id as BudgetReportColumn,
+                                                  ]
+                                                : options.columns.filter(
+                                                      (column) => column !== id,
+                                                  ),
+                                        })
+                                    }
+                                />
+                            </FieldSet>
                         </FieldGroup>
                     </div>
                     <div
@@ -331,6 +446,7 @@ export function BudgetPrintDialog({
                             data={data}
                             options={{ ...options, columns: visibleColumns }}
                             tenantName={tenantName}
+                            logoUrl={logoUrl}
                             year={year}
                             createdAt={createdAt}
                         />
@@ -349,7 +465,7 @@ export function BudgetPrintDialog({
                             : 'Controlla l’impaginazione nell’anteprima di Chrome prima di salvare. Scala 100%, carta A4.'}
                     </p>
                     <Button
-                        disabled={invalid || logoLoading || printing}
+                        disabled={invalid || printing}
                         onClick={() => {
                             setError('');
                             setPrinting(true);

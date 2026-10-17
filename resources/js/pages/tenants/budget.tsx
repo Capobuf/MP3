@@ -311,6 +311,7 @@ function BudgetWorkspace({
             <BudgetTable
                 ref={budgetTable}
                 tenantName={props.tenant.name}
+                logoUrl={props.logoUrl}
                 budgetYearId={year.id}
                 budget={budget}
                 slug={props.tenant.slug}

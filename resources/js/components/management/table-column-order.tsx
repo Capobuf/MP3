@@ -86,9 +86,11 @@ export function TableColumnOrder({
     onVisibilityChange,
     onOrderChange,
     disabled = false,
+    label: listLabel = 'Ordine delle colonne',
 }: {
     columns: Column[];
     disabled?: boolean;
+    label?: string;
     onVisibilityChange: (id: string, visible: boolean) => void;
     onOrderChange: (ids: string[]) => void;
 }) {
@@ -110,15 +112,15 @@ export function TableColumnOrder({
             accessibility={{
                 screenReaderInstructions: {
                     draggable:
-                        'Premi Spazio o Invio per iniziare il riordino. Usa le frecce su e giù per spostare la colonna. Premi Spazio o Invio per confermare, Esc per annullare.',
+                        'Premi Spazio o Invio per iniziare il riordino. Usa le frecce su e giù per spostare la voce. Premi Spazio o Invio per confermare, Esc per annullare.',
                 },
                 announcements: {
                     onDragStart: ({ active }) =>
-                        `Colonna ${label(active.id)} selezionata.`,
+                        `Voce ${label(active.id)} selezionata.`,
                     onDragOver: ({ active, over }) =>
                         over
                             ? `${label(active.id)} in posizione ${ids.indexOf(String(over.id)) + 1} di ${ids.length}.`
-                            : 'Fuori dall’elenco delle colonne.',
+                            : 'Fuori dall’elenco.',
                     onDragEnd: ({ active, over }) =>
                         over
                             ? `${label(active.id)} spostata in posizione ${ids.indexOf(String(over.id)) + 1} di ${ids.length}.`
@@ -135,10 +137,7 @@ export function TableColumnOrder({
             }}
         >
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-                <ul
-                    className="flex flex-col gap-2"
-                    aria-label="Ordine delle colonne"
-                >
+                <ul className="flex flex-col gap-2" aria-label={listLabel}>
                     {columns.map((column) => (
                         <SortableColumn
                             key={column.id}

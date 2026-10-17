@@ -1,11 +1,13 @@
 import type { Ref } from 'react';
 import type { Row, Table } from '@tanstack/react-table';
 import { BudgetSankey } from './budget-sankey';
+import { BudgetReportChart } from './budget-report-charts';
 import { budgetLabels, budgetTypes } from './budget-types';
-import type { BudgetEntry, BudgetSnapshot } from './budget-types';
+import type { BudgetEntry, BudgetSnapshot, BudgetTotals } from './budget-types';
 import { money } from './helpers';
 
 export const budgetReportColumns = {
+    status: 'Stato',
     description: 'Descrizione',
     type: 'Tipo',
     vendor: 'Fornitore',
@@ -14,21 +16,67 @@ export const budgetReportColumns = {
     actual: 'Effettivo',
     variance: 'Scostamento',
 };
+export const budgetReportBlocks = {
+    kpis: 'Riepilogo economico',
+    sankey: 'Ripartizione del Budget',
+    reconciliation: 'Importi della ripartizione',
+    completeness: 'Completezza dei dati',
+    distribution: 'Distribuzione percentuale per fornitore',
+    vendors: 'Classifica fornitori',
+    projects: 'Allocato ed effettivo per progetto',
+    contracts: 'Allocato ed effettivo per contratto',
+    variances: 'Principali sforamenti e risparmi',
+    table: 'Voci del Budget',
+    totals: 'Totale delle voci incluse nel report',
+};
 export type BudgetReportColumn = keyof typeof budgetReportColumns;
+export type BudgetReportBlock = keyof typeof budgetReportBlocks;
 export type BudgetReportData = {
     budget: BudgetSnapshot;
-    columns: { id: BudgetReportColumn; visible: boolean }[];
     filters: string[];
 };
 export type BudgetReportOptions = {
     title: string;
+    company: string;
+    subtitle: string;
     orientation: 'portrait' | 'landscape';
-    kpis: boolean;
-    chart: boolean;
-    table: boolean;
+    showCompany: boolean;
+    showYear: boolean;
+    showLogo: boolean;
+    showScope: boolean;
+    showDate: boolean;
+    blocks: BudgetReportBlock[];
+    hiddenBlocks: BudgetReportBlock[];
+    titles: Record<BudgetReportBlock, string>;
+    sankeyMetric: 'allocated' | 'actual' | 'both';
+    groupByType: boolean;
+    subtotals: boolean;
     columns: BudgetReportColumn[];
-    logo: string | null;
 };
+export function defaultBudgetReportOptions(
+    tenantName: string,
+): BudgetReportOptions {
+    return {
+        title: 'Budget annuale',
+        company: tenantName,
+        subtitle: 'Report economico',
+        orientation: 'landscape',
+        showCompany: true,
+        showYear: true,
+        showLogo: true,
+        showScope: true,
+        showDate: true,
+        blocks: Object.keys(budgetReportBlocks) as BudgetReportBlock[],
+        hiddenBlocks: [],
+        titles: { ...budgetReportBlocks },
+        sankeyMetric: 'both',
+        groupByType: true,
+        subtotals: true,
+        columns: (
+            Object.keys(budgetReportColumns) as BudgetReportColumn[]
+        ).filter((key) => key !== 'status'),
+    };
+}
 
 export function captureBudgetReport(
     table: Table<BudgetEntry>,
@@ -54,13 +102,6 @@ export function captureBudgetReport(
                 return entry;
             }),
         },
-        columns: table
-            .getAllLeafColumns()
-            .filter((column) => Object.hasOwn(budgetReportColumns, column.id))
-            .map((column) => ({
-                id: column.id as BudgetReportColumn,
-                visible: column.getIsVisible(),
-            })),
         filters,
     };
 }
@@ -68,9 +109,17 @@ export function captureBudgetReport(
 function amount(value: string | null, variance = false) {
     return value === null && variance ? 'Non confrontabile' : money(value);
 }
-
 function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
     switch (column) {
+        case 'status':
+            return (
+                <>
+                    <span className="budget-report-status-label">
+                        {entry.included ? 'Inclusa' : 'Esclusa'}
+                    </span>
+                    {entry.incomplete > 0 && <small>Dati incompleti</small>}
+                </>
+            );
         case 'description':
             return entry.description;
         case 'type':
@@ -83,11 +132,24 @@ function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
             return amount(entry[column], column === 'variance');
     }
 }
-
+const metrics = ['allocated', 'actual', 'variance'] as const;
+function ReportTotals({ totals }: { totals: BudgetTotals }) {
+    return (
+        <dl className="budget-report-kpis">
+            {metrics.map((metric) => (
+                <div key={metric} data-metric={metric}>
+                    <dt>{budgetReportColumns[metric]}</dt>
+                    <dd>{amount(totals[metric], metric === 'variance')}</dd>
+                </div>
+            ))}
+        </dl>
+    );
+}
 export function BudgetReport({
     data,
     options,
     tenantName,
+    logoUrl,
     year,
     createdAt,
     ref,
@@ -95,13 +157,210 @@ export function BudgetReport({
     data: BudgetReportData;
     options: BudgetReportOptions;
     tenantName: string;
+    logoUrl?: string | null;
     year: number;
     createdAt: string;
     ref?: Ref<HTMLElement>;
 }) {
     const { budget } = data;
-    const { totals } = budget;
-    const metrics = ['allocated', 'actual', 'variance'] as const;
+    const width = options.orientation === 'portrait' ? 680 : 1008;
+    const flowMetrics =
+        options.sankeyMetric === 'both'
+            ? (['allocated', 'actual'] as const)
+            : [options.sankeyMetric];
+    const groups = options.groupByType
+        ? budgetTypes.map((type) => ({
+              id: type,
+              name: budgetLabels[type],
+              entries: budget.entries.filter((entry) => entry.type === type),
+              totals: budget.groups[type],
+          }))
+        : [
+              {
+                  id: 'all',
+                  name: '',
+                  entries: budget.entries,
+                  totals: budget.totals,
+              },
+          ];
+    const renderBlock = (block: BudgetReportBlock) => {
+        switch (block) {
+            case 'kpis':
+            case 'totals':
+                return (
+                    <div
+                        className={
+                            block === 'totals'
+                                ? 'budget-report-totals'
+                                : undefined
+                        }
+                    >
+                        <ReportTotals totals={budget.totals} />
+                    </div>
+                );
+            case 'sankey':
+                return (
+                    <>
+                        {flowMetrics.map((metric) => (
+                            <div key={metric} className="budget-report-block">
+                                <h3>{budgetReportColumns[metric]}</h3>
+                                <BudgetSankey
+                                    budget={budget}
+                                    printWidth={width}
+                                    printMetric={metric}
+                                />
+                            </div>
+                        ))}
+                        <p className="budget-report-note">
+                            I grafici rappresentano i soli flussi positivi.
+                            Rettifiche negative e importi mancanti non generano
+                            flussi.
+                        </p>
+                    </>
+                );
+            case 'reconciliation':
+                return (
+                    <>
+                        {flowMetrics.map((metric) => (
+                            <div key={metric} className="budget-report-block">
+                                <h3>{budgetReportColumns[metric]}</h3>
+                                <table className="budget-report-distribution">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Tipo</th>
+                                            <th scope="col">Flussi positivi</th>
+                                            <th scope="col">
+                                                Rettifiche negative
+                                            </th>
+                                            <th scope="col">
+                                                {budgetReportColumns[metric]}{' '}
+                                                netto
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {budgetTypes.map((type) => (
+                                            <tr key={type}>
+                                                <th scope="row">
+                                                    {budgetLabels[type]}
+                                                </th>
+                                                <td>
+                                                    {money(
+                                                        budget.groups[type][
+                                                            `${metric}_positive`
+                                                        ],
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {money(
+                                                        budget.groups[type][
+                                                            `${metric}_negative`
+                                                        ],
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    {money(
+                                                        budget.groups[type][
+                                                            metric
+                                                        ],
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ))}
+                    </>
+                );
+            case 'table':
+                return budget.entries.length === 0 ? (
+                    <p>Nessuna voce corrisponde ai filtri selezionati.</p>
+                ) : (
+                    <>
+                        {groups
+                            .filter((group) => group.entries.length > 0)
+                            .map((group) => (
+                                <div key={group.id}>
+                                    {group.name && (
+                                        <h3 className="budget-report-group-title">
+                                            {group.name}
+                                        </h3>
+                                    )}
+                                    <table className="budget-report-entries">
+                                        <thead>
+                                            <tr>
+                                                {options.columns.map(
+                                                    (column) => (
+                                                        <th
+                                                            scope="col"
+                                                            key={column}
+                                                            data-column={column}
+                                                        >
+                                                            {
+                                                                budgetReportColumns[
+                                                                    column
+                                                                ]
+                                                            }
+                                                        </th>
+                                                    ),
+                                                )}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {group.entries.map((entry) => (
+                                                <tr
+                                                    key={entry.id}
+                                                    data-entry-id={entry.id}
+                                                    data-included={
+                                                        entry.included
+                                                    }
+                                                >
+                                                    {options.columns.map(
+                                                        (column) => (
+                                                            <td
+                                                                key={column}
+                                                                data-column={
+                                                                    column
+                                                                }
+                                                            >
+                                                                {reportCell(
+                                                                    entry,
+                                                                    column,
+                                                                )}
+                                                            </td>
+                                                        ),
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {options.groupByType &&
+                                        options.subtotals && (
+                                            <div className="budget-report-block budget-report-subtotal">
+                                                <h3>
+                                                    Subtotale · {group.name} ·
+                                                    voci incluse
+                                                </h3>
+                                                <ReportTotals
+                                                    totals={group.totals}
+                                                />
+                                            </div>
+                                        )}
+                                </div>
+                            ))}
+                    </>
+                );
+            default:
+                return (
+                    <BudgetReportChart
+                        kind={block}
+                        budget={budget}
+                        width={width}
+                    />
+                );
+        }
+    };
     return (
         <article
             ref={ref}
@@ -113,193 +372,65 @@ export function BudgetReport({
                 <div className="budget-report-heading">
                     <p className="budget-report-eyebrow">
                         <span className="budget-report-brand">MP3</span>
-                        {tenantName}
+                        {options.showCompany && options.company}
                     </p>
                     <h1>{options.title}</h1>
-                    <p className="budget-report-subtitle">
-                        Report economico · Budget annuale
-                    </p>
+                    <p className="budget-report-subtitle">{options.subtitle}</p>
                 </div>
                 <div className="budget-report-identity">
-                    {options.logo && (
-                        <img src={options.logo} alt={`Logo ${tenantName}`} />
+                    {options.showLogo && logoUrl && (
+                        <img src={logoUrl} alt={`Logo ${tenantName}`} />
                     )}
-                    <p className="budget-report-year">
-                        <span>Esercizio</span>
-                        <strong>{year}</strong>
-                    </p>
+                    {options.showYear && (
+                        <p className="budget-report-year">
+                            <span>Esercizio</span>
+                            <strong>{year}</strong>
+                        </p>
+                    )}
                 </div>
             </header>
-            <div className="budget-report-scope">
-                <div className="budget-report-scope-heading">
-                    <strong>Perimetro del report</strong>
-                    <span>Elaborato il {createdAt}</span>
-                </div>
-                <p>{data.filters.join(' · ')}</p>
-                <p className="budget-report-counts">
-                    <strong>{budget.entries.length}</strong> righe nel report ·{' '}
-                    <strong>{totals.count}</strong> voci incluse nei totali ·{' '}
-                    <strong>{totals.incomplete}</strong> con dati incompleti
-                </p>
-            </div>
-            {options.kpis && (
-                <section
-                    className="budget-report-block"
-                    aria-label="Riepilogo KPI"
-                >
-                    <h2>Riepilogo economico</h2>
-                    <dl className="budget-report-kpis">
-                        {metrics.map((metric) => (
-                            <div key={metric} data-metric={metric}>
-                                <dt>{budgetReportColumns[metric]}</dt>
-                                <dd>
-                                    {amount(
-                                        totals[metric],
-                                        metric === 'variance',
-                                    )}
-                                </dd>
-                            </div>
-                        ))}
-                    </dl>
-                </section>
-            )}
-            {options.chart && (
-                <section
-                    className="budget-report-block"
-                    aria-label="Ripartizione Budget"
-                >
-                    <h2>Ripartizione del Budget · Allocato</h2>
-                    <BudgetSankey
-                        budget={budget}
-                        printWidth={
-                            options.orientation === 'portrait' ? 680 : 1008
-                        }
-                    />
-                    <table
-                        className="budget-report-distribution"
-                        aria-label="Importi della ripartizione"
-                    >
-                        <thead>
-                            <tr>
-                                <th scope="col">Tipo</th>
-                                <th scope="col">Flussi positivi</th>
-                                <th scope="col">Rettifiche negative</th>
-                                <th scope="col">Allocato netto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {budgetTypes.map((type) => (
-                                <tr key={type}>
-                                    <th scope="row">{budgetLabels[type]}</th>
-                                    <td>
-                                        {money(
-                                            budget.groups[type]
-                                                .allocated_positive,
-                                        )}
-                                    </td>
-                                    <td>
-                                        {money(
-                                            budget.groups[type]
-                                                .allocated_negative,
-                                        )}
-                                    </td>
-                                    <td>
-                                        {money(budget.groups[type].allocated)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    <p className="budget-report-note">
-                        Il grafico rappresenta i soli flussi allocati positivi.
-                        Rettifiche negative e importi mancanti non generano
-                        flussi; i totali netti li rispettano secondo le regole
-                        del Budget.
-                    </p>
-                </section>
-            )}
-            {options.table && (
-                <section aria-label="Tabella analitica">
-                    <h2>Voci del Budget</h2>
-                    {budget.entries.length === 0 ? (
-                        <p>Nessuna voce corrisponde ai filtri selezionati.</p>
-                    ) : (
-                        <table className="budget-report-entries">
-                            <thead>
-                                <tr>
-                                    <th
-                                        scope="col"
-                                        className="budget-report-status"
-                                    >
-                                        Stato
-                                    </th>
-                                    {options.columns.map((column) => (
-                                        <th
-                                            scope="col"
-                                            key={column}
-                                            data-column={column}
-                                        >
-                                            {budgetReportColumns[column]}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {budget.entries.map((entry) => (
-                                    <tr
-                                        key={entry.id}
-                                        data-entry-id={entry.id}
-                                        data-included={entry.included}
-                                    >
-                                        <td>
-                                            <span className="budget-report-status-label">
-                                                {entry.included
-                                                    ? 'Inclusa'
-                                                    : 'Esclusa'}
-                                            </span>
-                                            {entry.incomplete > 0 && (
-                                                <small>Dati incompleti</small>
-                                            )}
-                                        </td>
-                                        {options.columns.map((column) => (
-                                            <td
-                                                key={column}
-                                                data-column={column}
-                                                className={
-                                                    metrics.some(
-                                                        (metric) =>
-                                                            metric === column,
-                                                    )
-                                                        ? 'budget-report-money'
-                                                        : undefined
-                                                }
-                                            >
-                                                {reportCell(entry, column)}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
-                    <div className="budget-report-block budget-report-totals">
-                        <h3>Totale delle voci incluse nel report</h3>
-                        <dl className="budget-report-kpis">
-                            {metrics.map((metric) => (
-                                <div key={metric} data-metric={metric}>
-                                    <dt>{budgetReportColumns[metric]}</dt>
-                                    <dd>
-                                        {amount(
-                                            totals[metric],
-                                            metric === 'variance',
-                                        )}
-                                    </dd>
-                                </div>
-                            ))}
-                        </dl>
+            {(options.showScope || options.showDate) && (
+                <div className="budget-report-scope">
+                    <div className="budget-report-scope-heading">
+                        {options.showScope && (
+                            <strong>Perimetro del report</strong>
+                        )}
+                        {options.showDate && (
+                            <span>Elaborato il {createdAt}</span>
+                        )}
                     </div>
-                </section>
+                    {options.showScope && (
+                        <>
+                            <p>{data.filters.join(' · ')}</p>
+                            <p className="budget-report-counts">
+                                <strong>{budget.entries.length}</strong> righe
+                                nel report ·{' '}
+                                <strong>{budget.totals.count}</strong> voci
+                                incluse nei totali ·{' '}
+                                <strong>{budget.totals.incomplete}</strong> con
+                                dati incompleti
+                            </p>
+                        </>
+                    )}
+                </div>
             )}
+            {options.blocks
+                .filter((block) => !options.hiddenBlocks.includes(block))
+                .map((block) => (
+                    <section
+                        key={block}
+                        data-report-block={block}
+                        aria-label={options.titles[block]}
+                        className={
+                            block === 'kpis' || block === 'totals'
+                                ? 'budget-report-block'
+                                : undefined
+                        }
+                    >
+                        <h2>{options.titles[block]}</h2>
+                        {renderBlock(block)}
+                    </section>
+                ))}
             <footer className="budget-report-note budget-report-footer">
                 Le voci escluse non contribuiscono ai totali. «Da inserire»
                 indica un importo mancante, distinto da zero. Le spese già
@@ -307,7 +438,9 @@ export function BudgetReport({
                 <p className="budget-report-signature">
                     <strong>MP3</strong>
                     <span>
-                        {tenantName} · Budget {year}
+                        {options.showCompany && options.company}
+                        {options.showCompany && options.showYear && ' · '}
+                        {options.showYear && `Budget ${year}`}
                     </span>
                 </p>
             </footer>
