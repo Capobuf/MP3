@@ -459,9 +459,6 @@ export function BudgetReport({
                         Elaborato il {createdAt}
                     </p>
                 )}
-                Le voci escluse non contribuiscono ai totali. «Da inserire»
-                indica un importo mancante, distinto da zero. Le spese già
-                attribuite ad altre voci non vengono conteggiate due volte.
                 <p className="budget-report-signature">
                     <strong>MP3</strong>
                     <span>
