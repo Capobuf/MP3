@@ -13,7 +13,13 @@ export function DetailHero({
     icon: LucideIcon;
     children: ReactNode;
     actions: ReactNode;
-    accent?: 'expense' | 'contract' | 'project' | 'budget';
+    accent?:
+        | 'expense'
+        | 'contract'
+        | 'project'
+        | 'budget'
+        | 'vendor'
+        | 'cost-center';
 }) {
     function moveSpotlight(event: PointerEvent<HTMLDivElement>) {
         if (

@@ -234,6 +234,14 @@
     --detail-hero-accent: var(--chart-3);
 }
 
+.detail-hero[data-accent='vendor'] {
+    --detail-hero-accent: var(--chart-4);
+}
+
+.detail-hero[data-accent='cost-center'] {
+    --detail-hero-accent: var(--chart-5);
+}
+
 /* Mask both decorative layers to the one-pixel rim; controls remain unobstructed. */
 .detail-hero::before,
 .detail-hero::after {

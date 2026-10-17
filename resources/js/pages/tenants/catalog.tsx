@@ -1,3 +1,4 @@
+import { DetailHero } from '@/components/management/detail-hero';
 import { ProjectStatusSelect } from '@/components/management/project-status-select';
 import {
     InlineEdit,
@@ -5,7 +6,15 @@ import {
 } from '@/components/management/inline-edit';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { Head, Link, router } from '@inertiajs/react';
-import { Plus, Ellipsis, ArrowUpRight, Search } from 'lucide-react';
+import {
+    Plus,
+    Ellipsis,
+    ArrowUpRight,
+    Search,
+    FileText,
+    FolderKanban,
+    Handshake,
+} from 'lucide-react';
 import { useState } from 'react';
 import {
     useTableView,
@@ -66,6 +75,12 @@ import {
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import type { Tenant } from '@/types';
+
+const catalogHeroes = {
+    contracts: { icon: FileText, accent: 'contract' },
+    projects: { icon: FolderKanban, accent: 'project' },
+    vendors: { icon: Handshake, accent: 'vendor' },
+} as const;
 
 export default function CatalogPage({
     tenant,
@@ -146,38 +161,43 @@ export default function CatalogPage({
         <>
             <Head title={`${labels[catalog]} · ${tenant.name}`} />
             <div className="page-shell">
-                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                        <p className="text-sm text-muted-foreground">
-                            {tenant.name}
-                        </p>
-                        <h1 className="page-title">{labels[catalog]}</h1>
-                        <p className="mt-2 text-sm text-muted-foreground">
+                <DetailHero
+                    icon={catalogHeroes[catalog].icon}
+                    accent={catalogHeroes[catalog].accent}
+                    actions={
+                        <>
+                            <Button
+                                onClick={() => router.visit(`${path}/create`)}
+                            >
+                                <Plus data-icon="inline-start" />
+                                Nuovo {singular[catalog]}
+                            </Button>
+                            <SpreadsheetActions
+                                slug={tenant.slug}
+                                resource={catalog}
+                                label={labels[catalog]}
+                                filters={filters}
+                            />
+                        </>
+                    }
+                >
+                    <h1 className="page-title">{labels[catalog]}</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        {tenant.name}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        {
                             {
-                                {
-                                    vendors:
-                                        'Anagrafiche e spese collegate ai tuoi fornitori.',
-                                    projects:
-                                        'Stato, periodo e costi dei progetti.',
-                                    contracts:
-                                        'Riferimenti, scadenze e spese dei contratti.',
-                                }[catalog]
-                            }
-                        </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button onClick={() => router.visit(`${path}/create`)}>
-                            <Plus data-icon="inline-start" />
-                            Nuovo {singular[catalog]}
-                        </Button>
-                        <SpreadsheetActions
-                            slug={tenant.slug}
-                            resource={catalog}
-                            label={labels[catalog]}
-                            filters={filters}
-                        />
-                    </div>
-                </header>
+                                vendors:
+                                    'Anagrafiche e spese collegate ai tuoi fornitori.',
+                                projects:
+                                    'Stato, periodo e costi dei progetti.',
+                                contracts:
+                                    'Riferimenti, scadenze e spese dei contratti.',
+                            }[catalog]
+                        }
+                    </p>
+                </DetailHero>
                 <Card>
                     <CardContent className="flex min-w-0 flex-col gap-5">
                         <div className="flex flex-wrap items-center gap-2">
