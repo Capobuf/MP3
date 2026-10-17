@@ -507,6 +507,9 @@
     line-height: 1.12;
 }
 .budget-report h2 {
+    display: flex;
+    align-items: center;
+    gap: 2mm;
     margin: 5mm 0 3mm;
     border-left: 0.8mm solid var(--report-accent);
     padding-left: 3mm;
@@ -514,6 +517,14 @@
     font-weight: 650;
     letter-spacing: -0.02em;
     break-after: avoid;
+}
+.budget-report h2 > svg {
+    width: 4mm;
+    height: 4mm;
+    flex-shrink: 0;
+}
+.budget-report-date {
+    margin-bottom: 2mm;
 }
 .budget-report h3 {
     margin-bottom: 3mm;
@@ -595,9 +606,6 @@
 .budget-report-scope-heading strong {
     color: var(--report-ink);
     font-weight: 600;
-}
-.budget-report-scope-heading span {
-    font-size: 7pt;
 }
 .budget-report-counts {
     margin-top: 1mm;
@@ -708,6 +716,9 @@
 .budget-report td[data-column='variance'] {
     font-weight: 600;
 }
+.budget-report [data-column='variance'] {
+    padding-inline: 1mm;
+}
 .budget-report-note {
     margin-top: 3mm;
     color: var(--report-muted);
@@ -765,12 +776,6 @@
 .budget-report section > .budget-report-note,
 .budget-report-chart-batch > .budget-report-note {
     break-after: avoid;
-}
-.budget-report-chart-key {
-    display: inline-block;
-    width: 2mm;
-    height: 2mm;
-    margin-right: 2mm;
 }
 .budget-report th[data-column='status'] {
     width: 17mm;

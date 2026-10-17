@@ -1,6 +1,16 @@
 import { useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Printer, RotateCcw } from 'lucide-react';
+import {
+    Printer,
+    RotateCcw,
+    PanelTop,
+    PanelBottom,
+    File,
+    RectangleVertical,
+    RectangleHorizontal,
+    LayoutList,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -26,6 +36,7 @@ import {
     BudgetReport,
     budgetReportColumns,
     budgetReportBlocks,
+    budgetReportIcons,
     defaultBudgetReportOptions,
 } from './budget-report';
 import type {
@@ -55,13 +66,15 @@ export function BudgetPrintDialog({
     const [order, setOrder] = useState(
         Object.keys(budgetReportColumns) as BudgetReportColumn[],
     );
-    const [createdAt] = useState(() => new Date().toLocaleString('it-IT'));
+    const [initialDate] = useState(() => new Date().toLocaleString('it-IT'));
+    const [createdAt, setCreatedAt] = useState(initialDate);
     const [error, setError] = useState('');
     const [printing, setPrinting] = useState(false);
     const contentRef = useRef<HTMLElement>(null);
     const visibleColumns = order.filter((id) => options.columns.includes(id));
     const invalid =
         !options.title.trim() ||
+        (options.showDate && !createdAt.trim()) ||
         options.blocks.every((block) => options.hiddenBlocks.includes(block)) ||
         (!options.hiddenBlocks.includes('table') &&
             visibleColumns.length === 0) ||
@@ -94,13 +107,13 @@ export function BudgetPrintDialog({
         return (
             <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 disabled={printing}
                 onClick={action}
+                title={`Reset ${label}`}
                 aria-label={`Reset ${label}`}
             >
-                <RotateCcw data-icon="inline-start" />
-                Reset
+                <RotateCcw />
             </Button>
         );
     }
@@ -129,6 +142,135 @@ export function BudgetPrintDialog({
             </Field>
         );
     }
+    function heading(Icon: LucideIcon, label: string, onReset: () => void) {
+        return (
+            <FieldLegend className="flex w-full items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    {label}
+                </span>
+                {reset(label, onReset)}
+            </FieldLegend>
+        );
+    }
+    function metricChoice(key: 'sankeyMetric' | 'reconciliationMetric') {
+        return (
+            <Field>
+                <FieldLabel>Importi</FieldLabel>
+                <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    value={options[key]}
+                    disabled={printing}
+                    aria-label={
+                        key === 'sankeyMetric'
+                            ? 'Importi del Sankey'
+                            : 'Importi della tabella di ripartizione'
+                    }
+                    onValueChange={(value) => {
+                        if (
+                            value === 'allocated' ||
+                            value === 'actual' ||
+                            value === 'both'
+                        )
+                            setOptions({ ...options, [key]: value });
+                    }}
+                >
+                    <ToggleGroupItem value="allocated">
+                        Allocato
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="actual">Effettivo</ToggleGroupItem>
+                    <ToggleGroupItem value="both">Entrambi</ToggleGroupItem>
+                </ToggleGroup>
+            </Field>
+        );
+    }
+    function resetBlock(block: BudgetReportBlock) {
+        setOptions({
+            ...options,
+            titles: { ...options.titles, [block]: defaults.titles[block] },
+            ...(block === 'sankey'
+                ? { sankeyMetric: defaults.sankeyMetric }
+                : {}),
+            ...(block === 'reconciliation'
+                ? { reconciliationMetric: defaults.reconciliationMetric }
+                : {}),
+            ...(block === 'table'
+                ? {
+                      columns: defaults.columns,
+                      groupByType: defaults.groupByType,
+                      subtotals: defaults.subtotals,
+                  }
+                : {}),
+        });
+        if (block === 'table')
+            setOrder(Object.keys(budgetReportColumns) as BudgetReportColumn[]);
+    }
+    function blockOptions(block: BudgetReportBlock) {
+        return (
+            <FieldGroup className="gap-3 pb-4">
+                <Field>
+                    <FieldLabel htmlFor={`report-title-${block}`}>
+                        Titolo
+                    </FieldLabel>
+                    <Input
+                        id={`report-title-${block}`}
+                        aria-label={`Titolo ${budgetReportBlocks[block]}`}
+                        value={options.titles[block]}
+                        maxLength={150}
+                        disabled={printing}
+                        onChange={(event) =>
+                            setOptions({
+                                ...options,
+                                titles: {
+                                    ...options.titles,
+                                    [block]: event.target.value,
+                                },
+                            })
+                        }
+                    />
+                </Field>
+                {block === 'sankey' && metricChoice('sankeyMetric')}
+                {block === 'reconciliation' &&
+                    metricChoice('reconciliationMetric')}
+                {block === 'table' && (
+                    <>
+                        {check('groupByType', 'Raggruppa per tipo')}
+                        {options.groupByType &&
+                            check('subtotals', 'Mostra subtotali per tipo')}
+                        <FieldSet>
+                            <FieldLegend variant="label">Colonne</FieldLegend>
+                            <TableColumnOrder
+                                disabled={printing}
+                                columns={order.map((id) => ({
+                                    id,
+                                    label: budgetReportColumns[id],
+                                    visible: options.columns.includes(id),
+                                    canHide: true,
+                                }))}
+                                onOrderChange={(ids) =>
+                                    setOrder(ids as BudgetReportColumn[])
+                                }
+                                onVisibilityChange={(id, visible) =>
+                                    setOptions({
+                                        ...options,
+                                        columns: visible
+                                            ? [
+                                                  ...options.columns,
+                                                  id as BudgetReportColumn,
+                                              ]
+                                            : options.columns.filter(
+                                                  (column) => column !== id,
+                                              ),
+                                    })
+                                }
+                            />
+                        </FieldSet>
+                    </>
+                )}
+            </FieldGroup>
+        );
+    }
     return (
         <Dialog
             open
@@ -148,12 +290,11 @@ export function BudgetPrintDialog({
                         «Salva come PDF» come destinazione di stampa.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="grid min-h-0 gap-6 overflow-y-auto lg:grid-cols-[17rem_minmax(0,1fr)]">
+                <div className="grid min-h-0 gap-6 overflow-y-auto lg:grid-cols-[20rem_minmax(0,1fr)]">
                     <div className="flex flex-col gap-5 lg:overflow-y-auto">
                         <FieldGroup>
                             <FieldSet>
-                                <FieldLegend>Intestazione</FieldLegend>
-                                {reset('intestazione', () =>
+                                {heading(PanelTop, 'Intestazione', () =>
                                     setOptions({
                                         ...options,
                                         title: defaults.title,
@@ -163,70 +304,93 @@ export function BudgetPrintDialog({
                                         showYear: true,
                                         showLogo: true,
                                         showScope: true,
-                                        showDate: true,
                                     }),
                                 )}
-                                <FieldGroup>
-                                    {(
-                                        [
-                                            ['title', 'Titolo del report'],
-                                            ['company', 'Nome azienda'],
-                                            ['subtitle', 'Sottotitolo'],
-                                        ] as const
-                                    ).map(([key, label]) => (
-                                        <Field key={key}>
-                                            <FieldLabel
-                                                htmlFor={`report-${key}`}
-                                            >
-                                                {label}
-                                            </FieldLabel>
-                                            <Input
-                                                id={`report-${key}`}
-                                                value={options[key]}
-                                                disabled={printing}
-                                                maxLength={150}
-                                                onChange={(event) =>
-                                                    setOptions({
-                                                        ...options,
-                                                        [key]: event.target
-                                                            .value,
-                                                    })
-                                                }
-                                            />
-                                        </Field>
-                                    ))}
+                                <FieldGroup className="gap-3">
+                                    <Field>
+                                        <FieldLabel htmlFor="report-title">
+                                            Titolo del report
+                                        </FieldLabel>
+                                        <Input
+                                            id="report-title"
+                                            value={options.title}
+                                            maxLength={150}
+                                            disabled={printing}
+                                            onChange={(event) =>
+                                                setOptions({
+                                                    ...options,
+                                                    title: event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </Field>
+                                    <Field>
+                                        <FieldLabel htmlFor="report-subtitle">
+                                            Sottotitolo
+                                        </FieldLabel>
+                                        <Input
+                                            id="report-subtitle"
+                                            value={options.subtitle}
+                                            maxLength={150}
+                                            disabled={printing}
+                                            onChange={(event) =>
+                                                setOptions({
+                                                    ...options,
+                                                    subtitle:
+                                                        event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </Field>
                                     {check(
                                         'showCompany',
                                         'Mostra nome azienda',
                                     )}
+                                    {options.showCompany && (
+                                        <Field>
+                                            <FieldLabel htmlFor="report-company">
+                                                Nome azienda
+                                            </FieldLabel>
+                                            <Input
+                                                id="report-company"
+                                                value={options.company}
+                                                maxLength={150}
+                                                disabled={printing}
+                                                onChange={(event) =>
+                                                    setOptions({
+                                                        ...options,
+                                                        company:
+                                                            event.target.value,
+                                                    })
+                                                }
+                                            />
+                                        </Field>
+                                    )}
                                     {check('showYear', 'Mostra anno')}
                                     {check('showLogo', 'Mostra logo azienda')}
-                                    <FieldDescription>
-                                        {logoUrl
-                                            ? 'Logo dalle impostazioni del tenant.'
-                                            : 'Nessun logo azienda configurato.'}{' '}
-                                        <a
-                                            href={`/t/${tenantSlug}/settings/identity`}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="underline"
-                                        >
-                                            Impostazioni azienda
-                                        </a>
-                                    </FieldDescription>
+                                    {options.showLogo && (
+                                        <FieldDescription>
+                                            {logoUrl
+                                                ? 'Logo dalle impostazioni del tenant.'
+                                                : 'Nessun logo azienda configurato.'}{' '}
+                                            <a
+                                                href={`/t/${tenantSlug}/settings/identity`}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="underline"
+                                            >
+                                                Impostazioni azienda
+                                            </a>
+                                        </FieldDescription>
+                                    )}
                                     {check(
                                         'showScope',
                                         'Mostra filtri e conteggio voci',
                                     )}
-                                    {check(
-                                        'showDate',
-                                        'Mostra data di elaborazione',
-                                    )}
                                 </FieldGroup>
                             </FieldSet>
                             <FieldSet>
-                                <FieldLegend>Formato pagina</FieldLegend>
-                                {reset('formato pagina', () =>
+                                {heading(File, 'Formato pagina', () =>
                                     setOptions({
                                         ...options,
                                         orientation: defaults.orientation,
@@ -250,21 +414,25 @@ export function BudgetPrintDialog({
                                     }}
                                 >
                                     <ToggleGroupItem value="portrait">
+                                        <RectangleVertical data-icon="inline-start" />
                                         Verticale
                                     </ToggleGroupItem>
                                     <ToggleGroupItem value="landscape">
+                                        <RectangleHorizontal data-icon="inline-start" />
                                         Orizzontale
                                     </ToggleGroupItem>
                                 </ToggleGroup>
                             </FieldSet>
                             <FieldSet>
-                                <FieldLegend>Blocchi del documento</FieldLegend>
-                                {reset('blocchi', () =>
-                                    setOptions({
-                                        ...options,
-                                        blocks: defaults.blocks,
-                                        hiddenBlocks: [],
-                                    }),
+                                {heading(
+                                    LayoutList,
+                                    'Blocchi del documento',
+                                    () =>
+                                        setOptions({
+                                            ...options,
+                                            blocks: defaults.blocks,
+                                            hiddenBlocks: [],
+                                        }),
                                 )}
                                 <FieldDescription>
                                     Seleziona e trascina i blocchi nell’ordine
@@ -275,10 +443,16 @@ export function BudgetPrintDialog({
                                     disabled={printing}
                                     columns={options.blocks.map((id) => ({
                                         id,
-                                        label: options.titles[id],
+                                        label: budgetReportBlocks[id],
+                                        icon: budgetReportIcons[id],
                                         visible:
                                             !options.hiddenBlocks.includes(id),
                                         canHide: true,
+                                        actions: reset(
+                                            budgetReportBlocks[id],
+                                            () => resetBlock(id),
+                                        ),
+                                        content: blockOptions(id),
                                     }))}
                                     onOrderChange={(ids) =>
                                         setOptions({
@@ -302,137 +476,30 @@ export function BudgetPrintDialog({
                                 />
                             </FieldSet>
                             <FieldSet>
-                                <FieldLegend>Titoli dei blocchi</FieldLegend>
-                                {reset('titoli', () =>
-                                    setOptions({
-                                        ...options,
-                                        titles: defaults.titles,
-                                    }),
-                                )}
-                                <FieldGroup>
-                                    {options.blocks
-                                        .filter(
-                                            (block) =>
-                                                !options.hiddenBlocks.includes(
-                                                    block,
-                                                ),
-                                        )
-                                        .map((block) => (
-                                            <Field key={block}>
-                                                <FieldLabel
-                                                    htmlFor={`report-title-${block}`}
-                                                >
-                                                    {budgetReportBlocks[block]}
-                                                </FieldLabel>
-                                                <Input
-                                                    id={`report-title-${block}`}
-                                                    value={
-                                                        options.titles[block]
-                                                    }
-                                                    maxLength={150}
-                                                    disabled={printing}
-                                                    onChange={(event) =>
-                                                        setOptions({
-                                                            ...options,
-                                                            titles: {
-                                                                ...options.titles,
-                                                                [block]:
-                                                                    event.target
-                                                                        .value,
-                                                            },
-                                                        })
-                                                    }
-                                                />
-                                            </Field>
-                                        ))}
-                                </FieldGroup>
-                            </FieldSet>
-                            <FieldSet>
-                                <FieldLegend>
-                                    Importi della ripartizione
-                                </FieldLegend>
-                                {reset('ripartizione', () =>
-                                    setOptions({
-                                        ...options,
-                                        sankeyMetric: defaults.sankeyMetric,
-                                    }),
-                                )}
-                                <ToggleGroup
-                                    type="single"
-                                    variant="outline"
-                                    value={options.sankeyMetric}
-                                    disabled={printing}
-                                    aria-label="Importi della ripartizione"
-                                    onValueChange={(value) => {
-                                        if (
-                                            value === 'allocated' ||
-                                            value === 'actual' ||
-                                            value === 'both'
-                                        )
-                                            setOptions({
-                                                ...options,
-                                                sankeyMetric: value,
-                                            });
-                                    }}
-                                >
-                                    <ToggleGroupItem value="allocated">
-                                        Allocato
-                                    </ToggleGroupItem>
-                                    <ToggleGroupItem value="actual">
-                                        Effettivo
-                                    </ToggleGroupItem>
-                                    <ToggleGroupItem value="both">
-                                        Entrambi
-                                    </ToggleGroupItem>
-                                </ToggleGroup>
-                            </FieldSet>
-                            <FieldSet>
-                                <FieldLegend>Tabella</FieldLegend>
-                                {reset('tabella', () => {
-                                    setOptions({
-                                        ...options,
-                                        columns: defaults.columns,
-                                        groupByType: defaults.groupByType,
-                                        subtotals: defaults.subtotals,
-                                    });
-                                    setOrder(
-                                        Object.keys(
-                                            budgetReportColumns,
-                                        ) as BudgetReportColumn[],
-                                    );
+                                {heading(PanelBottom, 'Footer', () => {
+                                    setOptions({ ...options, showDate: true });
+                                    setCreatedAt(initialDate);
                                 })}
-                                {check('groupByType', 'Raggruppa per tipo')}
-                                {options.groupByType &&
-                                    check(
-                                        'subtotals',
-                                        'Mostra subtotali per tipo',
-                                    )}
-
-                                <TableColumnOrder
-                                    disabled={printing}
-                                    columns={order.map((id) => ({
-                                        id,
-                                        label: budgetReportColumns[id],
-                                        visible: options.columns.includes(id),
-                                        canHide: true,
-                                    }))}
-                                    onOrderChange={(ids) =>
-                                        setOrder(ids as BudgetReportColumn[])
-                                    }
-                                    onVisibilityChange={(id, visible) =>
-                                        setOptions({
-                                            ...options,
-                                            columns: visible
-                                                ? [
-                                                      ...options.columns,
-                                                      id as BudgetReportColumn,
-                                                  ]
-                                                : options.columns.filter(
-                                                      (column) => column !== id,
-                                                  ),
-                                        })
-                                    }
-                                />
+                                {check(
+                                    'showDate',
+                                    'Mostra data di elaborazione',
+                                )}
+                                {options.showDate && (
+                                    <Field>
+                                        <FieldLabel htmlFor="report-date">
+                                            Data di elaborazione
+                                        </FieldLabel>
+                                        <Input
+                                            id="report-date"
+                                            value={createdAt}
+                                            maxLength={80}
+                                            disabled={printing}
+                                            onChange={(event) =>
+                                                setCreatedAt(event.target.value)
+                                            }
+                                        />
+                                    </Field>
+                                )}
                             </FieldSet>
                         </FieldGroup>
                     </div>
@@ -461,7 +528,7 @@ export function BudgetPrintDialog({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-muted-foreground">
                         {invalid
-                            ? 'Indica un titolo, almeno una sezione e almeno una colonna per la tabella.'
+                            ? 'Compila i titoli e la data visibile; seleziona almeno un blocco e una colonna per la tabella.'
                             : 'Controlla l’impaginazione nell’anteprima di Chrome prima di salvare. Scala 100%, carta A4.'}
                     </p>
                     <Button

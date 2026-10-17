@@ -2,35 +2,21 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
-    Cell,
-    Pie,
-    PieChart,
     ReferenceLine,
     XAxis,
     YAxis,
 } from 'recharts';
-import { compactMoney, percent, topGroups } from './analytics-helpers';
+import { compactMoney, topGroups } from './analytics-helpers';
 import type { EconomicGroup } from './analytics-types';
 import type { BudgetSnapshot } from './budget-types';
 import { money } from './helpers';
 
 export type BudgetReportChartKind =
-    | 'completeness'
     | 'distribution'
-    | 'vendors'
     | 'projects'
     | 'contracts'
     | 'variances';
-const colors = [
-    '#637fa9',
-    '#aa7744',
-    '#668570',
-    '#9279a8',
-    '#b58b56',
-    '#668f98',
-    '#8a8c99',
-    '#9b6275',
-];
+const colors = ['#637fa9', '#aa7744'];
 
 // Vendor totals use the same server accounting as the Budget; source charts use its attributed entries.
 export function budgetReportGroups(
@@ -88,142 +74,17 @@ export function BudgetReportChart({
     budget: BudgetSnapshot;
     width: number;
 }) {
-    if (kind === 'completeness') {
-        const rows = [
-            {
-                name: 'Voci complete',
-                value: budget.totals.count - budget.totals.incomplete,
-            },
-            {
-                name: 'Voci con dati incompleti',
-                value: budget.totals.incomplete,
-            },
-        ];
-        return budget.totals.count === 0 ? (
-            <p>Nessuna voce inclusa nel report.</p>
-        ) : (
-            <div className="budget-report-block">
-                <PieChart width={width} height={180}>
-                    <Pie
-                        data={rows}
-                        dataKey="value"
-                        innerRadius={40}
-                        outerRadius={75}
-                        isAnimationActive={false}
-                    >
-                        {rows.map((row, index) => (
-                            <Cell key={row.name} fill={colors[index]} />
-                        ))}
-                    </Pie>
-                </PieChart>
-                <table className="budget-report-distribution">
-                    <thead>
-                        <tr>
-                            <th scope="col">Completezza</th>
-                            <th scope="col">Voci incluse</th>
-                            <th scope="col">Percentuale</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((row, index) => (
-                            <tr key={row.name}>
-                                <th scope="row">
-                                    <span
-                                        className="budget-report-chart-key"
-                                        style={{ background: colors[index] }}
-                                    />
-                                    {row.name}
-                                </th>
-                                <td>{row.value}</td>
-                                <td>
-                                    {percent(
-                                        (row.value * 100) / budget.totals.count,
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        );
-    }
-    if (kind === 'distribution') {
-        const rows = topGroups(
-            budgetReportGroups(budget, 'vendors'),
-            6,
-            'actual',
-            true,
-        );
-        const positive = Number(budget.totals.actual_positive);
-        return positive <= 0 ? (
-            <p>Nessun flusso effettivo positivo nel report.</p>
-        ) : (
-            <div className="budget-report-block">
-                <h3>Effettivo · flussi positivi</h3>
-                <PieChart width={width} height={180}>
-                    <Pie
-                        data={rows.map((row) => ({
-                            ...row,
-                            value: Number(row.actual_positive),
-                        }))}
-                        dataKey="value"
-                        innerRadius={40}
-                        outerRadius={75}
-                        isAnimationActive={false}
-                    >
-                        {rows.map((row, index) => (
-                            <Cell
-                                key={row.id}
-                                fill={colors[index % colors.length]}
-                            />
-                        ))}
-                    </Pie>
-                </PieChart>
-                <table className="budget-report-distribution">
-                    <thead>
-                        <tr>
-                            <th scope="col">Fornitore</th>
-                            <th scope="col">Flussi positivi</th>
-                            <th scope="col">Percentuale</th>
-                            <th scope="col">Effettivo netto</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((row, index) => (
-                            <tr key={row.id}>
-                                <th scope="row">
-                                    <span
-                                        className="budget-report-chart-key"
-                                        style={{
-                                            background:
-                                                colors[index % colors.length],
-                                        }}
-                                    />
-                                    {row.name}
-                                </th>
-                                <td>{money(row.actual_positive)}</td>
-                                <td>
-                                    {percent(
-                                        (Number(row.actual_positive) * 100) /
-                                            positive,
-                                    )}
-                                </td>
-                                <td>{money(row.actual)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-                <p className="budget-report-note">
-                    Le percentuali rappresentano i flussi effettivi positivi;
-                    gli importi netti comprendono le rettifiche negative.
-                </p>
-            </div>
-        );
-    }
     const rows =
         kind === 'variances'
             ? budgetReportVariances(budget)
-            : topGroups(budgetReportGroups(budget, kind), 10, 'actual');
+            : topGroups(
+                  budgetReportGroups(
+                      budget,
+                      kind === 'distribution' ? 'vendors' : kind,
+                  ),
+                  10,
+                  'actual',
+              );
     if (!rows.length)
         return (
             <p>
@@ -234,6 +95,19 @@ export function BudgetReportChart({
                 nel report.
             </p>
         );
+    const metrics =
+        kind === 'variances'
+            ? (['variance'] as const)
+            : (['allocated', 'actual'] as const);
+    const values = rows.flatMap((row) =>
+        metrics.flatMap((metric) =>
+            row[metric] === null ? [] : [Number(row[metric])],
+        ),
+    );
+    const domain: [number, number] = [
+        Math.min(0, ...values),
+        Math.max(0, ...values),
+    ];
     // Small chart batches remain intact on an A4 page; the table carries full labels and exact amounts.
     return (
         <>
@@ -244,10 +118,6 @@ export function BudgetReportChart({
             </p>
             {Array.from({ length: Math.ceil(rows.length / 6) }, (_, page) => {
                 const batch = rows.slice(page * 6, page * 6 + 6);
-                const metrics =
-                    kind === 'variances'
-                        ? (['variance'] as const)
-                        : (['allocated', 'actual'] as const);
                 const data = batch.map((row, index) => ({
                     label: `${page * 6 + index + 1}`,
                     allocated:
@@ -283,6 +153,7 @@ export function BudgetReportChart({
                                 />
                                 <XAxis
                                     type="number"
+                                    domain={domain}
                                     tickFormatter={compactMoney}
                                     tick={{ fill: '#52647d', fontSize: 11 }}
                                 />

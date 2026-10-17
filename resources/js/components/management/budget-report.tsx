@@ -1,4 +1,15 @@
 import type { Ref } from 'react';
+import {
+    ChartNoAxesCombined,
+    GitFork,
+    TableProperties,
+    Building2,
+    FolderKanban,
+    FileText,
+    TrendingUp,
+    Table2,
+    Sigma,
+} from 'lucide-react';
 import type { Row, Table } from '@tanstack/react-table';
 import { BudgetSankey } from './budget-sankey';
 import { BudgetReportChart } from './budget-report-charts';
@@ -20,14 +31,23 @@ export const budgetReportBlocks = {
     kpis: 'Riepilogo economico',
     sankey: 'Ripartizione del Budget',
     reconciliation: 'Importi della ripartizione',
-    completeness: 'Completezza dei dati',
-    distribution: 'Distribuzione percentuale per fornitore',
-    vendors: 'Classifica fornitori',
+    distribution: 'Distribuzione Fornitore',
     projects: 'Allocato ed effettivo per progetto',
     contracts: 'Allocato ed effettivo per contratto',
     variances: 'Principali sforamenti e risparmi',
     table: 'Voci del Budget',
     totals: 'Totale delle voci incluse nel report',
+};
+export const budgetReportIcons = {
+    kpis: ChartNoAxesCombined,
+    sankey: GitFork,
+    reconciliation: TableProperties,
+    distribution: Building2,
+    projects: FolderKanban,
+    contracts: FileText,
+    variances: TrendingUp,
+    table: Table2,
+    totals: Sigma,
 };
 export type BudgetReportColumn = keyof typeof budgetReportColumns;
 export type BudgetReportBlock = keyof typeof budgetReportBlocks;
@@ -49,6 +69,7 @@ export type BudgetReportOptions = {
     hiddenBlocks: BudgetReportBlock[];
     titles: Record<BudgetReportBlock, string>;
     sankeyMetric: 'allocated' | 'actual' | 'both';
+    reconciliationMetric: 'allocated' | 'actual' | 'both';
     groupByType: boolean;
     subtotals: boolean;
     columns: BudgetReportColumn[];
@@ -60,7 +81,7 @@ export function defaultBudgetReportOptions(
         title: 'Budget annuale',
         company: tenantName,
         subtitle: 'Report economico',
-        orientation: 'landscape',
+        orientation: 'portrait',
         showCompany: true,
         showYear: true,
         showLogo: true,
@@ -70,6 +91,7 @@ export function defaultBudgetReportOptions(
         hiddenBlocks: [],
         titles: { ...budgetReportBlocks },
         sankeyMetric: 'both',
+        reconciliationMetric: 'both',
         groupByType: true,
         subtotals: true,
         columns: (
@@ -168,6 +190,10 @@ export function BudgetReport({
         options.sankeyMetric === 'both'
             ? (['allocated', 'actual'] as const)
             : [options.sankeyMetric];
+    const reconciliationMetrics =
+        options.reconciliationMetric === 'both'
+            ? (['allocated', 'actual'] as const)
+            : [options.reconciliationMetric];
     const groups = options.groupByType
         ? budgetTypes.map((type) => ({
               id: type,
@@ -221,7 +247,7 @@ export function BudgetReport({
             case 'reconciliation':
                 return (
                     <>
-                        {flowMetrics.map((metric) => (
+                        {reconciliationMetrics.map((metric) => (
                             <div key={metric} className="budget-report-block">
                                 <h3>{budgetReportColumns[metric]}</h3>
                                 <table className="budget-report-distribution">
@@ -389,49 +415,50 @@ export function BudgetReport({
                     )}
                 </div>
             </header>
-            {(options.showScope || options.showDate) && (
+            {options.showScope && (
                 <div className="budget-report-scope">
                     <div className="budget-report-scope-heading">
-                        {options.showScope && (
-                            <strong>Perimetro del report</strong>
-                        )}
-                        {options.showDate && (
-                            <span>Elaborato il {createdAt}</span>
-                        )}
+                        <strong>Perimetro del report</strong>
                     </div>
-                    {options.showScope && (
-                        <>
-                            <p>{data.filters.join(' · ')}</p>
-                            <p className="budget-report-counts">
-                                <strong>{budget.entries.length}</strong> righe
-                                nel report ·{' '}
-                                <strong>{budget.totals.count}</strong> voci
-                                incluse nei totali ·{' '}
-                                <strong>{budget.totals.incomplete}</strong> con
-                                dati incompleti
-                            </p>
-                        </>
-                    )}
+                    <p>{data.filters.join(' · ')}</p>
+                    <p className="budget-report-counts">
+                        <strong>{budget.entries.length}</strong> righe nel
+                        report · <strong>{budget.totals.count}</strong> voci
+                        incluse nei totali ·{' '}
+                        <strong>{budget.totals.incomplete}</strong> con dati
+                        incompleti
+                    </p>
                 </div>
             )}
             {options.blocks
                 .filter((block) => !options.hiddenBlocks.includes(block))
-                .map((block) => (
-                    <section
-                        key={block}
-                        data-report-block={block}
-                        aria-label={options.titles[block]}
-                        className={
-                            block === 'kpis' || block === 'totals'
-                                ? 'budget-report-block'
-                                : undefined
-                        }
-                    >
-                        <h2>{options.titles[block]}</h2>
-                        {renderBlock(block)}
-                    </section>
-                ))}
+                .map((block) => {
+                    const Icon = budgetReportIcons[block];
+                    return (
+                        <section
+                            key={block}
+                            data-report-block={block}
+                            aria-label={options.titles[block]}
+                            className={
+                                block === 'kpis' || block === 'totals'
+                                    ? 'budget-report-block'
+                                    : undefined
+                            }
+                        >
+                            <h2>
+                                <Icon aria-hidden="true" />
+                                {options.titles[block]}
+                            </h2>
+                            {renderBlock(block)}
+                        </section>
+                    );
+                })}
             <footer className="budget-report-note budget-report-footer">
+                {options.showDate && (
+                    <p className="budget-report-date">
+                        Elaborato il {createdAt}
+                    </p>
+                )}
                 Le voci escluse non contribuiscono ai totali. «Da inserire»
                 indica un importo mancante, distinto da zero. Le spese già
                 attribuite ad altre voci non vengono conteggiate due volte.

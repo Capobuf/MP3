@@ -360,11 +360,13 @@ la tabella di riconciliazione è un blocco indipendente.
 
 Il configuratore permette di modificare titolo, nome azienda, sottotitolo e titoli
 dei blocchi; nascondere anno, logo, data, filtri/conteggi; riordinare e selezionare
-blocchi e colonne. Tutto è attivo inizialmente tranne la colonna Stato. La tabella
+blocchi e colonne. Il formato iniziale è A4 verticale. Tutto è attivo inizialmente
+tranne la colonna Stato. Titolo, reset e opzioni sono accanto al rispettivo blocco;
+disattivandolo si nascondono le sue opzioni. La data modificabile è nel Footer. La tabella
 può raggruppare per tipo con subtotali facoltativi, rispettando l’ordine delle voci
 all’interno dei gruppi. Ogni sezione del configuratore ha un reset indipendente.
-Le impostazioni valgono per il report aperto. I grafici aggiuntivi sono completezza,
-distribuzione/classifica fornitori, confronto per progetti/contratti e scostamenti.
+Le impostazioni valgono per il report aperto. I grafici aggiuntivi sono Distribuzione Fornitore (barre di allocato/effettivo),
+confronto per progetti/contratti e scostamenti.
 Le classifiche mostrano le prime 10 voci più «Altri»; gli scostamenti mostrano
 i 5 maggiori sforamenti e i 5 maggiori risparmi, come nella panoramica.
 Non vengono caricati storico, stati dei progetti o scadenze dalla panoramica.

@@ -323,3 +323,85 @@ it('keeps the overview selection of five overruns and five savings, omitting zer
         19, 18, 17, 16, 15, 0, 1, 2, 3, 4,
     ]);
 });
+
+it('defaults to portrait, removes obsolete charts and places the editable date only in the footer', () => {
+    const options = defaultBudgetReportOptions('Azienda');
+    expect(options.orientation).toBe('portrait');
+    expect(options.blocks).not.toContain('completeness');
+    expect(options.blocks).not.toContain('vendors');
+    expect(options.titles.distribution).toBe('Distribuzione Fornitore');
+    const html = renderToStaticMarkup(
+        <BudgetReport
+            data={{ budget: summary, filters: [] }}
+            options={{
+                ...options,
+                blocks: ['sankey', 'reconciliation'],
+                sankeyMetric: 'actual',
+                reconciliationMetric: 'allocated',
+            }}
+            tenantName="Azienda"
+            year={2027}
+            createdAt="DATA PERSONALIZZATA"
+        />,
+    );
+    expect(html.indexOf('DATA PERSONALIZZATA')).toBeGreaterThan(
+        html.indexOf('<footer'),
+    );
+    const sankey = html.slice(
+        html.indexOf('data-report-block="sankey"'),
+        html.indexOf('data-report-block="reconciliation"'),
+    );
+    expect(sankey).toContain('Effettivo');
+    expect(sankey).not.toContain('Allocato');
+    expect(html).toContain('Allocato netto');
+    expect(html).not.toContain('Effettivo netto');
+});
+it('keeps known allocated amounts in the supplier bar chart when all actuals are missing, and distinguishes zero', () => {
+    const budget = {
+        ...summary,
+        vendor_groups: {
+            none: { ...totals, allocated: '63296.44', actual: null },
+        },
+    };
+    const html = renderToStaticMarkup(
+        <BudgetReport
+            data={{ budget, filters: [] }}
+            options={{
+                ...defaultBudgetReportOptions('Azienda'),
+                blocks: ['distribution'],
+            }}
+            tenantName="Azienda"
+            year={2027}
+            createdAt="DATA"
+        />,
+    );
+    expect(html).toContain('63.296,44');
+    expect(html).toContain('Da inserire');
+    expect(html).not.toContain('Percentuale');
+    const zero = renderToStaticMarkup(
+        <BudgetReport
+            data={{
+                budget: {
+                    ...budget,
+                    vendor_groups: {
+                        none: {
+                            ...totals,
+                            allocated: '63296.44',
+                            actual: '0.00',
+                        },
+                    },
+                },
+                filters: [],
+            }}
+            options={{
+                ...defaultBudgetReportOptions('Azienda'),
+                blocks: ['distribution'],
+            }}
+            tenantName="Azienda"
+            year={2027}
+            createdAt="DATA"
+        />,
+    );
+    expect(zero).not.toContain('Da inserire</td>');
+    expect(zero).toContain('0,00');
+});
