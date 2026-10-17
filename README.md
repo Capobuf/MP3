@@ -359,7 +359,7 @@ e non contribuiscono ai totali; gli importi mancanti restano distinti da zero.
 
 Si possono modificare titolo, orientamento A4, sezioni e ordine/visibilità delle
 colonne. Il logo PNG/JPG (massimo 2 MB) rimane nel browser per il singolo report.
-**Stampa / Salva PDF** apre la stampa del browser tramite `react-to-print`:
+**Anteprima di stampa** apre l’anteprima nativa del browser tramite `react-to-print`:
 in Chrome scegliere **Salva come PDF**, carta A4, scala 100% e controllare tutte
 le pagine. L’anteprima nell’app mostra il documento continuo; quella di Chrome
 mostra l’impaginazione effettiva. Le impostazioni del browser possono prevalere

@@ -138,8 +138,9 @@ export function BudgetPrintDialog({
                     <DialogTitle>Stampa report · Budget {year}</DialogTitle>
                     <DialogDescription>
                         Il report usa le righe risultanti dai filtri del Budget,
-                        comprese quelle nei gruppi chiusi. In Chrome scegli
-                        «Salva come PDF» come destinazione di stampa.
+                        comprese quelle nei gruppi chiusi. Configura il
+                        documento, poi apri «Anteprima di stampa» per verificare
+                        le pagine A4 nel browser.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid min-h-0 gap-6 overflow-y-auto lg:grid-cols-[17rem_minmax(0,1fr)]">
@@ -310,9 +311,14 @@ export function BudgetPrintDialog({
                     </div>
                     <div
                         className="min-w-0 overflow-auto rounded-md border bg-muted p-4"
-                        aria-label="Documento da stampare"
+                        aria-label="Contenuto del report"
                         tabIndex={0}
                     >
+                        <p className="mb-4 text-sm text-muted-foreground">
+                            Contenuto del report · Vista continua, senza
+                            divisione in pagine. L’impaginazione effettiva è
+                            nell’anteprima di stampa del browser.
+                        </p>
                         <BudgetReport
                             ref={contentRef}
                             data={data}
@@ -333,7 +339,7 @@ export function BudgetPrintDialog({
                     <p className="text-sm text-muted-foreground">
                         {invalid
                             ? 'Indica un titolo, almeno una sezione e almeno una colonna per la tabella.'
-                            : 'Controlla l’impaginazione nell’anteprima di Chrome prima di salvare. Scala 100%, carta A4.'}
+                            : 'Nell’anteprima di Chrome controlla le pagine, poi scegli «Salva come PDF» o una stampante. Carta A4, scala 100%.'}
                     </p>
                     <Button
                         disabled={invalid || logoLoading || printing}
@@ -344,7 +350,9 @@ export function BudgetPrintDialog({
                         }}
                     >
                         <Printer data-icon="inline-start" />
-                        {printing ? 'Stampa in corso…' : 'Stampa / Salva PDF'}
+                        {printing
+                            ? 'Anteprima in corso…'
+                            : 'Anteprima di stampa'}
                     </Button>
                 </div>
             </DialogContent>
