@@ -15,6 +15,9 @@ class CommentRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return ['content' => ['required', 'array', new CommentContent]];
+        return [
+            'content' => ['required', 'array', new CommentContent],
+            'parent_id' => $this->isMethod('POST') ? ['sometimes', 'nullable', 'integer', 'min:1'] : ['prohibited'],
+        ];
     }
 }

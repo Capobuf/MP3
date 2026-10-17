@@ -2,7 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { Breadcrumbs } from '@/components/breadcrumbs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { UserAvatar } from '@/components/user-info';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -29,7 +29,6 @@ import {
 } from '@/components/ui/tooltip';
 import { UserMenuContent } from '@/components/user-menu-content';
 import { useCurrentUrl } from '@/hooks/use-current-url';
-import { useInitials } from '@/hooks/use-initials';
 import { cn, toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem, NavItem } from '@/types';
@@ -70,7 +69,6 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
     const homeLabel = currentTenant
         ? `Vai alla home di ${currentTenant.name}`
         : 'Vai a Impostazioni Piattaforma';
-    const getInitials = useInitials();
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
     return (
@@ -227,15 +225,9 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                                     variant="ghost"
                                     className="size-10 rounded-full p-1"
                                 >
-                                    <Avatar className="size-8 overflow-hidden rounded-full">
-                                        <AvatarImage
-                                            src={auth.user?.avatar}
-                                            alt={auth.user?.name}
-                                        />
-                                        <AvatarFallback className="rounded-lg bg-muted text-muted-foreground">
-                                            {getInitials(auth.user?.name ?? '')}
-                                        </AvatarFallback>
-                                    </Avatar>
+                                    <UserAvatar
+                                        user={auth.user ?? { name: '' }}
+                                    />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent className="w-56" align="end">

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use RyanChandler\Comments\Models\Comment;
 use Tests\TestCase;
 
@@ -49,13 +50,14 @@ class CommentTest extends TestCase
             $this->freezeTime();
             $recordPath = '/t/alfa/'.$resource.'/'.$record->id;
             $path = $recordPath.'/comments';
-            $response = $this->postJson($path, ['content' => $this->content(), 'user_id' => 999, 'parent_id' => 999])
+            $response = $this->postJson($path, ['content' => $this->content(), 'user_id' => 999])
                 ->assertCreated()->assertHeaderMissing('X-Undo-Action')
                 ->assertJsonPath('comment.author.id', $this->author->id)
                 ->assertJsonPath('comment.can_update', true)->assertJsonPath('comment.can_delete', true);
             $id = $response->json('comment.id');
             $created = $response->json('comment.created_at');
             $response->assertJsonPath('comment.updated_at', $created);
+            $reply = $this->postJson($path, ['content' => $this->content('Risposta'), 'parent_id' => $id])->assertCreated()->assertHeaderMissing('X-Undo-Action')->json('comment.id');
             $this->assertNull(Comment::findOrFail($id)->parent_id);
             $this->assertSame($this->content(), json_decode(Comment::findOrFail($id)->content, true));
             $this->getJson($path.'?year=2030')->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $id);
@@ -75,7 +77,7 @@ class CommentTest extends TestCase
             $this->deleteJson($path.'/'.$id)->assertNotFound();
             $this->assertDatabaseHas('comments', ['id' => $id, 'deleted_at' => null]);
             $this->postJson('/t/alfa/undo')->assertOk();
-            $this->getJson($path)->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $id)->assertJsonPath('data.0.content', $this->content('Aggiornato'));
+            $this->getJson($path)->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $id)->assertJsonPath('data.0.content', $this->content('Aggiornato'))->assertJsonPath('data.0.replies.0.id', $reply)->assertJsonPath('comments_count', 2);
             $this->travelBack();
         }
     }
@@ -146,6 +148,65 @@ class CommentTest extends TestCase
         foreach (['direction=invalid', 'page=0', 'page=1.5', 'direction=desc%3BDROP'] as $query) {
             $this->getJson($path.'?'.$query)->assertUnprocessable();
         }
+        $this->travelBack();
+    }
+
+    public function test_replies_are_scoped_to_a_live_root_and_only_the_author_can_change_them(): void
+    {
+        $this->actingAs($this->author);
+        $vendor = $this->tenant->vendors()->create(['name' => 'Uno']);
+        $otherRecord = $this->tenant->vendors()->create(['name' => 'Due']);
+        $foreignTenant = Tenant::create(['name' => 'Beta', 'slug' => 'beta']);
+        $foreignRecord = $foreignTenant->vendors()->create(['name' => 'Esterno']);
+        $path = '/t/alfa/vendors/'.$vendor->id.'/comments';
+        $root = $this->postJson($path, ['content' => $this->content()])->assertCreated()->json('comment.id');
+        $secondRoot = $this->postJson($path, ['content' => $this->content('Altro principale')])->assertCreated()->json('comment.id');
+        $wrongRecord = $otherRecord->comments()->create(['content' => json_encode($this->content()), 'user_id' => $this->author->id]);
+        $foreign = $foreignRecord->comments()->create(['content' => json_encode($this->content()), 'user_id' => $this->author->id]);
+        foreach ([$wrongRecord->id, $foreign->id, 999999, -1] as $parent) {
+            $this->postJson($path, ['content' => $this->content(), 'parent_id' => $parent])->assertUnprocessable()->assertJsonValidationErrors('parent_id');
+        }
+        $member = User::factory()->create();
+        $member->tenants()->attach($this->tenant);
+        $this->actingAs($member);
+        $reply = $this->postJson($path, ['content' => $this->content('Risposta'), 'parent_id' => $root, 'user_id' => $this->author->id])->assertCreated()->assertJsonPath('comment.author.id', $member->id)->json('comment.id');
+        $this->postJson($path, ['content' => $this->content(), 'parent_id' => $reply])->assertUnprocessable();
+        $this->patchJson($path.'/'.$reply, ['content' => $this->content('Modificata'), 'parent_id' => $secondRoot])->assertUnprocessable();
+        $this->patchJson($path.'/'.$reply, ['content' => $this->content('Modificata')])->assertOk()->assertJsonPath('comment.parent_id', $root);
+        $this->actingAs($this->author);
+        $this->patchJson($path.'/'.$reply, ['content' => $this->content()])->assertForbidden();
+        $this->deleteJson($path.'/'.$reply)->assertForbidden();
+        $this->deleteJson($path.'/'.$root)->assertOk();
+        $this->postJson($path, ['content' => $this->content(), 'parent_id' => $root])->assertUnprocessable();
+        $response = $this->getJson($path.'?direction=asc')->assertOk()->assertJsonPath('total', 2)->assertJsonPath('comments_count', 2)->assertJsonPath('data.0.id', $root)->assertJsonPath('data.0.deleted', true)->assertJsonPath('data.0.content', null)->assertJsonPath('data.0.author', null)->assertJsonPath('data.0.can_update', false)->assertJsonPath('data.0.replies.0.content', $this->content('Modificata'));
+        $this->assertStringNotContainsString(json_encode($this->content()), json_encode($response->json('data.0')));
+        $this->actingAs($member);
+        $this->deleteJson($path.'/'.$reply)->assertOk();
+        $this->getJson($path)->assertOk()->assertJsonPath('total', 1)->assertJsonPath('comments_count', 1)->assertJsonPath('data.0.id', $secondRoot);
+    }
+
+    public function test_only_roots_are_paginated_and_replies_are_loaded_in_chronological_order(): void
+    {
+        $this->actingAs($this->author);
+        $vendor = $this->tenant->vendors()->create(['name' => 'Uno']);
+        $path = '/t/alfa/vendors/'.$vendor->id.'/comments';
+        $this->freezeTime();
+        $ids = [];
+        for ($i = 0; $i < 10; $i++) {
+            $ids[] = $this->postJson($path, ['content' => $this->content('Principale '.$i)])->assertCreated()->json('comment.id');
+        }
+        $reply1 = $this->postJson($path, ['content' => $this->content('Prima risposta'), 'parent_id' => $ids[0]])->assertCreated()->json('comment.id');
+        $reply2 = $this->postJson($path, ['content' => $this->content('Seconda risposta'), 'parent_id' => $ids[0]])->assertCreated()->json('comment.id');
+        $this->getJson($path)->assertJsonPath('total', 10)->assertJsonPath('comments_count', 12)->assertJsonPath('last_page', 1)->assertJsonCount(10, 'data')->assertJsonPath('data.9.replies.0.id', $reply1)->assertJsonPath('data.9.replies.1.id', $reply2);
+        $eleventh = $this->postJson($path, ['content' => $this->content('Undicesimo')])->assertCreated()->json('comment.id');
+        $this->getJson($path)->assertJsonPath('total', 11)->assertJsonPath('comments_count', 13)->assertJsonPath('last_page', 2)->assertJsonPath('data.0.id', $eleventh);
+        $this->getJson($path.'?page=2')->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $ids[0])->assertJsonCount(2, 'data.0.replies');
+        $this->getJson($path.'?direction=asc')->assertJsonPath('data.0.id', $ids[0])->assertJsonPath('data.0.replies.0.id', $reply1)->assertJsonPath('data.0.replies.1.id', $reply2);
+        DB::enableQueryLog();
+        $this->getJson($path)->assertOk();
+        $queries = collect(DB::getQueryLog())->filter(fn ($query) => str_contains($query['query'], 'from `comments`') || str_contains($query['query'], 'from "comments"'));
+        $this->assertLessThanOrEqual(4, $queries->count());
+        DB::disableQueryLog();
         $this->travelBack();
     }
 

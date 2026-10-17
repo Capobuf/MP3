@@ -2,6 +2,24 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
 import type { User } from '@/types';
 
+export function UserAvatar({
+    user,
+}: {
+    user: { name: string; avatar?: string | null };
+}) {
+    const getInitials = useInitials();
+    return (
+        <Avatar>
+            <AvatarImage
+                src={user.avatar ?? undefined}
+                alt={user.name}
+                className="object-cover"
+            />
+            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+        </Avatar>
+    );
+}
+
 export function UserInfo({
     user,
     showEmail = false,
@@ -9,16 +27,9 @@ export function UserInfo({
     user: User;
     showEmail?: boolean;
 }) {
-    const getInitials = useInitials();
-
     return (
         <>
-            <Avatar className="h-8 w-8 overflow-hidden rounded-full">
-                <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-full bg-muted text-foreground">
-                    {getInitials(user.name)}
-                </AvatarFallback>
-            </Avatar>
+            <UserAvatar user={user} />
             <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                 <span className="truncate font-medium">{user.name}</span>
                 {showEmail && (

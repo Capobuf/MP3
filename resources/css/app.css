@@ -382,3 +382,10 @@
         @apply font-semibold;
     }
 }
+
+@layer components {
+    .tiptap.comment-rich-text:has(> p:only-child > br:only-child)::before {
+        content: attr(data-placeholder);
+        @apply pointer-events-none float-left h-0 text-muted-foreground;
+    }
+}

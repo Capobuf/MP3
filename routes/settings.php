@@ -10,6 +10,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('settings', fn () => to_route('profile.edit'));
 
     Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::post('settings/profile/photo', [ProfileController::class, 'storePhoto'])->name('profile.photo.store');
+    Route::delete('settings/profile/photo', [ProfileController::class, 'destroyPhoto'])->name('profile.photo.destroy');
+    Route::get('users/{user}/photo', [ProfileController::class, 'photo'])->whereNumber('user')->name('profile.photo.show');
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 

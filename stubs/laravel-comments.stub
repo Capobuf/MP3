@@ -8,6 +8,7 @@ namespace Illuminate\Support {
 namespace RyanChandler\Comments\Models {
     /**
      * @property int $id
+     * @property int|null $parent_id
      * @property int|null $user_id
      * @property string $content
      * @property \Illuminate\Support\Carbon|null $created_at

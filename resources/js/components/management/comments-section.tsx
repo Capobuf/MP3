@@ -1,8 +1,9 @@
 import type { JSONContent } from '@tiptap/react';
 import { renderToReactElement } from '@tiptap/static-renderer/pm/react';
-import { Ellipsis, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { Ellipsis, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { UserAvatar } from '@/components/user-info';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -16,13 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -30,13 +25,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Empty,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyMedia,
-    EmptyTitle,
-} from '@/components/ui/empty';
 import {
     Pagination,
     PaginationContent,
@@ -54,7 +42,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import type { Tenant } from '@/types';
@@ -64,16 +51,20 @@ import { api } from './helpers';
 
 type Comment = {
     id: number;
-    content: JSONContent;
-    author: { id: number | null; name: string };
+    parent_id: number | null;
+    deleted: boolean;
+    content: JSONContent | null;
+    author: { id: number | null; name: string; avatar: string | null } | null;
     created_at: string;
     updated_at: string;
     can_update: boolean;
     can_delete: boolean;
 };
+type Thread = Comment & { replies: Comment[] };
 type CommentPage = {
-    data: Comment[];
+    data: Thread[];
     total: number;
+    comments_count: number;
     current_page: number;
     last_page: number;
 };
@@ -87,6 +78,148 @@ const dateTime = new Intl.DateTimeFormat('it-IT', {
     dateStyle: 'medium',
     timeStyle: 'short',
 });
+
+function CommentMessage({
+    comment,
+    locked,
+    editing,
+    busy,
+    onEdit,
+    onDelete,
+    onSave,
+    onCancel,
+    onReply,
+}: {
+    comment: Comment;
+    locked: boolean;
+    editing: boolean;
+    busy: boolean;
+    onEdit: () => void;
+    onDelete: () => void;
+    onSave: (content: JSONContent) => Promise<void>;
+    onCancel: () => void;
+    onReply?: () => void;
+}) {
+    return (
+        <div
+            className="flex min-w-0 items-start gap-3"
+            data-comment-id={comment.id}
+        >
+            {comment.deleted ? (
+                <div
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                    aria-hidden="true"
+                >
+                    <Trash2 className="size-4" />
+                </div>
+            ) : (
+                <UserAvatar
+                    user={comment.author ?? { name: 'Utente non disponibile' }}
+                />
+            )}
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                {comment.deleted ? (
+                    <p className="py-1 text-sm text-muted-foreground">
+                        Commento eliminato
+                    </p>
+                ) : (
+                    <>
+                        <div className="flex min-w-0 items-start justify-between gap-2">
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 pt-1">
+                                <span className="text-sm font-medium break-words">
+                                    {comment.author?.name}
+                                </span>
+                                <time
+                                    className="text-xs text-muted-foreground"
+                                    dateTime={comment.created_at}
+                                >
+                                    {dateTime.format(
+                                        new Date(comment.created_at),
+                                    )}
+                                </time>
+                                {comment.updated_at !== comment.created_at && (
+                                    <span
+                                        className="text-xs text-muted-foreground"
+                                        title={`Modificato il ${dateTime.format(new Date(comment.updated_at))}`}
+                                    >
+                                        Modificato
+                                    </span>
+                                )}
+                            </div>
+                            {(comment.can_update || comment.can_delete) && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label={`Azioni commento di ${comment.author?.name}`}
+                                            disabled={locked}
+                                        >
+                                            <Ellipsis />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuGroup>
+                                            {comment.can_update && (
+                                                <DropdownMenuItem
+                                                    onSelect={onEdit}
+                                                >
+                                                    <Pencil />
+                                                    Modifica
+                                                </DropdownMenuItem>
+                                            )}
+                                            {comment.can_delete && (
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    onSelect={onDelete}
+                                                >
+                                                    <Trash2 />
+                                                    Elimina
+                                                </DropdownMenuItem>
+                                            )}
+                                        </DropdownMenuGroup>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            )}
+                        </div>
+                        {editing && comment.content ? (
+                            <CommentEditor
+                                content={comment.content}
+                                label="Modifica commento"
+                                submitLabel="Salva"
+                                busy={busy}
+                                onSave={onSave}
+                                onCancel={onCancel}
+                            />
+                        ) : (
+                            comment.content && (
+                                <div className="comment-rich-text">
+                                    {renderToReactElement({
+                                        extensions: commentExtensions,
+                                        content: comment.content,
+                                    })}
+                                </div>
+                            )
+                        )}
+                        {onReply && !editing && (
+                            <Button
+                                type="button"
+                                variant="link"
+                                size="sm"
+                                className="h-auto self-start px-0 py-1"
+                                disabled={locked}
+                                onClick={onReply}
+                            >
+                                Rispondi
+                            </Button>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export function CommentsSection({
     tenant,
@@ -110,6 +243,7 @@ export function CommentsSection({
     const [loadError, setLoadError] = useState('');
     const [saveError, setSaveError] = useState('');
     const [editing, setEditing] = useState<Comment | null>(null);
+    const [replying, setReplying] = useState<number | null>(null);
     const [selected, setSelected] = useState<Comment | null>(null);
     const [busy, setBusy] = useState(false);
     const [editorVersion, setEditorVersion] = useState(0);
@@ -157,7 +291,11 @@ export function CommentsSection({
             revision: current.revision + 1,
         }));
     }
-    async function save(content: JSONContent, comment?: Comment) {
+    async function save(
+        content: JSONContent,
+        comment?: Comment,
+        parentId?: number,
+    ) {
         if (operation.current) return;
         operation.current = true;
         setBusy(true);
@@ -166,14 +304,19 @@ export function CommentsSection({
             await api(
                 `${path}${comment ? `/${comment.id}` : ''}`,
                 comment ? 'PATCH' : 'POST',
-                { content },
+                {
+                    content,
+                    ...(!comment && parentId ? { parent_id: parentId } : {}),
+                },
             );
             toast.success(
-                comment ? 'Commento aggiornato.' : 'Commento pubblicato.',
+                comment ? 'Commento aggiornato.' : 'Commento inviato.',
             );
             setEditing(null);
-            if (!comment) setEditorVersion((version) => version + 1);
-            refresh(comment ? query.page : 1);
+            setReplying(null);
+            if (!comment && !parentId)
+                setEditorVersion((version) => version + 1);
+            refresh(comment || parentId ? query.page : 1);
         } catch (error) {
             setSaveError(
                 error instanceof Error
@@ -194,12 +337,9 @@ export function CommentsSection({
             await api(`${path}/${selected.id}`, 'DELETE');
             setSelected(null);
             setEditing(null);
+            setReplying(null);
             toast.success('Commento eliminato.');
-            refresh(
-                list?.data.length === 1
-                    ? Math.max(1, query.page - 1)
-                    : query.page,
-            );
+            refresh();
         } catch (error) {
             toast.error(
                 error instanceof Error
@@ -211,6 +351,11 @@ export function CommentsSection({
             setBusy(false);
         }
     }
+    function cancel() {
+        setEditing(null);
+        setReplying(null);
+        setSaveError('');
+    }
     const lastPage = list?.last_page ?? 1;
     const pages = Array.from(
         new Set([1, query.page - 1, query.page, query.page + 1, lastPage]),
@@ -218,27 +363,55 @@ export function CommentsSection({
         .filter((page) => page >= 1 && page <= lastPage)
         .sort((a, b) => a - b);
     const locked = busy || loading;
+    const composing = !!editing || replying !== null;
     function go(page: number) {
         if (!locked) {
-            setEditing(null);
-            setSaveError('');
+            cancel();
             refresh(page);
         }
     }
+    function message(comment: Comment, root: boolean) {
+        return (
+            <CommentMessage
+                comment={comment}
+                locked={locked || composing}
+                editing={editing?.id === comment.id}
+                busy={busy}
+                onEdit={() => {
+                    setEditing(comment);
+                    setReplying(null);
+                    setSaveError('');
+                }}
+                onDelete={() => setSelected(comment)}
+                onSave={(content) => save(content, comment)}
+                onCancel={cancel}
+                onReply={
+                    root && !comment.deleted
+                        ? () => {
+                              setReplying(comment.id);
+                              setEditing(null);
+                              setSaveError('');
+                          }
+                        : undefined
+                }
+            />
+        );
+    }
     return (
         <Card id="comments">
-            <CardHeader>
+            <CardHeader className="pb-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <CardTitle className="flex items-center gap-2">
-                        <MessageSquare />
                         Commenti{' '}
                         {list && (
-                            <Badge variant="secondary">{list.total}</Badge>
+                            <Badge variant="secondary">
+                                {list.comments_count}
+                            </Badge>
                         )}
                     </CardTitle>
                     <Select
                         value={query.direction}
-                        disabled={locked || !!editing}
+                        disabled={locked || composing}
                         onValueChange={(direction) =>
                             setQuery((current) => ({
                                 ...current,
@@ -265,34 +438,25 @@ export function CommentsSection({
                         </SelectContent>
                     </Select>
                 </div>
-                <CardDescription>
-                    Commenti del record, condivisi tra tutti gli anni.
-                </CardDescription>
             </CardHeader>
             <CardContent className="flex min-w-0 flex-col gap-5">
-                {!editing && (
-                    <CommentEditor
-                        key={editorVersion}
-                        busy={busy}
-                        onSave={(content) => save(content)}
-                    />
-                )}
+                <CommentEditor
+                    key={editorVersion}
+                    busy={busy || composing}
+                    onSave={(content) => save(content)}
+                />
                 {saveError && (
                     <Alert variant="destructive" role="alert">
                         <AlertTitle>Commento non salvato</AlertTitle>
                         <AlertDescription>{saveError}</AlertDescription>
                     </Alert>
                 )}
-                <Separator />
                 <div
                     aria-busy={loading}
                     className="flex min-w-0 flex-col gap-5"
                 >
                     {loading ? (
-                        <>
-                            <Skeleton className="h-20 w-full" />
-                            <Skeleton className="h-20 w-full" />
-                        </>
+                        <Skeleton className="h-16 w-full" />
                     ) : loadError ? (
                         <Alert variant="destructive">
                             <AlertTitle>Commenti non disponibili</AlertTitle>
@@ -309,127 +473,57 @@ export function CommentsSection({
                             </AlertDescription>
                         </Alert>
                     ) : !list?.data.length ? (
-                        <Empty>
-                            <EmptyHeader>
-                                <EmptyMedia variant="icon">
-                                    <MessageSquare />
-                                </EmptyMedia>
-                                <EmptyTitle>Nessun commento</EmptyTitle>
-                                <EmptyDescription>
-                                    Aggiungi il primo commento a questo record.
-                                </EmptyDescription>
-                            </EmptyHeader>
-                        </Empty>
+                        <p className="text-sm text-muted-foreground">
+                            Nessun commento. Inizia la conversazione.
+                        </p>
                     ) : (
                         <ul
-                            className="flex min-w-0 flex-col gap-5"
+                            className="flex min-w-0 flex-col gap-6"
                             aria-label="Elenco commenti"
                         >
-                            {list.data.map((comment) => (
+                            {list.data.map((thread) => (
                                 <li
-                                    key={comment.id}
-                                    className="flex min-w-0 flex-col gap-3 rounded-lg border p-4"
+                                    key={thread.id}
+                                    className="relative min-w-0"
+                                    data-thread-id={thread.id}
                                 >
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="flex min-w-0 flex-col gap-1">
-                                            <p className="text-sm font-medium break-words">
-                                                {comment.author.name}
-                                            </p>
-                                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                                <time
-                                                    dateTime={
-                                                        comment.created_at
-                                                    }
-                                                >
-                                                    {dateTime.format(
-                                                        new Date(
-                                                            comment.created_at,
-                                                        ),
-                                                    )}
-                                                </time>
-                                                {comment.updated_at !==
-                                                    comment.created_at && (
-                                                    <Badge
-                                                        variant="outline"
-                                                        title={`Modificato il ${dateTime.format(new Date(comment.updated_at))}`}
-                                                    >
-                                                        Modificato
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                        {(comment.can_update ||
-                                            comment.can_delete) && (
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        aria-label={`Azioni commento di ${comment.author.name}`}
-                                                        disabled={
-                                                            locked || !!editing
-                                                        }
-                                                    >
-                                                        <Ellipsis />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuGroup>
-                                                        {comment.can_update && (
-                                                            <DropdownMenuItem
-                                                                onSelect={() => {
-                                                                    setEditing(
-                                                                        comment,
-                                                                    );
-                                                                    setSaveError(
-                                                                        '',
-                                                                    );
-                                                                }}
-                                                            >
-                                                                <Pencil />
-                                                                Modifica
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                        {comment.can_delete && (
-                                                            <DropdownMenuItem
-                                                                variant="destructive"
-                                                                onSelect={() =>
-                                                                    setSelected(
-                                                                        comment,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Trash2 />
-                                                                Elimina
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                    </DropdownMenuGroup>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        )}
-                                    </div>
-                                    {editing?.id === comment.id ? (
-                                        <CommentEditor
-                                            key={comment.id}
-                                            content={comment.content}
-                                            label="Modifica commento"
-                                            submitLabel="Salva"
-                                            busy={busy}
-                                            onSave={(content) =>
-                                                save(content, comment)
-                                            }
-                                            onCancel={() => {
-                                                setEditing(null);
-                                                setSaveError('');
-                                            }}
+                                    {(thread.replies.length > 0 ||
+                                        replying === thread.id) && (
+                                        <div
+                                            className="pointer-events-none absolute top-9 bottom-4 left-4 border-l border-border"
+                                            aria-hidden="true"
                                         />
-                                    ) : (
-                                        <div className="comment-rich-text">
-                                            {renderToReactElement({
-                                                extensions: commentExtensions,
-                                                content: comment.content,
-                                            })}
+                                    )}
+                                    {message(thread, true)}
+                                    {(thread.replies.length > 0 ||
+                                        replying === thread.id) && (
+                                        <div className="ml-10 flex min-w-0 flex-col gap-4 pt-4 sm:ml-11">
+                                            {thread.replies.map((reply) => (
+                                                <div
+                                                    key={reply.id}
+                                                    className="relative min-w-0 before:absolute before:top-4 before:-left-6 before:w-6 before:border-t before:border-border last:after:absolute last:after:top-4 last:after:bottom-0 last:after:-left-6 last:after:w-px last:after:bg-card sm:before:-left-7 sm:before:w-7 sm:last:after:-left-7"
+                                                >
+                                                    {message(reply, false)}
+                                                </div>
+                                            ))}
+                                            {replying === thread.id && (
+                                                <div className="relative min-w-0 before:absolute before:top-4 before:-left-6 before:w-6 before:border-t before:border-border last:after:absolute last:after:top-4 last:after:bottom-0 last:after:-left-6 last:after:w-px last:after:bg-card sm:before:-left-7 sm:before:w-7 sm:last:after:-left-7">
+                                                    <CommentEditor
+                                                        key={`reply:${thread.id}`}
+                                                        label={`Rispondi a ${thread.author?.name}`}
+                                                        placeholder="Scrivi una risposta…"
+                                                        busy={busy}
+                                                        onSave={(content) =>
+                                                            save(
+                                                                content,
+                                                                undefined,
+                                                                thread.id,
+                                                            )
+                                                        }
+                                                        onCancel={cancel}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </li>
@@ -446,7 +540,7 @@ export function CommentsSection({
                                         type="button"
                                         disabled={
                                             locked ||
-                                            !!editing ||
+                                            composing ||
                                             query.page <= 1
                                         }
                                         onClick={() => go(query.page - 1)}
@@ -470,7 +564,7 @@ export function CommentsSection({
                                     >
                                         <button
                                             type="button"
-                                            disabled={locked || !!editing}
+                                            disabled={locked || composing}
                                             aria-label={`Pagina ${page}`}
                                             onClick={() => go(page)}
                                         >
@@ -485,7 +579,7 @@ export function CommentsSection({
                                         type="button"
                                         disabled={
                                             locked ||
-                                            !!editing ||
+                                            composing ||
                                             query.page >= lastPage
                                         }
                                         onClick={() => go(query.page + 1)}
@@ -510,8 +604,9 @@ export function CommentsSection({
                             Eliminare il commento?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Il commento verrà rimosso. Questa operazione non può
-                            essere annullata dall’interfaccia.
+                            Il messaggio verrà rimosso. Le eventuali risposte
+                            resteranno visibili. L’operazione non può essere
+                            annullata dall’interfaccia.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

@@ -8,19 +8,20 @@ import {
     ListOrdered,
     Link,
     Unlink,
+    Send,
 } from 'lucide-react';
 import { useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-    Field,
-    FieldDescription,
-    FieldGroup,
-    FieldLabel,
-} from '@/components/ui/field';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { Toggle } from '@/components/ui/toggle';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
     commentExtensions,
     emptyComment,
@@ -30,7 +31,8 @@ import {
 export function CommentEditor({
     content = emptyComment,
     label = 'Nuovo commento',
-    submitLabel = 'Pubblica commento',
+    submitLabel,
+    placeholder = 'Scrivi un commento…',
     busy = false,
     onSave,
     onCancel,
@@ -38,6 +40,7 @@ export function CommentEditor({
     content?: JSONContent;
     label?: string;
     submitLabel?: string;
+    placeholder?: string;
     busy?: boolean;
     onSave: (content: JSONContent) => Promise<void>;
     onCancel?: () => void;
@@ -54,7 +57,8 @@ export function CommentEditor({
                 role: 'textbox',
                 'aria-multiline': 'true',
                 'aria-label': label,
-                class: 'comment-rich-text min-h-28 p-3 outline-none',
+                'data-placeholder': placeholder,
+                class: 'comment-rich-text min-h-14 px-3 py-2 outline-none',
             },
         },
     });
@@ -100,7 +104,9 @@ export function CommentEditor({
         >
             <FieldGroup>
                 <Field>
-                    <FieldLabel id={`${id}-label`}>{label}</FieldLabel>
+                    <FieldLabel id={`${id}-label`} className="sr-only">
+                        {label}
+                    </FieldLabel>
                     <div className="overflow-hidden rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/50">
                         <div
                             className="flex flex-wrap items-center gap-1 border-b p-1"
@@ -229,10 +235,64 @@ export function CommentEditor({
                             )}
                         </div>
                         <EditorContent editor={editor} />
+                        <div className="flex min-h-10 items-center justify-end gap-2 px-2 pb-2">
+                            {(state?.length ?? 0) >= 4500 && (
+                                <span
+                                    className="mr-auto text-xs text-muted-foreground"
+                                    aria-live="polite"
+                                >
+                                    {state?.length ?? 0} / 5.000
+                                </span>
+                            )}
+                            {onCancel && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={busy}
+                                    onClick={onCancel}
+                                >
+                                    Annulla
+                                </Button>
+                            )}
+                            {submitLabel ? (
+                                <Button
+                                    type="submit"
+                                    size="sm"
+                                    disabled={
+                                        disabled ||
+                                        state?.empty ||
+                                        (state?.length ?? 0) > 5000 ||
+                                        linkOpen
+                                    }
+                                >
+                                    {busy && <Spinner />}
+                                    {submitLabel}
+                                </Button>
+                            ) : (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            type="submit"
+                                            size="icon"
+                                            aria-label="Invia commento"
+                                            disabled={
+                                                disabled ||
+                                                state?.empty ||
+                                                (state?.length ?? 0) > 5000 ||
+                                                linkOpen
+                                            }
+                                        >
+                                            {busy ? <Spinner /> : <Send />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        Invia commento
+                                    </TooltipContent>
+                                </Tooltip>
+                            )}
+                        </div>
                     </div>
-                    <FieldDescription aria-live="polite">
-                        {state?.length ?? 0} / 5.000 caratteri
-                    </FieldDescription>
                 </Field>
                 {linkOpen && (
                     <Field data-invalid={!!linkError}>
@@ -293,30 +353,6 @@ export function CommentEditor({
                     </Field>
                 )}
             </FieldGroup>
-            <div className="flex flex-wrap justify-end gap-2">
-                {onCancel && (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={onCancel}
-                    >
-                        Annulla
-                    </Button>
-                )}
-                <Button
-                    type="submit"
-                    disabled={
-                        disabled ||
-                        state?.empty ||
-                        (state?.length ?? 0) > 5000 ||
-                        linkOpen
-                    }
-                >
-                    {busy && <Spinner />}
-                    {submitLabel}
-                </Button>
-            </div>
         </form>
     );
 }
