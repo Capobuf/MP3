@@ -110,23 +110,38 @@ export function BudgetReport({
             aria-label="Anteprima report Budget"
         >
             <header className="budget-report-header">
-                <div>
+                <div className="budget-report-heading">
                     <p className="budget-report-eyebrow">
-                        MP3 · {tenantName} · {year}
+                        <span className="budget-report-brand">MP3</span>
+                        {tenantName}
                     </p>
                     <h1>{options.title}</h1>
-                    <p>Budget annuale · Elaborato il {createdAt}</p>
+                    <p className="budget-report-subtitle">
+                        Report economico · Budget annuale
+                    </p>
                 </div>
-                {options.logo && (
-                    <img src={options.logo} alt={`Logo ${tenantName}`} />
-                )}
+                <div className="budget-report-identity">
+                    {options.logo && (
+                        <img src={options.logo} alt={`Logo ${tenantName}`} />
+                    )}
+                    <p className="budget-report-year">
+                        <span>Esercizio</span>
+                        <strong>{year}</strong>
+                    </p>
+                </div>
             </header>
-            <p className="budget-report-scope">
-                {data.filters.join(' · ')}
-                <br />
-                {budget.entries.length} righe nel report · {totals.count} voci
-                incluse nei totali · {totals.incomplete} con dati incompleti.
-            </p>
+            <div className="budget-report-scope">
+                <div className="budget-report-scope-heading">
+                    <strong>Perimetro del report</strong>
+                    <span>Elaborato il {createdAt}</span>
+                </div>
+                <p>{data.filters.join(' · ')}</p>
+                <p className="budget-report-counts">
+                    <strong>{budget.entries.length}</strong> righe nel report ·{' '}
+                    <strong>{totals.count}</strong> voci incluse nei totali ·{' '}
+                    <strong>{totals.incomplete}</strong> con dati incompleti
+                </p>
+            </div>
             {options.kpis && (
                 <section
                     className="budget-report-block"
@@ -135,7 +150,7 @@ export function BudgetReport({
                     <h2>Riepilogo economico</h2>
                     <dl className="budget-report-kpis">
                         {metrics.map((metric) => (
-                            <div key={metric}>
+                            <div key={metric} data-metric={metric}>
                                 <dt>{budgetReportColumns[metric]}</dt>
                                 <dd>
                                     {amount(
@@ -160,7 +175,10 @@ export function BudgetReport({
                             options.orientation === 'portrait' ? 680 : 1008
                         }
                     />
-                    <table aria-label="Importi della ripartizione">
+                    <table
+                        className="budget-report-distribution"
+                        aria-label="Importi della ripartizione"
+                    >
                         <thead>
                             <tr>
                                 <th scope="col">Tipo</th>
@@ -216,7 +234,11 @@ export function BudgetReport({
                                         Stato
                                     </th>
                                     {options.columns.map((column) => (
-                                        <th scope="col" key={column}>
+                                        <th
+                                            scope="col"
+                                            key={column}
+                                            data-column={column}
+                                        >
                                             {budgetReportColumns[column]}
                                         </th>
                                     ))}
@@ -224,11 +246,17 @@ export function BudgetReport({
                             </thead>
                             <tbody>
                                 {budget.entries.map((entry) => (
-                                    <tr key={entry.id} data-entry-id={entry.id}>
+                                    <tr
+                                        key={entry.id}
+                                        data-entry-id={entry.id}
+                                        data-included={entry.included}
+                                    >
                                         <td>
-                                            {entry.included
-                                                ? 'Inclusa'
-                                                : 'Esclusa'}
+                                            <span className="budget-report-status-label">
+                                                {entry.included
+                                                    ? 'Inclusa'
+                                                    : 'Esclusa'}
+                                            </span>
                                             {entry.incomplete > 0 && (
                                                 <small>Dati incompleti</small>
                                             )}
@@ -236,6 +264,7 @@ export function BudgetReport({
                                         {options.columns.map((column) => (
                                             <td
                                                 key={column}
+                                                data-column={column}
                                                 className={
                                                     metrics.some(
                                                         (metric) =>
@@ -257,7 +286,7 @@ export function BudgetReport({
                         <h3>Totale delle voci incluse nel report</h3>
                         <dl className="budget-report-kpis">
                             {metrics.map((metric) => (
-                                <div key={metric}>
+                                <div key={metric} data-metric={metric}>
                                     <dt>{budgetReportColumns[metric]}</dt>
                                     <dd>
                                         {amount(
@@ -271,12 +300,16 @@ export function BudgetReport({
                     </div>
                 </section>
             )}
-            <footer className="budget-report-note">
+            <footer className="budget-report-note budget-report-footer">
                 Le voci escluse non contribuiscono ai totali. «Da inserire»
                 indica un importo mancante, distinto da zero. Le spese già
                 attribuite ad altre voci non vengono conteggiate due volte.
-                <br />
-                MP3 · {tenantName} · Budget {year}
+                <p className="budget-report-signature">
+                    <strong>MP3</strong>
+                    <span>
+                        {tenantName} · Budget {year}
+                    </span>
+                </p>
             </footer>
         </article>
     );

@@ -365,6 +365,11 @@ le pagine. L’anteprima nell’app mostra il documento continuo; quella di Chro
 mostra l’impaginazione effettiva. Le impostazioni del browser possono prevalere
 su formato e margini CSS. Il POC riguarda esclusivamente il Budget.
 
+Il report usa Inter Variable, distribuito localmente in `public/fonts/inter`
+con la licenza SIL Open Font License del [progetto Inter](https://github.com/rsms/inter).
+Il font viene caricato anche nel documento di stampa; nessun servizio font esterno
+è necessario. La palette del report resta chiara anche con il tema dark dell’app.
+
 Controlli del prototipo, con database PHP separato `testing`:
 
 ```bash

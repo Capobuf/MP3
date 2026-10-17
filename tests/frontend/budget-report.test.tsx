@@ -148,8 +148,8 @@ describe('Budget report', () => {
         expect(html).not.toContain('Ripartizione del Budget');
         expect(html).not.toContain('<button');
         expect(html).not.toContain('Fornitore');
-        expect(html.indexOf('scope="col">Allocato')).toBeLessThan(
-            html.indexOf('scope="col">Descrizione'),
+        expect(html.indexOf('data-column="allocated"')).toBeLessThan(
+            html.indexOf('data-column="description"'),
         );
     });
     it('renders the empty set explicitly instead of the entire annual budget', () => {

@@ -65,11 +65,24 @@ export function BudgetPrintDialog({
         (options.table && visibleColumns.length === 0);
     const print = useReactToPrint({
         contentRef,
+        fonts: [
+            {
+                family: 'MP3 Report',
+                source: 'url("/fonts/inter/InterVariable.woff2")',
+                weight: '100 900',
+                style: 'normal',
+            },
+        ],
         documentTitle: `${options.title} - ${tenantName}`,
         pageStyle: `@page { size: A4 ${options.orientation}; margin: 12mm; }`,
         onBeforePrint: async () => {
             if (!contentRef.current)
                 throw new Error('Anteprima non disponibile.');
+            const fonts = await document.fonts.load('400 12px "MP3 Report"');
+            if (fonts.length === 0)
+                throw new Error(
+                    'Font del report non disponibile. Ricarica la pagina e riprova.',
+                );
             await document.fonts.ready;
             await Promise.all(
                 Array.from(contentRef.current.querySelectorAll('img')).map(

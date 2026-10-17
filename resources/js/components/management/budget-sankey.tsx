@@ -122,7 +122,7 @@ export function BudgetSankey({
         return data.links.length ? (
             <Sankey
                 width={printWidth}
-                height={200}
+                height={140}
                 data={data}
                 node={node}
                 link={link}
