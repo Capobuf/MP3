@@ -58,6 +58,10 @@ class ExpenseWriter
         }
         $costCenterIds = $data['cost_center_ids'] ?? null;
         unset($data['cost_center_ids']);
+        // Saving an already empty line list must not erase directly recorded amounts.
+        if ($expense->exists && ! $hasLines && ! $contractEntry && ($data['lines'] ?? null) === []) {
+            unset($data['lines']);
+        }
         if (! array_key_exists('lines', $data)) {
             if ($contractEntry && $expense->allocated_amount === null && $expense->actual_amount === null) {
                 throw ValidationException::withMessages(['allocated_amount' => 'Nel contratto indica almeno un importo allocato o effettivo, anche zero.']);

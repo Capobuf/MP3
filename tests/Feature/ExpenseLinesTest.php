@@ -95,6 +95,10 @@ class ExpenseLinesTest extends TestCase
         $response = $this->postJson('/t/righe/expenses', ['title' => 'Pluriennale', 'year' => 2026, 'lines' => $lines])->assertCreated();
         $url = '/t/righe/expenses/'.$response->json('record.id');
         $expense = $this->tenant->expenses()->findOrFail($response->json('record.id'));
+        $this->patchJson($url, ['lines' => $lines])->assertOk()
+            ->assertJsonPath('record.allocated_amount', $expense->allocated_amount)
+            ->assertJsonPath('record.actual_amount', $expense->actual_amount)
+            ->assertJsonPath('record.variance', $expense->variance);
         $before = $expense->lines()->get()->toArray();
         // An unchanged shared period must not become an instruction to rewrite lines.
         $this->patchJson($url, ['title' => 'Rinominata', 'notes' => 'Note', 'year' => 2026, 'period_starts_on' => $response->json('record.period_starts_on'), 'period_ends_on' => $response->json('record.period_ends_on')])->assertOk();
