@@ -55,6 +55,92 @@ class SpreadsheetTransferTest extends TestCase
         return IOFactory::load($response->baseResponse->getFile()->getPathname());
     }
 
+    public function test_insertion_paths_preserve_missing_zero_and_negative_actual_amounts(): void
+    {
+        $tenant = $this->tenant();
+        $year = $tenant->budgetYears()->create(['year' => 2026]);
+        foreach ([null, '0.00', '-0.01'] as $actual) {
+            foreach (['form', 'direct', 'xlsx', 'budget-form', 'budget-xlsx'] as $path) {
+                $title = $path.'-'.($actual ?? 'NULL');
+                $data = ['title' => $title, 'year' => 2026, 'allocated_amount' => '100.00', 'actual_amount' => $actual];
+                if (in_array($path, ['form', 'budget-form'], true)) {
+                    $data['lines'] = [['description' => $title, 'type' => 'allocated', 'unit_price' => '100.00', 'year' => 2026]];
+                    if ($actual !== null) {
+                        $data['lines'][] = ['description' => $title, 'type' => 'actual', 'unit_price' => $actual, 'year' => 2026];
+                    }
+                }
+                if ($path === 'budget-form') {
+                    $data['budget_year_id'] = $year->id;
+                }
+                if (in_array($path, ['xlsx', 'budget-xlsx'], true)) {
+                    $resource = $path === 'xlsx' ? 'expenses' : 'budget';
+                    $row = $path === 'xlsx' ? [$title, 2026, null, null, null, null, null, null, '100.00', $actual, null]
+                        : [2026, 'new-expense', null, $title, '100.00', $actual, null];
+                    $file = $this->file($resource, [$row]);
+                    $preview = $this->postJson('/t/ambiente/'.$resource.'/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
+                    $this->postJson('/t/ambiente/'.$resource.'/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+                } else {
+                    $this->postJson('/t/ambiente/expenses', $data)->assertCreated();
+                }
+                $expense = $tenant->expenses()->where('title', $title)->sole();
+                $request = Request::create('/', 'GET', ['year' => 2026, 'search' => $title]);
+                $economic = ExpenseOverview::query($tenant, $request)->sole();
+                $kpis = ExpenseAnalytics::data($tenant, $request);
+                $book = $this->workbook('/t/ambiente/expenses/export.xlsx?year=2026&search='.urlencode($title));
+                $variance = $actual === null ? null : ($actual === '0.00' ? '-100.00' : '-100.01');
+                $expected = ['100.00', $actual, $variance];
+                $this->assertSame($expected, [$expense->allocated_amount, $expense->actual_amount, $expense->variance], $title);
+                $this->assertSame($expected, [$economic->allocated_amount, $economic->actual_amount, $economic->variance], $title);
+                $this->assertSame($expected, [$kpis['current']['allocated'], $kpis['current']['actual'], $kpis['current']['variance']], $title);
+                $this->assertSame($actual === null ? 1 : 0, $kpis['current']['incomplete']);
+                $this->assertSame($actual === null ? [] : [$variance], array_column($kpis['variances'], 'variance'));
+                $this->assertSame(100.0, $book->getSheet(0)->getCell('I2')->getValue());
+                $this->assertSame($actual === null ? null : (float) $actual, $book->getSheet(0)->getCell('J2')->getValue());
+                $this->get('/t/ambiente/expenses?year=2026&search='.urlencode($title))->assertInertia(fn (Assert $page) => $page
+                    ->where('expenses.data.0.actual_amount', $actual)->where('expenses.data.0.variance', $variance));
+                if (str_starts_with($path, 'budget-')) {
+                    $entry = collect(app(AnnualBudget::class)->snapshot($tenant, $year)['entries'])->firstWhere('source_id', $expense->id);
+                    $this->assertSame($expected, [$entry['allocated'], $entry['actual'], $entry['variance']]);
+                }
+            }
+        }
+    }
+
+    public function test_annual_lines_preserve_missing_types_and_known_zero_sums(): void
+    {
+        $tenant = $this->tenant();
+        $response = $this->postJson('/t/ambiente/expenses', ['title' => 'Annualità', 'year' => 2026, 'lines' => [
+            ['description' => 'Allocato', 'type' => 'allocated', 'unit_price' => '100.00', 'year' => 2026],
+            ['description' => 'Rettifica', 'type' => 'allocated', 'unit_price' => '-0.01', 'year' => 2026],
+            ['description' => 'Zero esplicito', 'type' => 'actual', 'unit_price' => '0.00', 'year' => 2027],
+            ['description' => 'Accredito', 'type' => 'allocated', 'unit_price' => '-12.35', 'quantity' => '0.5', 'year' => 2028],
+            ['description' => 'Storno', 'type' => 'allocated', 'unit_price' => '6.18', 'year' => 2028],
+        ]])->assertCreated();
+        $expense = $tenant->expenses()->findOrFail($response->json('record.id'));
+        $this->assertSame('99.99', $expense->allocated_amount);
+        $this->assertSame('0.00', $expense->actual_amount);
+        foreach ([2026 => ['99.99', null], 2027 => [null, '0.00'], 2028 => ['0.00', null]] as $selected => [$allocated, $actual]) {
+            $year = $tenant->budgetYears()->create(['year' => $selected]);
+            $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
+            $request = Request::create('/', 'GET', ['year' => $selected]);
+            $economic = ExpenseOverview::query($tenant, $request)->sole();
+            $this->assertSame([$allocated, $actual, null], [$economic->allocated_amount, $economic->actual_amount, $economic->variance]);
+            $kpis = ExpenseAnalytics::data($tenant, $request);
+            $this->assertSame([$allocated, $actual, null], [$kpis['current']['allocated'], $kpis['current']['actual'], $kpis['current']['variance']]);
+            $this->assertSame([], $kpis['variances']);
+            $breakdown = ExpenseOverview::breakdown(ExpenseOverview::query($tenant, $request));
+            $this->assertSame($actual === null ? 1 : 0, $breakdown['actual']['missing']);
+            $this->assertSame($actual === '0.00' ? 1 : 0, $breakdown['actual']['zero']);
+            $entry = app(AnnualBudget::class)->snapshot($tenant, $year)['entries'][0];
+            $this->assertSame([$allocated, $actual, null], [$entry['allocated'], $entry['actual'], $entry['variance']]);
+            foreach (['expenses' => ['I2', 'J2'], 'budget' => ['F2', 'G2']] as $resource => [$allocatedCell, $actualCell]) {
+                $sheet = $this->workbook('/t/ambiente/'.$resource.'/export.xlsx?year='.$selected)->getSheet(0);
+                $this->assertSame($allocated === null ? null : (float) $allocated, $sheet->getCell($allocatedCell)->getValue());
+                $this->assertSame($actual === null ? null : (float) $actual, $sheet->getCell($actualCell)->getValue());
+            }
+        }
+    }
+
     public static function lineLessAmounts(): array
     {
         return [

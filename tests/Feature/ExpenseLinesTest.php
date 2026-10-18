@@ -56,9 +56,9 @@ class ExpenseLinesTest extends TestCase
     public function test_either_type_can_be_absent_and_zero_allocated_means_positive_overspend(): void
     {
         foreach ([
-            [[], '0.00', '0.00', '0.00'],
-            [[$this->line('Preventivo', 'allocated', '75')], '75.00', '0.00', '-75.00'],
-            [[$this->line('Fattura', 'actual', '75')], '0.00', '75.00', '75.00'],
+            [[], null, null, null],
+            [[$this->line('Preventivo', 'allocated', '75')], '75.00', null, null],
+            [[$this->line('Fattura', 'actual', '75')], null, '75.00', null],
             [[$this->line('Preventivo zero', 'allocated', '0'), $this->line('Fattura', 'actual', '75')], '0.00', '75.00', '75.00'],
         ] as [$lines, $allocated, $actual, $variance]) {
             $this->postJson('/t/righe/expenses', ['title' => 'Tipi indipendenti', 'year' => 2026, 'lines' => $lines])
@@ -80,9 +80,9 @@ class ExpenseLinesTest extends TestCase
             ->assertJsonPath('record.variance', '3.00')->assertJsonPath('record.title', 'Servizi')->assertJsonPath('record.vendor_id', $vendor->id)->assertJsonPath('record.notes', 'Conserva');
         $this->patchJson($url, ['allocated_amount' => '999'])->assertUnprocessable()->assertJsonValidationErrors('lines');
         $this->patchJson($url, ['lines' => [$this->line('Prima', 'actual', '10')]])->assertOk()
-            ->assertJsonCount(1, 'record.lines')->assertJsonPath('record.allocated_amount', '0.00')->assertJsonPath('record.variance', '10.00');
+            ->assertJsonCount(1, 'record.lines')->assertJsonPath('record.allocated_amount', null)->assertJsonPath('record.variance', null);
         $this->patchJson($url, ['title' => 'Rinominata'])->assertOk()->assertJsonCount(1, 'record.lines');
-        $this->patchJson($url, ['lines' => []])->assertOk()->assertJsonCount(0, 'record.lines')->assertJsonPath('record.variance', '0.00');
+        $this->patchJson($url, ['lines' => []])->assertOk()->assertJsonCount(0, 'record.lines')->assertJsonPath('record.variance', null);
         $this->assertDatabaseCount('expense_lines', 0);
     }
 
@@ -108,6 +108,18 @@ class ExpenseLinesTest extends TestCase
             ->assertJsonPath('record.year', 2026)->assertJsonPath('record.lines.0.year', null)
             ->assertJsonPath('record.lines.1.year', 2027)->assertJsonPath('record.lines.1.total', '200.00')
             ->assertJsonPath('record.lines.1.period_starts_on', '2027-01-01');
+    }
+
+    public function test_unchanged_lines_preserve_historical_zero_until_an_explicit_edit(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Storica', 'year' => 2026, 'allocated_amount' => '100.00', 'actual_amount' => '0.00']);
+        $line = $expense->lines()->create([...$this->line('Preventivo', 'allocated', '100'), 'total' => '100.00', 'position' => 0]);
+        $url = '/t/righe/expenses/'.$expense->id;
+        $this->patchJson($url, ['lines' => [$this->line('Preventivo', 'allocated', '100.00', '1.0000')]])->assertOk()
+            ->assertJsonPath('record.actual_amount', '0.00')->assertJsonPath('record.variance', '-100.00')
+            ->assertJsonPath('record.lines.0.id', $line->id);
+        $this->patchJson($url, ['lines' => [$this->line('Preventivo', 'allocated', '110.00')]])->assertOk()
+            ->assertJsonPath('record.allocated_amount', '110.00')->assertJsonPath('record.actual_amount', null)->assertJsonPath('record.variance', null);
     }
 
     public function test_invalid_lines_are_rejected_atomically(): void
@@ -184,7 +196,7 @@ class ExpenseLinesTest extends TestCase
                 $this->assertNotEmpty($expense->lines);
                 foreach (['allocated' => 'allocated_amount', 'actual' => 'actual_amount'] as $type => $field) {
                     $lines = $expense->lines->where('type', $type);
-                    if ($expense->contract_id !== null && $lines->isEmpty()) {
+                    if ($lines->isEmpty()) {
                         $this->assertNull($expense->{$field});
                     } else {
                         $this->assertSame(Money::cents($expense->{$field}), $lines->sum(fn ($line) => Money::cents((string) $line->total)));

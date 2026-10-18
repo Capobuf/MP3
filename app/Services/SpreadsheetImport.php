@@ -74,7 +74,7 @@ class SpreadsheetImport
                 if ($status === 'new' && $resource === 'expenses') {
                     $expense = $tenant->expenses()->make();
                     $expense->setAttribute('id', -$row['row']);
-                    app(ExpenseWriter::class)->persist($expense, $data, $pending, false, true);
+                    app(ExpenseWriter::class)->persist($expense, $data, $pending, false);
                     if ($warning = ExpensePeriods::overlapWarning($expense, $pending)) {
                         $plan['warnings'][] = $warning;
                     }
@@ -325,7 +325,7 @@ class SpreadsheetImport
             }
             $data = $row['data'];
             if ($resource === 'expenses') {
-                app(ExpenseWriter::class)->create($tenant, $data, true);
+                app(ExpenseWriter::class)->create($tenant, $data);
 
                 continue;
             }
@@ -336,7 +336,7 @@ class SpreadsheetImport
                         'title' => $data['description'], 'year' => $year->year,
                         'allocated_amount' => $data['allocated_amount'], 'actual_amount' => $data['actual_amount'],
                         'cost_center_ids' => $data['cost_center_id'] === null ? [] : [$data['cost_center_id']],
-                    ], true);
+                    ]);
                     $data = ['type' => 'expense', 'source_id' => $expense->id, 'cost_center_id' => $data['cost_center_id']];
                 }
                 unset($data['year']);
