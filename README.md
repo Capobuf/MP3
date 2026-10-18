@@ -319,9 +319,10 @@ Laravel contengono disco e percorso da controllare e rimuovere tramite Storage.
 Non sono introdotti worker o retry automatici. I file mancanti restituiscono un
 404 controllato; i metadati possono comunque essere eliminati.
 
-I test dedicati sono in `tests/Feature/AttachmentTest.php`, usano il database
-separato `testing`, storage simulato e fixture Office/PDF valide. Usano
-`DatabaseMigrations` per osservare commit reali. Prima di eseguire la suite,
+I test dedicati sono in `tests/Feature/AttachmentTest.php` e `tests/Feature/UndoTest.php`,
+usano il database separato `testing`, storage simulato e fixture Office/PDF valide.
+Usano `DatabaseTruncation` per osservare commit reali, con pulizia anche a fine test
+per non lasciare dati ai casi successivi con `RefreshDatabase`. Prima di eseguire la suite,
 verificare `DB_DATABASE=testing`, `DB_URL` vuoto e assenza di cache che punti al
 database di sviluppo. Non eseguire reset o `migrate:fresh` sul database utente.
 Il ramo di partenza non contiene workflow GitHub Actions: i controlli elencati

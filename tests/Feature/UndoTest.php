@@ -6,7 +6,7 @@ use App\Models\Attachment;
 use App\Models\Tenant;
 use App\Models\UndoAction;
 use App\Models\User;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 class UndoTest extends TestCase
 {
-    use DatabaseMigrations;
+    use DatabaseTruncation;
 
     private Tenant $tenant;
 
@@ -23,6 +23,8 @@ class UndoTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Leave no committed data for subsequent RefreshDatabase tests.
+        $this->beforeApplicationDestroyed(fn () => $this->truncateTablesForAllConnections());
         Storage::fake('attachments');
         $this->tenant = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa']);
         $this->user = User::factory()->create(['undo_popup_seconds' => 30]);
