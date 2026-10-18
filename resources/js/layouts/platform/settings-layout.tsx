@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Building2, Mail, Users } from 'lucide-react';
+import { Archive, Building2, Mail, Users } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 import { Button } from '@/components/ui/button';
 
@@ -7,6 +7,7 @@ const sections = [
     { title: 'Ambienti', href: '/platform', icon: Building2 },
     { title: 'Utenti', href: '/platform/settings/users', icon: Users },
     { title: 'Email', href: '/platform/settings/email', icon: Mail },
+    { title: 'Backup', href: '/platform/settings/backups', icon: Archive },
 ];
 
 export default function PlatformSettingsLayout({

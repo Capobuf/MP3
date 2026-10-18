@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Tenant;
 use App\Services\ContractSchedule;
+use App\Support\Backups\BackupLock;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\Mailer\Transport\Smtp\SmtpTransport;
@@ -16,6 +17,11 @@ class SendContractReminders extends Command
     protected $description = 'Invia i promemoria contratti di oggi dalle 08:00 Europe/Rome, con retry automatici ogni ora fino alle 23:00';
 
     public function handle(ContractSchedule $schedule): int
+    {
+        return BackupLock::run(fn () => $this->send($schedule), false);
+    }
+
+    private function send(ContractSchedule $schedule): int
     {
         $tenants = Tenant::query()->where('contract_reminders->enabled', true);
         if (! $tenants->exists()) {

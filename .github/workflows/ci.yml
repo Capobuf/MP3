@@ -56,7 +56,7 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           extensions: mbstring, pdo_mysql, zip, xml, dom, xmlreader, xmlwriter, gd
           tools: composer:v2
           coverage: none
@@ -65,8 +65,8 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/composer/files
-          key: ${{ runner.os }}-composer-php83-${{ hashFiles('composer.lock') }}
-          restore-keys: ${{ runner.os }}-composer-php83-
+          key: ${{ runner.os }}-composer-php84-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-php84-
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --prefer-dist --no-progress --no-ansi

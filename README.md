@@ -6,11 +6,11 @@ Base applicativa Laravel 13 creata con lo starter kit React ufficiale. Include R
 
 - Docker Desktop con Docker Compose per l'ambiente di sviluppo consigliato
 - Composer 2 per installare inizialmente le dipendenze
-- In alternativa: PHP 8.3 o superiore, MySQL/MariaDB, Node.js e npm
+- In alternativa: PHP 8.4 o superiore, MySQL/MariaDB, Node.js e npm
 
 ## Sviluppo con Docker
 
-Laravel Sail configura due soli servizi: l'applicazione PHP 8.3 e MySQL 8.4. Da PowerShell:
+Laravel Sail configura due soli servizi: l'applicazione PHP 8.4 e MySQL 8.4. Da PowerShell:
 
 ```powershell
 composer install
@@ -408,3 +408,171 @@ Verifica mirata, con stop al primo errore:
 ```sh
 php artisan test --filter=ContractScheduleTest --stop-on-failure
 ```
+
+## Backup locali e ripristino
+
+**Impostazioni Piattaforma → Backup** è riservato ai super admin. Crea uno ZIP
+con il database MySQL completo, `storage/app/private` (allegati, foto e copie
+Undo), storage pubblico, codice, asset compilati, lockfile, configurazione e
+`.env`, inclusa `APP_KEY`. Non richiede Google Drive. Gli archivi sono in
+`storage/app/backups/platform`, fuori dai dischi pubblici e dal disco `local`
+che offre URL temporanei. Il download passa sempre da una rotta autenticata.
+Sono dati altamente sensibili: non pubblicare la directory e conserva anche
+le copie scaricate in un luogo protetto. Lo ZIP non ha una password separata.
+
+L’elenco permette di eliminare un archivio o selezionarne più di uno, anche tutti.
+La conferma mostra i nomi e avvisa che la cancellazione è definitiva, comprese
+le ultime copie disponibili. Vale sia per piattaforma sia per tenant, con gli
+stessi permessi del download; i dati attuali dell’applicazione non vengono eliminati.
+
+Spatie Laravel Backup **v10 richiede PHP 8.4**; Compose e CI usano questa
+versione. Sono necessari `zip`, `mysqldump` e, per ripristinare, il client
+`mysql` (presenti in Sail). Dopo l’aggiornamento installare i lockfile, applicare
+la migration delle impostazioni backup, compilare gli asset e pulire le cache.
+Il database e i volumi esistenti vanno conservati.
+
+```sh
+docker compose up -d --build laravel.test
+docker compose exec laravel.test composer install --no-interaction
+docker compose exec laravel.test npm ci
+docker compose exec laravel.test php artisan migrate --force
+docker compose exec laravel.test npm run build
+docker compose exec laravel.test php artisan optimize:clear
+```
+
+La programmazione globale è inizialmente **disabilitata**; si possono scegliere
+giornaliera o settimanale, giorno e orario **Europe/Rome**. Lo Scheduler controlla
+la scadenza ogni minuto e impedisce due esecuzioni dello stesso slot, compreso
+il ritorno all’ora solare. Come per qualsiasi schedule Laravel, il server deve
+eseguire `php artisan schedule:run` ogni minuto. Esempio di crontab con Sail:
+
+```cron
+* * * * * cd /percorso/MP3 && docker compose exec -T laravel.test php artisan schedule:run >> storage/logs/scheduler.log 2>&1
+```
+
+Nell’ambiente attuale `10.0.0.30:8000` i container sono autonomi: usare
+`docker exec mp3-app` al posto di `docker compose exec laravel.test`.
+Non avviare un secondo progetto Compose sugli stessi dati. Il runtime del
+container applicativo è stato aggiornato a PHP 8.4; per una futura ricreazione
+utilizzare il runtime Sail 8.4 indicato nel repository.
+
+Il comando operativo è `php artisan mp3:backup`. Usa Spatie per dump e ZIP,
+verifica il manifest e ogni file con SHA-256, poi pubblica l’archivio nell’elenco
+e applica la **DefaultStrategy Spatie**. La politica standard conserva tutti
+gli archivi per 7 giorni, poi copie giornaliere per 16 giorni, settimanali per
+8 settimane, mensili per 4 mesi e annuali per 2 anni; soglia di 5 GB per ambito,
+con conservazione dell’archivio più recente. Si configura in `config/backup.php`
+secondo Spatie. La stessa strategia vale per gli ZIP tenant. I comandi Spatie
+`backup:run` lavorano nella directory di staging `.pending`: usare `mp3:backup`
+per ottenere archivi verificati e visibili nell’applicazione.
+
+La schermata conserva ultimo avvio, esito ed errore sanitizzato, senza dump,
+SQL o credenziali nei log. Un errore di rotazione segnala un esito fallito anche
+se il nuovo ZIP, già verificato, è disponibile. Directory mancanti, file
+illeggibili, allegati incompleti, schema incompatibile e spazio insufficiente
+interrompono l’operazione. Cache, log, dipendenze ricostruibili, file temporanei
+e backup stessi sono esclusi. Un backup interrotto non viene pubblicato.
+
+Le scritture web e i comandi periodici di promemoria/Undo condividono un lock
+locale; backup e ripristino acquisiscono il lock esclusivo. I salvataggi durante
+l’operazione ricevono un errore temporaneo e possono essere ripetuti. Prima di
+un backup globale sospendere anche import SQL, deploy e scritture CLI esterne
+all’applicazione. Questa soluzione è per la singola installazione locale con
+storage condiviso del repository; storage remoti o più host richiedono un piano
+di snapshot dedicato. Non sono stati aggiunti container, code o worker.
+
+### Backup di un ambiente
+
+**Impostazioni ambiente → Backup** è accessibile agli stessi membri che oggi
+possono gestire l’ambiente. Lo ZIP versionato contiene snapshot dei dati di tutti
+gli anni, riferimenti annuali, Budget, stati, impostazioni dei promemoria,
+cronologia delle notifiche, commenti con risposte, allegati e metadati,
+identità degli utenti e associazioni. Riutilizza lo snapshot relazionale
+esistente e il controllo di ambiente vuoto di `TenantCsvTransfer`; non usa il
+CSV tecnico come backup e non ricalcola importi o riapplica le validazioni
+per nuovi record. La cronologia temporanea Undo rimane nel backup globale.
+
+Il ripristino web richiede uno ZIP compatibile e una conferma esplicita. Il
+tenant di destinazione deve essere privo di dati, cronologia Undo/promemoria e
+impostazioni personalizzate; gli stati iniziali predefiniti sono ammessi.
+Il nome e lo slug della destinazione restano invariati. Le associazioni già
+presenti devono essere comprese in quelle del backup: non si effettua un merge.
+File e riferimenti vengono verificati prima di inserire dati, le chiavi vengono
+rimappate e gli errori annullano la transazione e rimuovono i nuovi file.
+
+Il backup tenant **non contiene password, passkey, segreti 2FA, sessioni o
+privilegi globali**. Nella stessa installazione un’identità esistente viene
+riutilizzata solo se ID, nome ed email coincidono e la firma HMAC del backup è
+valida; l’account non viene aggiornato. Su un’altra installazione qualsiasi
+email già esistente è un conflitto che blocca il ripristino. Le identità nuove
+creano account non privilegiati, non verificati e con password casuale:
+si accede attraverso il recupero password Fortify. Altri tenant e account
+condivisi restano invariati. Una rotazione di `APP_KEY` rende l’archivio tenant
+un archivio proveniente da un’altra installazione ai fini del riuso identità.
+
+I limiti di upload e decompressione sono in `config/platform-backups.php`;
+anche i limiti PHP e del proxy devono consentire il caricamento. Per impostazione
+iniziale lo ZIP caricato non può superare 100 MB, i metadati JSON 64 MB, il
+contenuto estratto 10 GB e le voci ZIP 100.000. Gli archivi globali si ripristinano
+da filesystem senza upload web. I checksum rilevano corruzioni; importare
+archivi provenienti da installazioni affidabili.
+
+### Ripristino globale da terminale
+
+1. Preparare una destinazione con **database MySQL completamente vuoto**,
+   stessa versione principale MySQL, PHP 8.4 e storage privato/pubblico vuoto
+   (sono ammessi i `.gitignore`). Configurare `.env` con le credenziali della
+   destinazione. Non eseguire le migration prima del ripristino.
+2. Installare esattamente codice, configurazione e asset del backup, con le
+   dipendenze dei lockfile. Il manifest registra commit, impronta delle migration,
+   dimensioni e SHA-256 dei file. Il comando confronta anche il codice installato,
+   per rilevare differenze rispetto al commit dichiarato, compresi file modificati
+   non ancora committati.
+3. Copiare lo ZIP in un percorso privato e verificare:
+
+    ```sh
+    php artisan mp3:restore /percorso/backup.zip --verify
+    php artisan down
+    php artisan mp3:restore /percorso/backup.zip --force
+    ```
+
+4. Il comando importa il dump, ripristina lo storage e `.env`/`APP_KEY`, mantenendo
+   **connessione DB e APP_URL della destinazione**. Conserva il precedente `.env`
+   in `.env.before-restore`, con permessi privati. Se la configurazione del processo
+   o dell’orchestratore sovrascrive `.env`, allinearla prima di riaprire l’applicazione.
+5. In un nuovo processo eseguire `php artisan optimize:clear`, controllare utenti,
+   impostazioni cifrate e allegati, quindi `php artisan up`. Custodire o rimuovere
+   in modo sicuro `.env.before-restore` dopo il collaudo.
+
+Non è possibile ripristinare sopra un database popolato. L’import MySQL contiene
+DDL e non è transazionale: se il client o il filesystem fallisce dopo l’avvio,
+il comando restituisce errore e mantiene la destinazione in manutenzione.
+In tal caso ripartire da una nuova destinazione vuota, conservando l’archivio
+originale. Nessun ripristino globale è esposto via HTTP.
+
+### Collaudo della issue 21
+
+Il 18 ottobre 2026 è stato eseguito un backup/ripristino MySQL 8.4 reale su due
+database temporanei, con directory applicative separate nel container esistente.
+Verificati: database di destinazione corretto, utenti e privilegi, associazioni,
+impostazioni tenant, importi, byte degli allegati e dello storage privato,
+uguaglianza di `APP_KEY` e decifratura delle credenziali SMTP. Il comando di
+verifica non ha scritto dati; il restore ha mantenuto la manutenzione fino
+all’apertura esplicita. Database e fixture temporanei sono stati rimossi al
+termine. Questo collaudo completo non viene aggiunto alla CI.
+
+Verificati anche dal browser: creazione/download di entrambi gli ZIP,
+salvataggio della pianificazione, restore tenant vuoto e pagina mobile.
+La suite MySQL completa passa con 347 test e 7.623 asserzioni; passano anche
+build, TypeScript, lint, Pint e PHPStan.
+
+`tests/Feature/BackupTest.php` copre round-trip tenant, isolamento, permessi,
+identità in conflitto, firma, schema, ZIP alterati/traversal, file mancanti,
+rollback con pulizia file, pianificazione e rotazione. Controlli rapidi:
+
+```sh
+php artisan test --filter=BackupTest --stop-on-error --stop-on-failure
+```
+
+Per l’intera suite usare il database separato `testing`, mai quello operativo:
+`php artisan test --stop-on-error --stop-on-failure`.

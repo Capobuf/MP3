@@ -42,3 +42,8 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+
+/storage/app/backups
+/storage/app/backup-temp
+/storage/framework/backup.lock
+/.env.before-restore
