@@ -8,6 +8,7 @@ export function ExpensePeriodFields({
     disabled,
     errors,
     showPeriod,
+    showYear = true,
     idPrefix = 'entity',
     yearLabel = 'Anno di imputazione economica',
     compact = false,
@@ -17,6 +18,7 @@ export function ExpensePeriodFields({
     disabled: boolean;
     errors: Record<string, string[]>;
     showPeriod: boolean;
+    showYear?: boolean;
     idPrefix?: string;
     yearLabel?: string;
     compact?: boolean;
@@ -53,50 +55,54 @@ export function ExpensePeriodFields({
                         </FieldError>
                     </Field>
                 ))}
-            <Field
-                className="min-w-0 gap-2"
-                data-invalid={!!errors.year}
-                data-disabled={disabled}
-            >
-                <FieldLabel
-                    className={compact ? 'sr-only' : undefined}
-                    id={`${idPrefix}-year-label`}
-                    htmlFor={`${idPrefix}-year`}
+            {showYear && (
+                <Field
+                    className="min-w-0 gap-2"
+                    data-invalid={!!errors.year}
+                    data-disabled={disabled}
                 >
-                    {yearLabel}
-                </FieldLabel>
-                <Input
-                    type="number"
-                    min={2000}
-                    max={2100}
-                    required
-                    id={`${idPrefix}-year`}
-                    value={values.year}
-                    onChange={(event) => onChange('year', event.target.value)}
-                    disabled={disabled}
-                    aria-labelledby={`${idPrefix}-year-label`}
-                    aria-invalid={!!errors.year}
-                    aria-describedby={
-                        errors.year
-                            ? `${idPrefix}-year-error`
-                            : compact
-                              ? undefined
-                              : `${idPrefix}-year-description`
-                    }
-                />
-                {!compact && (
-                    <p
-                        id={`${idPrefix}-year-description`}
-                        className="text-sm text-muted-foreground"
-                        role="status"
+                    <FieldLabel
+                        className={compact ? 'sr-only' : undefined}
+                        id={`${idPrefix}-year-label`}
+                        htmlFor={`${idPrefix}-year`}
                     >
-                        {`Importo interamente imputato al ${values.year}.`}
-                    </p>
-                )}
-                <FieldError id={`${idPrefix}-year-error`}>
-                    {errors.year?.[0]}
-                </FieldError>
-            </Field>
+                        {yearLabel}
+                    </FieldLabel>
+                    <Input
+                        type="number"
+                        min={2000}
+                        max={2100}
+                        required
+                        id={`${idPrefix}-year`}
+                        value={values.year}
+                        onChange={(event) =>
+                            onChange('year', event.target.value)
+                        }
+                        disabled={disabled}
+                        aria-labelledby={`${idPrefix}-year-label`}
+                        aria-invalid={!!errors.year}
+                        aria-describedby={
+                            errors.year
+                                ? `${idPrefix}-year-error`
+                                : compact
+                                  ? undefined
+                                  : `${idPrefix}-year-description`
+                        }
+                    />
+                    {!compact && (
+                        <p
+                            id={`${idPrefix}-year-description`}
+                            className="text-sm text-muted-foreground"
+                            role="status"
+                        >
+                            {`Importo interamente imputato al ${values.year}.`}
+                        </p>
+                    )}
+                    <FieldError id={`${idPrefix}-year-error`}>
+                        {errors.year?.[0]}
+                    </FieldError>
+                </Field>
+            )}
         </>
     );
 }

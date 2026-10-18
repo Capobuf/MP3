@@ -292,7 +292,7 @@ export function ExpenseLines({
             filter === 'actual' ? 'actual' : 'allocated',
             defaultDescription,
         );
-        line.year = defaultPeriod?.year ?? String(economicContext!.year);
+        line.year = String(economicContext!.year);
         line.period_starts_on = null;
         line.period_ends_on = null;
         pendingFocus.current = line.key;

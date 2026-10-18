@@ -731,6 +731,10 @@ export function EntityForm({
                                                 onChange={change}
                                                 disabled={formBusy}
                                                 errors={errors}
+                                                showYear={
+                                                    !current.detailed ||
+                                                    current.lines.length === 0
+                                                }
                                                 showPeriod={
                                                     !contractLines &&
                                                     (!!current.values

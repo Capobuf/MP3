@@ -67,6 +67,7 @@ export function ExpenseLinesCard({
     )?.[1][0];
 
     function start(add: boolean) {
+        if (lock.current) return;
         const next = draftLines(expense);
         setErrors({});
         setFocusKey(undefined);
@@ -135,6 +136,7 @@ export function ExpenseLinesCard({
                                 type="button"
                                 variant="outline"
                                 size="sm"
+                                disabled={saving}
                                 onClick={() => start(false)}
                             >
                                 Gestisci righe
@@ -142,7 +144,7 @@ export function ExpenseLinesCard({
                             <Button
                                 type="button"
                                 size="sm"
-                                disabled={lines.length >= 500}
+                                disabled={saving || lines.length >= 500}
                                 onClick={() => start(true)}
                             >
                                 <Plus data-icon="inline-start" />
@@ -205,29 +207,50 @@ export function ExpenseLinesCard({
                             key="reading"
                             defaultPeriod={defaultPeriod}
                             readOnly
-                            onSaveLine={(key, field, value) =>
-                                saveInlineRecord(url, {
-                                    lines: lines.map((line, index) => {
-                                        const data = lineData(
-                                            line,
-                                            expense.year,
-                                        );
-                                        return String(line.id ?? index) === key
-                                            ? {
-                                                  ...data,
-                                                  [field]: [
-                                                      'unit_price',
-                                                      'quantity',
-                                                  ].includes(field)
-                                                      ? decimalInput(value)
-                                                      : field.endsWith('_on')
-                                                        ? value || null
-                                                        : value,
-                                              }
-                                            : data;
-                                    }),
-                                })
-                            }
+                            disabled={saving}
+                            onSaveLine={async (key, field, value) => {
+                                if (lock.current) return;
+                                lock.current = true;
+                                setSaving(true);
+                                onEditingChange(true);
+                                try {
+                                    await saveInlineRecord(
+                                        url,
+                                        {
+                                            lines: lines.map((line, index) => {
+                                                const data = lineData(
+                                                    line,
+                                                    expense.year,
+                                                );
+                                                return String(
+                                                    line.id ?? index,
+                                                ) === key
+                                                    ? {
+                                                          ...data,
+                                                          [field]: [
+                                                              'unit_price',
+                                                              'quantity',
+                                                          ].includes(field)
+                                                              ? decimalInput(
+                                                                    value,
+                                                                )
+                                                              : field.endsWith(
+                                                                      '_on',
+                                                                  )
+                                                                ? value || null
+                                                                : value,
+                                                      }
+                                                    : data;
+                                            }),
+                                        },
+                                        navigation.allow,
+                                    );
+                                } finally {
+                                    lock.current = false;
+                                    setSaving(false);
+                                    onEditingChange(false);
+                                }
+                            }}
                             showSummary={false}
                             showHeading={false}
                             contractMode={!!expense.contract_id}
