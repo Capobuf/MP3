@@ -13,7 +13,7 @@ class SendContractReminders extends Command
 {
     protected $signature = 'contracts:remind';
 
-    protected $description = 'Invia i promemoria contratti di oggi alle 08:00 Europe/Rome';
+    protected $description = 'Invia i promemoria contratti di oggi dalle 08:00 Europe/Rome, con retry automatici ogni ora fino alle 23:00';
 
     public function handle(ContractSchedule $schedule): int
     {

@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Notifications\GeneralNotification;
 use App\Services\ContractSchedule;
 use Carbon\CarbonImmutable;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\DB;
@@ -194,7 +195,7 @@ class ContractScheduleTest extends TestCase
 
     public function test_failure_retries_only_failed_recipient_and_pending_crash_is_not_resent(): void
     {
-        $this->contract();
+        $contract = $this->contract();
         $this->save($this->settings(['external_emails' => ['z-failure@example.test']]));
         $this->travelTo(CarbonImmutable::parse('2026-11-01 08:00', ContractSchedule::TIMEZONE));
         $fake = new class extends NotificationFake
@@ -218,12 +219,55 @@ class ContractScheduleTest extends TestCase
         $this->assertDatabaseHas('contract_reminder_deliveries', ['recipient' => 'member@example.test', 'status' => 'sent']);
         $this->assertDatabaseHas('contract_reminder_deliveries', ['recipient' => 'z-failure@example.test', 'status' => 'failed', 'sent_at' => null]);
         $this->postJson('/t/alfa/settings/contract-reminders/preview', $this->settings(['external_emails' => ['z-failure@example.test']]))->assertOk()->assertJsonCount(1, 'notifications');
+        $this->travelTo(CarbonImmutable::parse('2026-11-01 10:00', ContractSchedule::TIMEZONE));
+        $this->contract(['ends_on' => '2026-11-04']);
+        $settings = $this->settings(['days' => [3, 7], 'external_emails' => ['z-failure@example.test', 'new@example.test']]);
+        $this->postJson('/t/alfa/settings/contract-reminders/preview', $settings)->assertOk()
+            ->assertJsonPath('notifications.0.recipient', 'z-failure@example.test')
+            ->assertJsonPath('notifications.0.date', '2026-11-01')
+            ->assertJsonCount(1, 'notifications.0.contracts')
+            ->assertJsonPath('notifications.0.contracts.0.id', $contract->id);
+        $this->putJson('/t/alfa/settings/contract-reminders', $settings)->assertOk();
         Notification::fake();
-        $this->assertSame(1, $this->schedule->send($this->tenant));
+        $this->assertSame(1, $this->schedule->send($this->tenant->fresh()));
         Notification::assertSentOnDemandTimes(GeneralNotification::class, 1);
+        Notification::assertSentOnDemand(GeneralNotification::class, fn ($n, $channels, $recipient) => $recipient->routes['mail'] === 'z-failure@example.test' && ! str_contains($n->body, '04/11/2026'));
         DB::table('contract_reminder_deliveries')->update(['status' => 'pending', 'sent_at' => null]);
         $this->assertSame(0, $this->schedule->send($this->tenant));
         $this->assertSame(4, $this->schedule->preview($this->tenant, $this->settings())['pending']);
+    }
+
+    public function test_failed_monthly_delivery_survives_settings_save_but_not_the_day_boundary(): void
+    {
+        $this->contract();
+        $settings = $this->settings(['mode' => 'monthly']);
+        DB::table('contract_reminder_deliveries')->insert([
+            'tenant_id' => $this->tenant->id, 'recipient' => $this->user->email,
+            'notification_key' => 'monthly:2026-11', 'status' => 'failed',
+        ]);
+        $this->travelTo(CarbonImmutable::parse('2026-11-01 10:00', ContractSchedule::TIMEZONE));
+        $this->putJson('/t/alfa/settings/contract-reminders', $settings)->assertOk();
+        $this->postJson('/t/alfa/settings/contract-reminders/preview', $settings)->assertOk()->assertJsonCount(1, 'notifications');
+        $this->assertSame(1, $this->schedule->send($this->tenant->fresh()));
+        $this->assertSame(0, $this->schedule->send($this->tenant->fresh()));
+        DB::table('contract_reminder_deliveries')->update(['status' => 'failed', 'sent_at' => null]);
+        $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00', ContractSchedule::TIMEZONE));
+        $this->assertSame(0, $this->schedule->send($this->tenant->fresh()));
+        $this->postJson('/t/alfa/settings/contract-reminders/preview', $settings)->assertOk()->assertJsonCount(0, 'notifications');
+        Notification::assertSentOnDemandTimes(GeneralNotification::class, 1);
+    }
+
+    public function test_scheduler_retries_hourly_only_between_eight_and_twenty_three_in_rome(): void
+    {
+        foreach (['2026-03-29', '2026-10-25'] as $day) {
+            foreach (['07:00' => false, '08:00' => true, '09:00' => true, '10:30' => false, '23:00' => true, '23:01' => false] as $time => $expected) {
+                $this->travelTo(CarbonImmutable::parse($day.' '.$time, ContractSchedule::TIMEZONE));
+                $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains($event->command ?? '', 'contracts:remind'));
+                $this->assertNotNull($event);
+                $this->assertTrue($event->withoutOverlapping);
+                $this->assertSame($expected, $event->isDue($this->app) && $event->filtersPass($this->app), $day.' '.$time);
+            }
+        }
     }
 
     public function test_command_scans_enabled_tenants_independently_of_browser_year(): void

@@ -167,7 +167,8 @@ export default function ContractReminders({
                             <CardDescription>
                                 Configurazione condivisa da tutto l’ambiente.
                                 Invio alle 08:00, fuso Europe/Rome, con l’SMTP
-                                della piattaforma.
+                                della piattaforma. Gli invii falliti vengono
+                                ritentati ogni ora fino alle 23:00.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>

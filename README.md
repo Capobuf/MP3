@@ -370,9 +370,11 @@ invio. La preview usa lo stesso calendario del comando, sui dati del form e su u
 orizzonte di 12 mesi, senza salvare né spedire.
 
 L’invio è fissato alle **08:00 Europe/Rome**, anche quando il resto dell’app usa
-UTC. I cambi ora legale sono gestiti dal fuso; non si recuperano giorni trascorsi.
+UTC, con retry automatici ogni ora fino alle **23:00** per gli invii falliti.
+I cambi ora legale sono gestiti dal fuso; non si recuperano giorni trascorsi.
 Un salvataggio rende effettive le nuove regole da quel momento, senza recuperare
-le soglie già superate. Il comando usa l’SMTP della piattaforma e rifiuta trasporti
+le soglie già superate; restano ritentabili le notifiche del giorno già tentate
+e fallite per quel destinatario. Il comando usa l’SMTP della piattaforma e rifiuta trasporti
 `log`/`array` o fallback: configurare anche `APP_URL` con l’URL raggiungibile dai
 destinatari. Ogni destinatario riceve una email separata.
 

@@ -15,4 +15,4 @@ Artisan::command('undo:prune', function () {
 })->purpose('Rimuove la cronologia di annullamento scaduta e le copie private degli allegati');
 Schedule::command('undo:prune')->hourly()->withoutOverlapping();
 
-Schedule::command('contracts:remind')->dailyAt('08:00')->timezone(ContractSchedule::TIMEZONE)->withoutOverlapping();
+Schedule::command('contracts:remind')->cron('0 8-23 * * *')->timezone(ContractSchedule::TIMEZONE)->withoutOverlapping();

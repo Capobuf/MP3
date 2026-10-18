@@ -62,7 +62,8 @@ class ContractSchedule
         $saved = $this->settings($tenant);
         if (array_intersect_key($saved, self::DEFAULTS) == $settings) {
             $settings = $saved;
-            $now = $now->startOfDay();
+        } else {
+            $settings['starts_at'] = $now->toIso8601String();
         }
         $recipients = $this->recipients($tenant, $settings);
 
@@ -70,7 +71,7 @@ class ContractSchedule
             'enabled' => $settings['enabled'], 'recipients' => $recipients,
             'pending' => DB::table('contract_reminder_deliveries')->where('tenant_id', $tenant->id)->where('status', 'pending')->count(),
             'timezone' => self::TIMEZONE, 'until' => $until->toDateString(),
-            'notifications' => $this->calendar($tenant, $settings, $now, $until),
+            'notifications' => $this->calendar($tenant, $settings, $now->startOfDay(), $until),
         ];
     }
 
@@ -79,9 +80,7 @@ class ContractSchedule
      */
     public function calendar(Tenant $tenant, array $settings, CarbonImmutable $from, CarbonImmutable $until): array
     {
-        if (isset($settings['starts_at'])) {
-            $from = $from->max(CarbonImmutable::parse($settings['starts_at']));
-        }
+        $startsAt = isset($settings['starts_at']) ? CarbonImmutable::parse($settings['starts_at']) : $from;
         $recipients = $this->recipients($tenant, $settings);
         if (! $settings['enabled'] || $recipients === []) {
             return [];
@@ -89,6 +88,8 @@ class ContractSchedule
         $contracts = $tenant->contracts()->get()->keyBy('id');
         $eligible = $contracts->filter(fn (Contract $c) => $c->ends_on !== null && $c->year !== null && $c->year === CarbonImmutable::parse($c->getRawOriginal('ends_on'))->year);
         $sent = DB::table('contract_reminder_deliveries')->where('tenant_id', $tenant->id)->where('status', '!=', 'failed')->get()
+            ->groupBy('recipient')->map(fn ($rows) => $rows->pluck('notification_key')->flip());
+        $failed = DB::table('contract_reminder_deliveries')->where('tenant_id', $tenant->id)->where('status', 'failed')->get()
             ->groupBy('recipient')->map(fn ($rows) => $rows->pluck('notification_key')->flip());
         $groups = [];
         foreach ($eligible as $contract) {
@@ -116,6 +117,10 @@ class ContractSchedule
                     continue;
                 }
                 foreach ($recipients as $recipient) {
+                    // Only an already attempted notification may bypass a later settings save.
+                    if ($date->lt($startsAt) && ! isset($failed[$recipient][$key])) {
+                        continue;
+                    }
                     $batchKey = $settings['mode'] === 'monthly' ? $key : 'expiry-day:'.$date->toDateString();
                     if (isset($sent[$recipient][$key]) || isset($sent[$recipient][$batchKey])) {
                         continue;
