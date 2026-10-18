@@ -9,7 +9,7 @@ use App\Models\Project;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\AttachmentFiles;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Http\Testing\File;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +22,7 @@ use ZipArchive;
 class AttachmentTest extends TestCase
 {
     // Physical cleanup must be observed after a real commit, without a wrapping test transaction.
-    use DatabaseMigrations;
+    use DatabaseTruncation;
 
     private Tenant $tenant;
 
@@ -33,6 +33,8 @@ class AttachmentTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Leave no committed data for subsequent RefreshDatabase tests.
+        $this->beforeApplicationDestroyed(fn () => $this->truncateTablesForAllConnections());
         Storage::fake('attachments');
         $this->tenant = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa']);
         $this->other = Tenant::create(['name' => 'Beta', 'slug' => 'beta']);
