@@ -570,27 +570,18 @@ function SortableBudgetRow({
                 >
                     {cell.column.id === 'expand' ? (
                         <div className="flex items-center">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        ref={setActivatorNodeRef}
-                                        size="icon"
-                                        variant="ghost"
-                                        className="cursor-grab touch-none active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-40"
-                                        {...attributes}
-                                        {...listeners}
-                                        aria-disabled={disabled}
-                                        aria-label={`Riordina ${row.original.description}${disabled ? `: ${disabledReason}` : ''}`}
-                                    >
-                                        <GripVertical />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    {disabled
-                                        ? disabledReason
-                                        : 'Trascina nel gruppo. Da tastiera: Spazio, frecce, Spazio per confermare, Esc per annullare.'}
-                                </TooltipContent>
-                            </Tooltip>
+                            <Button
+                                ref={setActivatorNodeRef}
+                                size="icon"
+                                variant="ghost"
+                                className="cursor-grab touch-none active:cursor-grabbing aria-disabled:cursor-default aria-disabled:opacity-40"
+                                {...attributes}
+                                {...listeners}
+                                aria-disabled={disabled}
+                                aria-label={`Riordina ${row.original.description}${disabled ? `: ${disabledReason}` : ''}`}
+                            >
+                                <GripVertical />
+                            </Button>
                             {renderCell(cell)}
                         </div>
                     ) : (
