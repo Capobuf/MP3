@@ -165,7 +165,7 @@ class AnnualContractImport
                 ->map(fn ($line) => ['description' => $line['description'], 'quantity' => $line['quantity'], 'unit_price' => $line['unit_price'], 'type' => 'allocated', 'year' => $target->year, 'period_starts_on' => null, 'period_ends_on' => null])->values()->all();
         }
         $validated = Validator::make($data, ExpenseRequest::forTenant($tenant), (new ExpenseRequest)->messages())->validate();
-        $created = app(ExpenseWriter::class)->create($tenant, $validated, true);
+        $created = app(ExpenseWriter::class)->create($tenant, $validated);
         if ($created->allocated_amount !== $expense['allocated']) {
             throw ValidationException::withMessages([$type.'s' => 'Gli importi sorgente non corrispondono a prezzi e quantità. Correggi la spesa prima di importarla.']);
         }

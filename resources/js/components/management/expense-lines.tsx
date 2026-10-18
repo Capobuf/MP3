@@ -145,8 +145,8 @@ export function ExpenseLines({
     ).length;
     const filtered = filter !== 'all' || search !== '';
     const totals: Record<ExpenseLine['type'], bigint | null> = {
-        allocated: contractMode ? null : 0n,
-        actual: contractMode ? null : 0n,
+        allocated: null,
+        actual: null,
     };
     const incomplete = new Set<ExpenseLine['type']>();
     for (const line of lines) {

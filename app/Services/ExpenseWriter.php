@@ -12,12 +12,12 @@ use Illuminate\Validation\ValidationException;
 class ExpenseWriter
 {
     /** @param array<string, mixed> $data Validated expense fields. */
-    public function create(Tenant $tenant, array $data, bool $preserveMissing = false): Expense
+    public function create(Tenant $tenant, array $data): Expense
     {
-        return DB::transaction(function () use ($data, $tenant, $preserveMissing): Expense {
+        return DB::transaction(function () use ($data, $tenant): Expense {
             $expense = $tenant->expenses()->make();
             ExpensePeriods::lockContracts($tenant, [$data['contract_id'] ?? null]);
-            $this->persist($expense, $data, preserveMissing: $preserveMissing);
+            $this->persist($expense, $data);
 
             return $expense;
         });
@@ -27,7 +27,7 @@ class ExpenseWriter
      * @param  array<string, mixed>  $data
      * @param  array<int, Expense>  $pending
      */
-    public function persist(Expense $expense, array $data, array $pending = [], bool $write = true, bool $preserveMissing = false): void
+    public function persist(Expense $expense, array $data, array $pending = [], bool $write = true): void
     {
         if ($expense->exists && $expense->source_expense_id !== null && isset($data['year']) && (int) $data['year'] !== $expense->year) {
             throw ValidationException::withMessages(['year' => 'L’anno di una spesa importata non può essere cambiato. Importala nel Budget dell’anno successivo.']);
@@ -133,21 +133,24 @@ class ExpenseWriter
             }
         }
         unset($data['lines']);
-        // Missing types are unknown for contracts; retain the ordinary expense defaults.
+        $existingLines = $hasLines ? $expense->lines()->get() : collect();
+        $unchangedLines = $hasLines && $existingLines->count() === count($lines)
+            && $existingLines->every(fn ($line, $index) => ! $line->fill($lines[$index])->isDirty());
         foreach (['allocated' => 'allocated_amount', 'actual' => 'actual_amount'] as $type => $field) {
             $hasType = in_array($type, array_column($lines, 'type'), true);
-            $data[$field] = ! $hasType &&
-                ($preserveMissing || $expense->contract_id !== null || $expense->getRawOriginal('contract_id') !== null ||
-                    ($hasLines && $expense->getRawOriginal($field) === null))
-                ? null : Money::decimal($totals[$type]);
+            // An identical save must not reclassify historical amounts of unknown provenance.
+            $data[$field] = $unchangedLines ? $expense->getRawOriginal($field)
+                : ($hasType ? Money::decimal($totals[$type]) : null);
         }
         $expense->fill($data);
         if (! $write) {
             return;
         }
         $expense->save();
-        $expense->lines()->delete();
-        $expense->lines()->createMany($lines);
+        if (! $unchangedLines) {
+            $expense->lines()->delete();
+            $expense->lines()->createMany($lines);
+        }
         if ($costCenterIds !== null) {
             $expense->costCenters()->sync($costCenterIds);
         }

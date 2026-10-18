@@ -27,11 +27,8 @@ final class ExpenseOverview
                 SUM(CASE WHEN type = 'allocated' THEN total END) as allocated_amount,
                 SUM(CASE WHEN type = 'actual' THEN total END) as actual_amount")
             ->groupBy('expense_id')->groupByRaw('COALESCE(expense_lines.year, expenses.year)');
-        $detailed = DB::table('expenses')->joinSub($amounts, 'amounts', 'amounts.expense_id', '=', 'expenses.id')->select($columns)->addSelect('amounts.year');
-        foreach (['allocated', 'actual'] as $type) {
-            $field = $type.'_amount';
-            $detailed->selectRaw("CASE WHEN expenses.contract_id IS NULL AND expenses.$field IS NOT NULL THEN COALESCE(amounts.$field, 0) ELSE amounts.$field END as $field");
-        }
+        $detailed = DB::table('expenses')->joinSub($amounts, 'amounts', 'amounts.expense_id', '=', 'expenses.id')
+            ->select($columns)->addSelect('amounts.year', 'amounts.allocated_amount', 'amounts.actual_amount');
 
         return Expense::query()->fromSub($legacy->unionAll($detailed), 'expenses');
     }
