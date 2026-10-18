@@ -11,6 +11,7 @@ export function TenantSettingsNav({ slug }: { slug: string }) {
             {[
                 ['project-statuses', 'Stati dei progetti'],
                 ['users', 'Utenti'],
+                ['contract-reminders', 'Promemoria contratti'],
                 ['data', 'Importazione ed esportazione'],
             ].map(([path, title]) => {
                 const href = `/t/${slug}/settings/${path}`;

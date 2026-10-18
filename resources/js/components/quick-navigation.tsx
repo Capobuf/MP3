@@ -121,7 +121,10 @@ export function QuickNavigation() {
     const groups: { heading: string; items: NavItem[] }[] = [
         {
             heading: 'Navigazione',
-            items: getPrimaryNavItems(currentTenant, auth.user.is_super_admin),
+            items: getPrimaryNavItems(
+                currentTenant,
+                auth.user.is_super_admin,
+            ).flatMap((item) => [item, ...(item.items ?? [])]),
         },
         {
             heading: 'Ambienti',

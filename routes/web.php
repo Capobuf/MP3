@@ -11,6 +11,7 @@ use App\Http\Controllers\Tenant\AttachmentController;
 use App\Http\Controllers\Tenant\BudgetController;
 use App\Http\Controllers\Tenant\CatalogController;
 use App\Http\Controllers\Tenant\CommentController;
+use App\Http\Controllers\Tenant\ContractScheduleController;
 use App\Http\Controllers\Tenant\CostCenterController;
 use App\Http\Controllers\Tenant\CreationOptionsController;
 use App\Http\Controllers\Tenant\ExpenseController;
@@ -57,6 +58,12 @@ Route::middleware('auth')->group(function () {
             Route::get('/', [TenantUserSettingsController::class, 'index'])->name('users.index');
             Route::post('/', [TenantUserSettingsController::class, 'store'])->middleware('throttle:10,1')->name('users.store');
             Route::delete('{user}', [TenantUserSettingsController::class, 'destroy'])->name('users.destroy');
+        });
+        Route::get('scadenzario', [ContractScheduleController::class, 'index'])->name('contract-schedule.index');
+        Route::prefix('settings/contract-reminders')->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('/', [ContractScheduleController::class, 'edit'])->name('contract-reminders.edit');
+            Route::put('/', [ContractScheduleController::class, 'update'])->name('contract-reminders.update');
+            Route::post('preview', [ContractScheduleController::class, 'preview'])->name('contract-reminders.preview');
         });
         Route::get('settings', fn (Tenant $tenant) => to_route('tenant.project-statuses.index', $tenant));
         Route::get('settings/project-statuses', [ProjectStatusController::class, 'index'])->name('project-statuses.index');

@@ -1,3 +1,4 @@
+import type { TimelineContract } from './contract-timeline';
 export type Metric = 'actual' | 'allocated';
 export type GroupId = number | string;
 export type EconomicValues = {
@@ -56,9 +57,7 @@ export type VarianceRow = {
 };
 export type ContractExpiry = {
     asOf: string;
-    groups: { id: string; name: string; count: number }[];
-    undated: number;
-    upcoming: number;
+    records: TimelineContract[];
 };
 export type ExpenseAnalytics = {
     current: EconomicSummary;

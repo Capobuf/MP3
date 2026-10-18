@@ -167,6 +167,7 @@ export default function TenantDashboard(
                             <ContractExpiryChart
                                 key={`${chartKey}:expiry`}
                                 expiry={analytics.expiry}
+                                year={year}
                                 slug={tenant.slug}
                             />
                         </div>

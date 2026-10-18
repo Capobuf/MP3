@@ -212,20 +212,26 @@ class ExpenseAnalyticsTest extends TestCase
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('analytics.current.allocated', '0.59')->where('analytics.current.actual', '0.00')->has('analytics.variances', 5));
     }
 
-    public function test_expiry_boundaries_and_undated_are_independent_of_economic_filters(): void
+    public function test_expiry_timeline_respects_selected_year_and_is_independent_of_expense_filters(): void
     {
         $this->travelTo(now()->setDate(2026, 10, 10)->startOfDay());
         foreach ([-1, 0, 30, 31, 60, 61, 90, 91] as $day) {
-            $this->tenant->contracts()->create(['name' => 'Contratto '.$day, 'ends_on' => now()->addDays($day)->toDateString()]);
+            $this->tenant->contracts()->create(['name' => 'Contratto '.$day, 'year' => 2026, 'starts_on' => '2026-01-01', 'ends_on' => now()->addDays($day)->toDateString()]);
         }
-        $this->tenant->contracts()->create(['name' => 'Senza data']);
-        $this->other->contracts()->create(['name' => 'Altro tenant', 'ends_on' => now()->toDateString()]);
-        $data = $this->analytics(['year' => 2001, 'search' => 'Assente', 'contract_id' => 'none']);
-        $this->assertSame([1, 2, 2, 2], array_column($data['expiry']['groups'], 'count'));
-        $this->assertSame(1, $data['expiry']['undated']);
-        $this->assertSame(6, $data['expiry']['upcoming']);
-        $this->get('/t/alfa/dashboard?year=2001&search=Assente')->assertInertia(fn (Assert $page) => $page->missing('expiringContracts')->where('analytics.expiry.upcoming', 6));
-        $this->get('/t/alfa/contracts?expiring=1')->assertInertia(fn (Assert $page) => $page->has('records.data', 6));
+        $legacy = $this->tenant->contracts()->create(['name' => 'Senza data']);
+        $this->tenant->contracts()->create(['name' => 'Altro anno', 'year' => 2025, 'ends_on' => now()->toDateString()]);
+        $this->other->contracts()->create(['name' => 'Altro tenant', 'year' => 2026, 'ends_on' => now()->toDateString()]);
+        $data = $this->analytics(['year' => 2026, 'search' => 'Assente', 'contract_id' => 'none']);
+        $records = $data['expiry']['records'];
+        $this->assertCount(9, $records);
+        $this->assertSame('Contratto -1', $records[0]['display_name']);
+        $this->assertSame('2026-01-01', $records[0]['starts_on']);
+        $this->assertSame('2027-01-09', $records[7]['ends_on']);
+        $this->assertSame($legacy->id, $records[8]['id']);
+        $this->assertNull($records[8]['ends_on']);
+        $this->get('/t/alfa/dashboard?year=2026&search=Assente')->assertInertia(fn (Assert $page) => $page->missing('expiringContracts')->where('analytics.expiry.records', $records));
+        $this->get('/t/alfa/dashboard?year=2001&search=Assente')->assertInertia(fn (Assert $page) => $page->has('analytics.expiry.records', 1)->where('analytics.expiry.records.0.id', $legacy->id));
+        $this->get('/t/alfa/scadenzario?year=2026')->assertInertia(fn (Assert $page) => $page->where('records', fn ($rows) => $rows->pluck('id')->all() === array_column($records, 'id')));
     }
 
     public function test_variances_are_limited_to_five_per_sign_and_annual_series_to_six_available_years(): void

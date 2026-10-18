@@ -346,3 +346,65 @@ sopra si eseguono localmente, senza introdurre infrastruttura CI.
   alla cancellazione dei proprietari. Verificate visualizzazione desktop/light
   e mobile/dark senza overflow; nessun errore JavaScript dell’applicazione.
   Istanza e dati temporanei rimossi al termine.
+
+## Scadenzario e promemoria contratti
+
+**Contratti → Scadenzario** mostra i contratti dell’anno economico selezionato,
+compresi quelli con fine negli anni successivi e i record legacy senza annualità.
+La timeline continua fino all’ultima fine effettiva; i contratti senza fine restano
+nell’elenco senza una durata inventata. La Panoramica riutilizza la stessa timeline
+e mostra gli stessi contratti dell’anno, indipendentemente dai filtri delle spese.
+La rotellina regola lo zoom, il trascinamento sposta il periodo e il doppio clic
+sullo sfondo ripristina la vista iniziale. Per l’anno corrente, la timeline parte
+da un mese prima di oggi e mostra almeno tre mesi futuri; il passato resta
+esplorabile. Il conteggio dei contratti senza scadenza apre l’elenco filtrato.
+
+In **Impostazioni ambiente → Promemoria contratti** ogni utente dell’ambiente può
+configurare notifiche condivise, disabilitate per default. Sono notificabili solo
+contratti con `year` uguale all’anno di `ends_on`: nessuna copia annuale automatica.
+Il combobox propone anticipi di 1/3/7/14/30 giorni e permette di aggiungere
+valori personalizzati interi da 1 a 3650 giorni, visualizzati come chips rimovibili.
+Gli anticipi vengono aggregati per giornata e destinatario;
+il riepilogo mensile copre dal giorno scelto al giorno precedente il successivo
+invio. La preview usa lo stesso calendario del comando, sui dati del form e su un
+orizzonte di 12 mesi, senza salvare né spedire.
+
+L’invio è fissato alle **08:00 Europe/Rome**, anche quando il resto dell’app usa
+UTC, con retry automatici ogni ora fino alle **23:00** per gli invii falliti.
+I cambi ora legale sono gestiti dal fuso; non si recuperano giorni trascorsi.
+Un salvataggio rende effettive le nuove regole da quel momento, senza recuperare
+le soglie già superate; restano ritentabili le notifiche del giorno già tentate
+e fallite per quel destinatario. Il comando usa l’SMTP della piattaforma e rifiuta trasporti
+`log`/`array` o fallback: configurare anche `APP_URL` con l’URL raggiungibile dai
+destinatari. Ogni destinatario riceve una email separata.
+
+In produzione è necessario eseguire Laravel Scheduler **ogni minuto**, per
+esempio con questo cron sull’host (adattare il percorso del deployment):
+
+```cron
+* * * * * cd /percorso/MP3 && docker compose exec -T laravel.test php artisan schedule:run >> /var/log/mp3-scheduler.log 2>&1
+```
+
+Per installazioni senza Compose, usare il nome reale del container, ad esempio
+`docker exec mp3-app php artisan schedule:run`. Verificare il cron dell’host:
+registrare il comando in `routes/console.php` da solo non avvia lo scheduler.
+Non sono necessari worker, broker o nuovi container. `php artisan schedule:list`
+mostra la pianificazione. Il comando `php artisan contracts:remind` permette un
+retry nello stesso giorno, dalle 08:00, senza reinviare i successi già registrati.
+
+Il registro `contract_reminder_deliveries` ha una chiave univoca per tenant,
+indirizzo normalizzato e regola. La prenotazione persistente, serializzata con un
+lock di riga, impedisce duplicati fra esecuzioni concorrenti o dopo riavvio.
+`sent` indica accettazione da parte dell’SMTP, non consegna nella casella finale;
+`failed` consente retry e gli errori sono nei log Laravel. Un arresto durante
+l’invio può lasciare `pending`: viene segnalato nell’anteprima e non viene
+reinviato automaticamente. SMTP e database non hanno una transazione comune:
+l’amministratore deve verificare i log SMTP e riconciliare solo le righe incerte
+come `sent` (con data) oppure `failed` (solo se non inviate), prima di un retry.
+Non eliminare il registro per cambiare le impostazioni.
+
+Verifica mirata, con stop al primo errore:
+
+```sh
+php artisan test --filter=ContractScheduleTest --stop-on-failure
+```

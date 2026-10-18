@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Tenant;
+use App\Services\ContractSchedule;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use stdClass;
@@ -151,16 +152,11 @@ final class ExpenseAnalytics
     /** @return array<string, mixed> */
     private static function expiry(Tenant $tenant, int $year): array
     {
-        $today = now()->startOfDay();
-        $row = $tenant->contracts()->forYear($year)->toBase()->selectRaw('COUNT(CASE WHEN ends_on < ? THEN 1 END) AS expired, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within30, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within60, COUNT(CASE WHEN ends_on BETWEEN ? AND ? THEN 1 END) AS within90, COUNT(CASE WHEN ends_on IS NULL THEN 1 END) AS undated', [
-            $today->toDateString(), $today->toDateString(), $today->copy()->addDays(30)->toDateString(), $today->copy()->addDays(31)->toDateString(), $today->copy()->addDays(60)->toDateString(), $today->copy()->addDays(61)->toDateString(), $today->copy()->addDays(90)->toDateString(),
-        ])->sole();
-
-        return ['asOf' => $today->toDateString(), 'groups' => [
-            ['id' => 'expired', 'name' => 'Scaduti', 'count' => (int) $row->expired],
-            ['id' => 'within30', 'name' => 'Entro 30 giorni', 'count' => (int) $row->within30],
-            ['id' => 'within60', 'name' => '31–60 giorni', 'count' => (int) $row->within60],
-            ['id' => 'within90', 'name' => '61–90 giorni', 'count' => (int) $row->within90],
-        ], 'undated' => (int) $row->undated, 'upcoming' => (int) $row->within30 + (int) $row->within60 + (int) $row->within90];
+        return [
+            'asOf' => now(ContractSchedule::TIMEZONE)->toDateString(),
+            'records' => $tenant->contracts()->forYear($year)
+                ->orderByRaw('ends_on IS NULL')->orderBy('ends_on')->orderBy('id')
+                ->get(['id', 'name', 'year', 'starts_on', 'ends_on'])->toArray(),
+        ];
     }
 }

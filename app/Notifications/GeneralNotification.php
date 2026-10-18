@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use InvalidArgumentException;
@@ -24,12 +25,12 @@ class GeneralNotification extends Notification
     }
 
     /** @return array<int, string> */
-    public function via(User $notifiable): array
+    public function via(User|AnonymousNotifiable $notifiable): array
     {
         return ['mail'];
     }
 
-    public function toMail(User $notifiable): MailMessage
+    public function toMail(User|AnonymousNotifiable $notifiable): MailMessage
     {
         $message = (new MailMessage)->subject('MP3 — '.$this->title);
         if ($this->actionText !== null && $this->actionUrl !== null) {
