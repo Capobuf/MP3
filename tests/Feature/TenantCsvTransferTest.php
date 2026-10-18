@@ -362,6 +362,84 @@ class TenantCsvTransferTest extends TestCase
         $this->assertSame(0, $empty->{$type.'s'}()->count());
     }
 
+    public function test_expense_source_identity_round_trips_even_when_parent_year_differs_from_economic_year(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $original = app(ExpenseWriter::class)->create($source, ['title' => 'Pluriennale', 'year' => 2025, 'lines' => [
+            ['description' => 'Vecchia', 'type' => 'allocated', 'unit_price' => '10', 'year' => 2025],
+            ['description' => 'Sorgente', 'type' => 'allocated', 'unit_price' => '588', 'year' => 2026],
+        ]], true);
+        $copy = $source->expenses()->create(['title' => 'Copia', 'year' => 2027, 'allocated_amount' => '588', 'source_expense_id' => $original->id]);
+        $source->budgetYears()->create(['year' => 2027])->entries()->create(['tenant_id' => $source->id, 'type' => 'expense', 'expense_id' => $copy->id]);
+        $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+        $restored = $target->expenses()->where('year', 2027)->sole();
+        $this->assertSame($target->expenses()->where('year', 2025)->sole()->id, $restored->source_expense_id);
+        $this->assertSame($restored->id, $target->budgetEntries()->sole()->expense_id);
+        $this->assertNull($restored->actual_amount);
+        $year = $target->budgetYears()->sole();
+        $this->getJson('/t/destinazione/budget/years/'.$year->id.'/expense-import')->assertOk()->assertJsonPath('expenses.0.already_imported', true);
+
+    }
+
+    public function test_old_csv_expenses_have_no_invented_source_and_invalid_new_references_are_rejected(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $original = $source->expenses()->create(['title' => 'Originale', 'year' => 2026, 'allocated_amount' => '10']);
+        $source->expenses()->create(['title' => 'Copia', 'year' => 2027, 'allocated_amount' => '10', 'source_expense_id' => $original->id]);
+        $stream = fopen('php://temp', 'w+');
+        fwrite($stream, $this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());
+        rewind($stream);
+        $rows = [];
+        while (($row = fgetcsv($stream, null, ',', '"', '')) !== false) {
+            $rows[] = $row;
+        }
+        fclose($stream);
+        foreach (['legacy', 'missing', 'duplicate', 'cycle'] as $case) {
+            $out = fopen('php://temp', 'w+');
+            foreach ($rows as $row) {
+                if ($row[0] === 'meta' && $case === 'legacy') {
+                    $data = json_decode($row[2], true);
+                    $data['version'] = 3;
+                    $row[2] = json_encode($data);
+                }
+                if ($row[0] === 'expense') {
+                    $data = json_decode($row[2], true);
+                    if ($case === 'legacy') {
+                        unset($data['source_expense_ref']);
+                    } elseif ($data['source_expense_ref'] !== null) {
+                        if ($case === 'missing') {
+                            $data['source_expense_ref'] = 'expense:999999';
+                        } elseif ($case === 'cycle') {
+                            $data['source_expense_ref'] = $row[1];
+                        }
+                    }
+                    $row[2] = json_encode($data);
+                    if ($case === 'duplicate' && $data['source_expense_ref'] !== null) {
+                        fputcsv($out, ['expense', 'expense:999999', $row[2]], ',', '"', '');
+                    }
+                }
+                fputcsv($out, $row, ',', '"', '');
+            }
+            rewind($out);
+            $file = $this->csv(stream_get_contents($out));
+            fclose($out);
+            $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk();
+            if ($case === 'legacy') {
+                $preview->assertJsonPath('error_count', 0);
+                $legacyFile = $file;
+            } else {
+                $this->assertGreaterThan(0, $preview->json('error_count'));
+                $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertUnprocessable();
+            }
+            $this->assertSame(0, $target->expenses()->count());
+        }
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $legacyFile])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $legacyFile, 'token' => $preview->json('token')])->assertOk();
+        $this->assertSame([null, null], $target->expenses()->pluck('source_expense_id')->all());
+    }
+
     public static function legacyVersions(): array
     {
         return [[1], [2]];

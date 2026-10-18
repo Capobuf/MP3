@@ -17,7 +17,7 @@ use RyanChandler\Comments\Concerns\HasComments;
  * @property Carbon|null $period_starts_on
  * @property Carbon|null $period_ends_on
  */
-#[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'notes', 'period_starts_on', 'period_ends_on'])]
+#[Fillable(['title', 'year', 'vendor_id', 'contract_id', 'project_id', 'allocated_amount', 'actual_amount', 'notes', 'period_starts_on', 'period_ends_on', 'source_expense_id'])]
 class Expense extends Model
 {
     use HasComments;
@@ -66,6 +66,7 @@ class Expense extends Model
             'vendor_id' => 'integer',
             'contract_id' => 'integer',
             'project_id' => 'integer',
+            'source_expense_id' => 'integer',
             'year' => 'integer',
             'period_starts_on' => 'date:Y-m-d',
             'period_ends_on' => 'date:Y-m-d',

@@ -13,14 +13,14 @@ use Illuminate\Validation\ValidationException;
 
 class TenantCsvTransfer
 {
-    // Version 2 includes annual contract identity and uses explicit attributes, archive-local references and embedded pivot reference lists.
+    // Annual identities use archive-local references; version 4 adds the source expense.
     // It excludes database IDs, tenant ownership, accounts, attachments and derived values.
     public const TYPES = [
         'vendor' => ['relation' => 'vendors', 'fields' => ['name', 'vat_number', 'email', 'phone', 'notes'], 'refs' => []],
         'cost-center' => ['relation' => 'costCenters', 'fields' => ['name'], 'refs' => ['parent_ref' => ['parent_id', 'cost-center']]],
         'contract' => ['relation' => 'contracts', 'fields' => ['year', 'name', 'reference_amount', 'starts_on', 'ends_on', 'notes'], 'refs' => ['vendor_ref' => ['vendor_id', 'vendor'], 'source_contract_ref' => ['source_contract_id', 'contract']]],
         'project' => ['relation' => 'projects', 'fields' => ['year', 'name', 'description', 'status', 'starts_on', 'ends_on'], 'refs' => ['source_project_ref' => ['source_project_id', 'project']]],
-        'expense' => ['relation' => 'expenses', 'fields' => ['title', 'year', 'allocated_amount', 'actual_amount', 'notes', 'period_starts_on', 'period_ends_on'], 'refs' => ['vendor_ref' => ['vendor_id', 'vendor'], 'contract_ref' => ['contract_id', 'contract'], 'project_ref' => ['project_id', 'project']]],
+        'expense' => ['relation' => 'expenses', 'fields' => ['title', 'year', 'allocated_amount', 'actual_amount', 'notes', 'period_starts_on', 'period_ends_on'], 'refs' => ['source_expense_ref' => ['source_expense_id', 'expense'], 'vendor_ref' => ['vendor_id', 'vendor'], 'contract_ref' => ['contract_id', 'contract'], 'project_ref' => ['project_id', 'project']]],
         'expense-line' => ['relation' => 'lines', 'fields' => ['description', 'type', 'unit_price', 'quantity', 'total', 'position', 'period_starts_on', 'period_ends_on', 'year'], 'refs' => ['expense_ref' => ['expense_id', 'expense']]],
         'budget-year' => ['relation' => 'budgetYears', 'fields' => ['year', 'structure_copied', 'dismissed_sources'], 'refs' => []],
         'budget-entry' => ['relation' => 'budgetEntries', 'fields' => ['type', 'included', 'position'], 'refs' => ['budget_year_ref' => ['budget_year_id', 'budget-year'], 'contract_ref' => ['contract_id', 'contract'], 'project_ref' => ['project_id', 'project'], 'expense_ref' => ['expense_id', 'expense'], 'cost_center_ref' => ['cost_center_id', 'cost-center']]],
@@ -53,7 +53,7 @@ class TenantCsvTransfer
     public function write(Tenant $tenant, $stream): void
     {
         fputcsv($stream, ['record_type', 'record_ref', 'payload_json'], ',', '"', '');
-        $this->row($stream, 'meta', 'tenant', ['format' => 'mp3-tenant', 'version' => 3, 'name' => $tenant->name, 'slug' => $tenant->slug, 'project_statuses' => $tenant->projectStatuses()->orderBy('id')->get(['key', 'name'])->toArray()]);
+        $this->row($stream, 'meta', 'tenant', ['format' => 'mp3-tenant', 'version' => 4, 'name' => $tenant->name, 'slug' => $tenant->slug, 'project_statuses' => $tenant->projectStatuses()->orderBy('id')->get(['key', 'name'])->toArray()]);
         foreach (self::TYPES as $type => $definition) {
             $query = $type === 'expense-line' ? ExpenseLine::whereHas('expense', fn ($q) => $q->where('tenant_id', $tenant->id)) : $tenant->{$this->tenantRelation($type)}()->getQuery();
             if (in_array($type, self::PIVOTS, true)) {
@@ -128,7 +128,7 @@ class TenantCsvTransfer
                     }
                     $data = (array) $object;
                     if ($type === 'meta') {
-                        if ($line !== 2 || $meta !== null || $ref !== 'tenant' || array_diff(array_keys($data), ['format', 'version', 'name', 'slug', 'project_statuses']) !== [] || array_diff(['format', 'version', 'name', 'slug'], array_keys($data)) !== [] || ($data['format'] ?? null) !== 'mp3-tenant' || ! in_array($data['version'] ?? null, [1, 2, 3], true) || ! is_string($data['name'] ?? null) || ! is_string($data['slug'] ?? null)) {
+                        if ($line !== 2 || $meta !== null || $ref !== 'tenant' || array_diff(array_keys($data), ['format', 'version', 'name', 'slug', 'project_statuses']) !== [] || array_diff(['format', 'version', 'name', 'slug'], array_keys($data)) !== [] || ($data['format'] ?? null) !== 'mp3-tenant' || ! in_array($data['version'] ?? null, [1, 2, 3, 4], true) || ! is_string($data['name'] ?? null) || ! is_string($data['slug'] ?? null)) {
                             Values::invalid('meta', 'Formato o versione CSV incompatibile.');
                         }
                         if (isset($data['project_statuses']) && is_array($data['project_statuses'])) {
@@ -171,6 +171,12 @@ class TenantCsvTransfer
                         }
                         $data['year'] = null;
                         $data['source_project_ref'] = null;
+                    }
+                    if ($type === 'expense' && $meta['version'] < 4) {
+                        if (array_key_exists('source_expense_ref', $data)) {
+                            Values::invalid('payload_json', 'Il riferimento alla spesa sorgente richiede la versione CSV 4.');
+                        }
+                        $data['source_expense_ref'] = null;
                     }
                     $this->validatePayload($type, $data);
                     $records[$ref] = ['type' => $type, 'data' => $data, 'row' => $line];
@@ -219,11 +225,23 @@ class TenantCsvTransfer
                         Values::invalid('year', 'Anno di Budget duplicato.');
                     } $unique[$key] = true;
                 }
-                if (in_array($type, ['contract', 'project'], true) && $data['source_'.$type.'_ref'] !== null) {
+                if (in_array($type, ['contract', 'project', 'expense'], true) && $data['source_'.$type.'_ref'] !== null) {
                     $sourceRef = 'source_'.$type.'_ref';
                     $source = $records[$data[$sourceRef]]['data'];
-                    if ($data['year'] === null || $source['year'] === null || $source['year'] !== $data['year'] - 1) {
+                    if ($type !== 'expense' && ($data['year'] === null || $source['year'] === null || $source['year'] !== $data['year'] - 1)) {
                         Values::invalid($sourceRef, 'La sorgente deve appartenere all’anno precedente.');
+                    }
+                    if ($type === 'expense') {
+                        // Expense attribution and links may change after copying; only identity must survive.
+                        $seen = [$ref => true];
+                        $ancestor = $data[$sourceRef];
+                        while ($ancestor !== null) {
+                            if (isset($seen[$ancestor])) {
+                                Values::invalid($sourceRef, 'I riferimenti alle spese sorgenti non possono formare un ciclo.');
+                            }
+                            $seen[$ancestor] = true;
+                            $ancestor = $records[$ancestor]['data'][$sourceRef] ?? null;
+                        }
                     }
                     $key = $type.':'.$data['year'].':'.$data[$sourceRef];
                     if (isset($unique[$key])) {
@@ -443,7 +461,7 @@ class TenantCsvTransfer
                     $attributes['dismissed_sources'] = null;
                 }
                 foreach ($definition['refs'] as $field => [$column, $target]) {
-                    $attributes[$column] = $type === 'cost-center' || in_array($field, ['source_contract_ref', 'source_project_ref'], true) || $payload[$field] === null ? null : $map[$payload[$field]]->id;
+                    $attributes[$column] = $type === 'cost-center' || in_array($field, ['source_contract_ref', 'source_project_ref', 'source_expense_ref'], true) || $payload[$field] === null ? null : $map[$payload[$field]]->id;
                 }
                 if ($type === 'expense-line') {
                     $model = $map[$payload['expense_ref']]->lines()->make();
@@ -462,7 +480,7 @@ class TenantCsvTransfer
         foreach ($plan['records'] as $ref => $record) {
             $data = $record['data'];
             $model = $map[$ref];
-            if (in_array($record['type'], ['contract', 'project'], true) && $data['source_'.$record['type'].'_ref'] !== null) {
+            if (in_array($record['type'], ['contract', 'project', 'expense'], true) && $data['source_'.$record['type'].'_ref'] !== null) {
                 $model->forceFill(['source_'.$record['type'].'_id' => $map[$data['source_'.$record['type'].'_ref']]->id])->save();
             }
             if ($record['type'] === 'cost-center' && $data['parent_ref'] !== null) {
