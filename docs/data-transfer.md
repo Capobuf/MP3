@@ -12,13 +12,25 @@ Per importare, scaricare il modello della sezione e compilare il foglio **Dati**
 - Importi numerici Excel oppure testo `1234,56`, `1.234,56`, `1234.56`. Massimo due decimali; `1.234` è ambiguo e viene rifiutato. Vuoto resta distinto da zero.
 - Riferimenti esatti a record già esistenti nel tenant: nome oppure partita IVA del fornitore; nome univoco per contratto, progetto e spesa; `Padre / Figlio` per i centri di costo. Separare più centri con `;`.
 - Importare i centri padre prima dei figli; sono ammessi due livelli.
-- Budget: creare prima l’anno dall’interfaccia. Usare `manual` per voci libere, oppure `contract`, `project`, `expense` con una sorgente esistente. Sorgenti rimosse richiedono il ripristino dall’interfaccia.
+- Budget: creare prima l’anno dall’interfaccia. Usare `new-expense` per creare spese autonome, oppure `contract`, `project`, `expense` con una sorgente esistente. Sorgenti rimosse richiedono il ripristino dall’interfaccia.
 
 Premere **Valida e mostra anteprima**, controllare nuovi record, duplicati ed errori, quindi **Conferma importazione**. I duplicati certi vengono saltati; corrispondenze ambigue o differenti bloccano il file. Nessun record viene aggiornato. Una riga Spese crea una spesa semplice con righe economiche per gli importi specificati; condizioni avanzate restano nell’editor MP3.
 
 La validazione non scrive nel database. La conferma invia nuovamente il file e ripete tutti i controlli dentro una transazione. Un token cifrato, valido 30 minuti, lega anteprima, tenant, sezione, contenuto del file e piano di inserimento. Se questi cambiano, ripetere l’anteprima. Qualsiasi errore causa rollback completo. Gli import non sono registrati nello storico Annulla.
 
-## CSV tecnico del tenant, versione 1
+## Appartenenza e annualità del Budget
+
+Una spesa è autonoma oppure appartiene a un solo contratto o progetto. Form, modifica parziale, batch e import Excel verificano lo stato finale e rifiutano doppi collegamenti. Prima di collegare una spesa autonoma già nel Budget, usare **Rimuovi solo dal Budget** in tutte le annualità indicate nella scheda spesa.
+
+Le voci Budget `expense` accettano soltanto spese autonome economicamente presenti nell’anno. Contratti e progetti devono appartenere allo stesso anno del Budget e includono tutte le proprie spese di quell’anno. Escludere o rimuovere una voce non trasferisce le sue spese ad altre voci; i valori non conteggiati restano vuoti, distinti dallo zero esplicito.
+
+Le spese di un anno diverso dal contenitore restano visibili nel rendiconto e in **Inserisci spese mancanti**, con lo stato **Da risolvere**. **Scegli come correggere** apre la scheda spesa: l’utente può correggere l’anno degli importi interessati oppure scegliere un contenitore dell’anno della spesa. L’anteprima mostra gli importi e richiede conferma; dati modificati nel frattempo richiedono di ricaricare la pagina.
+
+Quando si cambia contenitore per un solo anno di una spesa pluriennale, le righe di quell’anno vengono spostate in una nuova spesa; le altre righe, gli allegati e i commenti restano nell’originale. Prezzi, quantità, zeri, importi negativi e valori mancanti sono conservati. Se il contenitore manca, crearlo oppure importarlo dall’anno precedente senza selezionare spese da copiare, poi tornare alla correzione. La copia annuale continua a generare previsioni dagli allocati precedenti e non trasferisce gli effettivi già registrati. L’anno principale di una spesa importata resta protetto.
+
+CSV tecnico e backup conservano anche i collegamenti storici incompatibili. Il CSV li segnala nell’anteprima; il Budget mantiene leggibili i conteggi storici con un avviso, fino a una correzione esplicita. Nessuna migrazione normalizza o cancella lo storico.
+
+## CSV tecnico del tenant, versione 4
 
 Solo i superuser accedono a **Impostazioni ambiente** → **Importazione ed esportazione dati**, all’indirizzo `/t/{slug}/settings/data`.
 
@@ -30,7 +42,7 @@ Il file usa UTF-8, delimitatore `,`, enclosure `"` ed escape vuoto. Header esatt
 record_type,record_ref,payload_json
 ```
 
-La prima riga dati è `meta,tenant`, con payload oggetto JSON contenente `format: "mp3-tenant"`, `version: 1`, `name` e `slug`. I due ultimi campi sono informativi: non cambiano il tenant destinatario.
+La prima riga dati è `meta,tenant`, con payload oggetto JSON contenente `format: "mp3-tenant"`, `version: 4` (lettura compatibile con le versioni 1–3), `name` e `slug`. I due ultimi campi sono informativi: non cambiano il tenant destinatario.
 
 Tipi supportati: `vendor`, `cost-center`, `contract`, `project`, `expense`, `expense-line`, `budget-year`, `budget-entry`. Il riferimento è locale al file, nel formato `tipo:numero-positivo`; non viene riutilizzato come ID di database.
 

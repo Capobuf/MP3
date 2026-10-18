@@ -297,6 +297,17 @@ class TenantCsvTransfer
         }
         // Preserve overlapping periods and report them without blocking restoration.
         $warnings = [];
+        foreach ($records as $ref => $record) {
+            if ($record['type'] === 'expense' && $record['data']['contract_ref'] !== null && $record['data']['project_ref'] !== null) {
+                $warnings[] = "{$ref}: doppio collegamento storico conservato. Risolvilo esplicitamente prima di modificare la spesa o importarla in un altro anno.";
+            }
+            if ($record['type'] === 'budget-entry' && $record['data']['type'] === 'expense') {
+                $expense = $records[$record['data']['expense_ref']]['data'] ?? [];
+                if (($expense['contract_ref'] ?? null) !== null || ($expense['project_ref'] ?? null) !== null) {
+                    $warnings[] = "{$ref}: voce Budget diretta di una spesa collegata conservata. Correggila esplicitamente dopo il ripristino.";
+                }
+            }
+        }
         if (collect($records)->contains(fn ($record) => $record['type'] === 'contract' && $record['data']['year'] === null)) {
             $warnings[] = 'Contratti storici senza anno: saranno conservati, ma richiedono una classificazione esplicita prima dell’importazione annuale.';
         }

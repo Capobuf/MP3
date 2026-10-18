@@ -50,6 +50,7 @@ export type BudgetSnapshot = {
     cost_center_groups: Record<string, BudgetTotals>;
     owners: Record<string, number>;
     has_missing_entries: boolean;
+    warnings: string[];
 };
 export type BudgetYear = {
     id: number;
@@ -70,7 +71,9 @@ export type BudgetSuggestion = {
     source_id: number;
     entry_id: number | null;
     description: string;
-    state: 'missing' | 'excluded' | 'removed';
+    state: 'missing' | 'excluded' | 'removed' | 'blocked';
+    problem: string | null;
+    expense_url: string;
     allocated: string | null;
     actual: string | null;
     expense_ids: number[];

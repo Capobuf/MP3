@@ -5,8 +5,6 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BudgetEntriesRequest;
 use App\Models\BudgetYear;
-use App\Models\Contract;
-use App\Models\Project;
 use App\Models\Tenant;
 use App\Services\AnnualBudget;
 use App\Services\AttachmentFiles;
@@ -71,6 +69,8 @@ class BudgetController extends Controller
         $relation = $tenant->{$data['type'].'s'}();
         if (in_array($data['type'], ['contract', 'project'], true)) {
             $relation->where('year', EconomicYearContext::year($tenant, $request));
+        } else {
+            $relation->whereNull('contract_id')->whereNull('project_id')->whereIn('id', ExpenseOverview::economicQuery($tenant)->where('year', EconomicYearContext::year($tenant, $request))->select('id'));
         }
         if (isset($data['id'])) {
             $record = $relation->findOrFail($data['id']);
@@ -99,6 +99,8 @@ class BudgetController extends Controller
             $suggestions = collect($budget->missing($tenant, $year))->keyBy('key');
             foreach ($request->validated('entries') as $index => $data) {
                 $key = $data['type'].':'.($data['source_id'] ?? '');
+                $source = $tenant->{$data['type'].'s'}()->whereKey($data['source_id'] ?? 0)->lockForUpdate()->firstOrFail();
+                AnnualBudget::validateSource($tenant, $year, $source);
                 $suggestion = $suggestions->get($key);
                 if ($suggestion === null) {
                     // Already covered is an idempotent no-op; never insert arbitrary or stale sources.
@@ -128,9 +130,7 @@ class BudgetController extends Controller
         if ($source === null) {
             throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La sorgente non appartiene a questo ambiente o è stata eliminata.']);
         }
-        if (($source instanceof Contract || $source instanceof Project) && $source->year !== $year->year) {
-            throw ValidationException::withMessages(['entries' => 'Seleziona una sorgente di questo anno. Per lo storico senza anno occorre prima una classificazione esplicita.']);
-        }
+        AnnualBudget::validateSource($tenant, $year, $source);
         $existing = $year->entries()->where($type.'_id', $source->id)->first();
         if ($existing !== null) {
             if (! $existing->included && ($data['reactivate'] ?? false)) {
@@ -171,6 +171,9 @@ class BudgetController extends Controller
                 abort_unless($entry !== null, 409);
                 switch ($data['action']) {
                     case 'exclude': case 'reactivate':
+                        if ($data['action'] === 'reactivate') {
+                            AnnualBudget::validateSource($tenant, $year, $entry->{$entry->type});
+                        }
                         $entry->update(['included' => $data['action'] === 'reactivate']);
                         break;
                     case 'reorder':

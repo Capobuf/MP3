@@ -43,6 +43,13 @@ class ExpenseWriter
             }
         }
         $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
+        if ($expense->contract_id !== null && $expense->project_id !== null) {
+            throw ValidationException::withMessages(['contract_id' => 'Una spesa può appartenere a un solo contratto o progetto. Rimuovi esplicitamente il collegamento precedente prima di scegliere quello nuovo.', 'project_id' => 'Scegli un solo contenitore economico.']);
+        }
+        if ($expense->exists && ($expense->contract_id !== null || $expense->project_id !== null) &&
+            DB::table('budget_entries')->where('expense_id', $expense->id)->exists()) {
+            throw ValidationException::withMessages(['budget' => 'La spesa è presente come voce singola in uno o più Budget. Usa «Rimuovi solo dal Budget» in ciascuna annualità prima di collegarla a un contratto o progetto.']);
+        }
         $individualPeriods = isset($data['lines']) && array_filter($data['lines'], fn ($line) => array_key_exists('year', $line) || array_key_exists('period_starts_on', $line) || array_key_exists('period_ends_on', $line)) !== [];
         if ($individualPeriods && ! $expense->exists) {
             $starts = array_filter(array_column($data['lines'], 'period_starts_on'));

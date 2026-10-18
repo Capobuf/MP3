@@ -769,6 +769,18 @@ export function EntityForm({
                                     )
                                         return null;
                                 }
+                                const incompatible =
+                                    current.kind === 'expenses' &&
+                                    !current.values[field.key] &&
+                                    ((field.key === 'contract_id' &&
+                                        !!current.values.project_id) ||
+                                        (field.key === 'project_id' &&
+                                            !!current.values.contract_id) ||
+                                        (!!budgetYearId &&
+                                            [
+                                                'contract_id',
+                                                'project_id',
+                                            ].includes(field.key)));
                                 const value = current.values[field.key];
                                 const id = `field-${field.key}`;
                                 const selectOptions = field.catalog
@@ -815,6 +827,13 @@ export function EntityForm({
                                             {field.label}
                                             {field.required && ' *'}
                                         </FieldLabel>
+                                        {incompatible && (
+                                            <p className="text-sm text-muted-foreground">
+                                                {budgetYearId
+                                                    ? 'Una voce singola del Budget deve restare autonoma.'
+                                                    : 'Rimuovi prima il collegamento all’altro contenitore per cambiarlo.'}
+                                            </p>
+                                        )}
                                         {field.catalog ? (
                                             <div className="flex gap-2">
                                                 <RecordSelect
@@ -838,7 +857,10 @@ export function EntityForm({
                                                             selected,
                                                         )
                                                     }
-                                                    disabled={formBusy}
+                                                    includeNone
+                                                    disabled={
+                                                        formBusy || incompatible
+                                                    }
                                                 />
                                                 {current.kind ===
                                                     'expenses' && (
@@ -846,7 +868,10 @@ export function EntityForm({
                                                         variant="outline"
                                                         type="button"
                                                         size="icon"
-                                                        disabled={formBusy}
+                                                        disabled={
+                                                            formBusy ||
+                                                            incompatible
+                                                        }
                                                         aria-label={`Crea ${singular[field.catalog]}`}
                                                         onClick={() => {
                                                             setErrors({});

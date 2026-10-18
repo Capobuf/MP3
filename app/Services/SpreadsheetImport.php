@@ -172,6 +172,7 @@ class SpreadsheetImport
                 if ($data['source_id'] === null) {
                     Values::invalid('source_id', 'Indica una sorgente.');
                 }
+                AnnualBudget::validateSource($tenant, $year, $tenant->{$data['type'].'s'}()->findOrFail($data['source_id']));
                 if (in_array($data['type'].':'.$data['source_id'], $year->dismissed_sources ?? [], true)) {
                     Values::invalid('source_id', 'La sorgente è stata rimossa dal Budget. Ripristinala dall’interfaccia MP3.');
                 }

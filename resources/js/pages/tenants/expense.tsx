@@ -1,4 +1,6 @@
 import { CommentsSection } from '@/components/management/comments-section';
+import { ExpenseAllocation } from '@/components/management/expense-allocation';
+import type { Allocation } from '@/components/management/expense-allocation';
 import { ArrowUpRight, ReceiptText } from 'lucide-react';
 import { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
@@ -27,10 +29,12 @@ export default function ExpenseDetail({
     tenant,
     expense,
     options,
+    allocation,
 }: {
     tenant: Tenant;
     expense: Expense;
     options: Options;
+    allocation: Allocation;
 }) {
     const path = `/t/${tenant.slug}/expenses`;
     const save = (field: string, value: unknown) =>
@@ -87,6 +91,14 @@ export default function ExpenseDetail({
                             </div>
                         )}
                 </DetailHero>
+                <ExpenseAllocation
+                    key={allocation.token}
+                    slug={tenant.slug}
+                    expenseId={expense.id}
+                    allocation={allocation}
+                    imported={expense.source_expense_id != null}
+                    disabled={editingLines}
+                />
                 <DetailKpis
                     allocated={expense.allocated_amount}
                     actual={expense.actual_amount}

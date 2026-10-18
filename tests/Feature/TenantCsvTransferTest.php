@@ -121,13 +121,15 @@ class TenantCsvTransferTest extends TestCase
         $contract->costCenters()->sync([$parent->id]);
         $project = $source->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $project->costCenters()->sync([$child->id]);
-        $expense = app(ExpenseWriter::class)->create($source, ['title' => 'Pluriennale', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id, 'cost_center_ids' => [$parent->id, $child->id], 'lines' => [
+        $expense = app(ExpenseWriter::class)->create($source, ['title' => 'Pluriennale', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'cost_center_ids' => [$parent->id, $child->id], 'lines' => [
             ['description' => 'Zero', 'type' => 'allocated', 'unit_price' => '0.00', 'quantity' => '1.0000', 'year' => 2026, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'],
             ['description' => 'Negativo', 'type' => 'allocated', 'unit_price' => '-12.34', 'quantity' => '2.5000', 'year' => 2027, 'period_starts_on' => '2027-01-01', 'period_ends_on' => '2027-12-31'],
         ]]);
         $lines = $expense->lines->map(fn ($line) => Arr::only($line->toArray(), ['description', 'type', 'unit_price', 'quantity', 'period_starts_on', 'period_ends_on', 'year']))->all();
         $lines[1]['year'] = 2024;
         $this->patchJson('/t/origine/expenses/'.$expense->id, ['lines' => $lines])->assertOk();
+        // Simulate a restored record that predates exclusive ownership.
+        $expense->update(['project_id' => $project->id]);
         $expense->refresh();
         $legacy = $source->expenses()->create(['title' => 'Legacy', 'year' => 2026, 'allocated_amount' => null, 'actual_amount' => '0.00']);
         $year = $source->budgetYears()->create(['year' => 2026, 'structure_copied' => true, 'dismissed_sources' => ['expense:'.$legacy->id]]);

@@ -55,6 +55,7 @@ import {
     GripVertical,
     Ellipsis,
     TriangleAlert,
+    X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -443,11 +444,13 @@ function ExpenseRows({
                             ) : id === 'allocated' || id === 'actual' ? (
                                 <ExpenseAmount
                                     value={
-                                        expense[
-                                            id === 'allocated'
-                                                ? 'allocated_amount'
-                                                : 'actual_amount'
-                                        ]
+                                        expense.contributes
+                                            ? expense[
+                                                  id === 'allocated'
+                                                      ? 'allocated_amount'
+                                                      : 'actual_amount'
+                                              ]
+                                            : null
                                     }
                                     label={`Modifica ${columnNames[id]} della spesa ${expense.title}`}
                                     busy={busy}
@@ -1072,16 +1075,7 @@ export function BudgetTable({
                         row.original.source_id &&
                         row.original.expenses[0] ? (
                             <ExpenseAmount
-                                value={
-                                    row.original.expenses[0] &&
-                                    !row.original.expenses[0].contributes
-                                        ? row.original.expenses[0][
-                                              field === 'allocated'
-                                                  ? 'allocated_amount'
-                                                  : 'actual_amount'
-                                          ]
-                                        : row.original[field]
-                                }
+                                value={row.original[field]}
                                 busy={busy}
                                 label={`Modifica ${columnNames[field]} della spesa ${row.original.description}`}
                                 expense={row.original.expenses[0]}
@@ -2111,23 +2105,44 @@ export function BudgetTable({
                 }}
             >
                 <AlertDialogContent>
+                    <AlertDialogCancel
+                        className="absolute top-2 right-2"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Chiudi"
+                        disabled={busy}
+                    >
+                        <X aria-hidden="true" />
+                    </AlertDialogCancel>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>
-                            Rimuovere {removing.length} voci dal Budget?
+                        <AlertDialogTitle className="pr-8">
+                            Rimuovere {removing.length}{' '}
+                            {removing.length === 1 ? 'voce' : 'voci'} dal
+                            Budget?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             Verranno rimossi i riferimenti annuali selezionati.
                             Puoi conservare la spesa nell’archivio oppure
                             eliminarla se non è usata altrove. Contratti e
-                            progetti rimangono negli archivi. Le eventuali spese
-                            ancora coperte da altre voci incluse saranno
-                            riattribuite.
+                            progetti rimangono negli archivi.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={busy}>
-                            Annulla
-                        </AlertDialogCancel>
+                    <AlertDialogFooter className="min-w-0 flex-col flex-wrap *:h-auto *:min-h-9 *:whitespace-normal">
+                        <AlertDialogAction
+                            disabled={busy}
+                            variant="destructive"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void batch('remove', removing).then((ok) => {
+                                    if (ok) {
+                                        setRemoving([]);
+                                        setSelection({});
+                                    }
+                                });
+                            }}
+                        >
+                            Rimuovi solo dal Budget
+                        </AlertDialogAction>
                         {removing.length === 1 &&
                             budget.entries.find(
                                 (entry) => entry.id === removing[0],
@@ -2148,24 +2163,9 @@ export function BudgetTable({
                                         });
                                     }}
                                 >
-                                    Rimuovi dal Budget ed elimina la spesa
+                                    Elimina anche la spesa
                                 </AlertDialogAction>
                             )}
-                        <AlertDialogAction
-                            disabled={busy}
-                            variant="destructive"
-                            onClick={(event) => {
-                                event.preventDefault();
-                                void batch('remove', removing).then((ok) => {
-                                    if (ok) {
-                                        setRemoving([]);
-                                        setSelection({});
-                                    }
-                                });
-                            }}
-                        >
-                            Rimuovi solo dal Budget
-                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
