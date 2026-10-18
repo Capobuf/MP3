@@ -55,6 +55,7 @@ import {
     GripVertical,
     Ellipsis,
     TriangleAlert,
+    X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -2104,8 +2105,17 @@ export function BudgetTable({
                 }}
             >
                 <AlertDialogContent>
+                    <AlertDialogCancel
+                        className="absolute top-2 right-2"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Chiudi"
+                        disabled={busy}
+                    >
+                        <X aria-hidden="true" />
+                    </AlertDialogCancel>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>
+                        <AlertDialogTitle className="pr-8">
                             Rimuovere {removing.length}{' '}
                             {removing.length === 1 ? 'voce' : 'voci'} dal
                             Budget?
@@ -2117,10 +2127,22 @@ export function BudgetTable({
                             progetti rimangono negli archivi.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter className="min-w-0 flex-wrap *:h-auto *:min-h-9 *:whitespace-normal">
-                        <AlertDialogCancel disabled={busy}>
-                            Annulla
-                        </AlertDialogCancel>
+                    <AlertDialogFooter className="min-w-0 flex-col flex-wrap *:h-auto *:min-h-9 *:whitespace-normal">
+                        <AlertDialogAction
+                            disabled={busy}
+                            variant="destructive"
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void batch('remove', removing).then((ok) => {
+                                    if (ok) {
+                                        setRemoving([]);
+                                        setSelection({});
+                                    }
+                                });
+                            }}
+                        >
+                            Rimuovi solo dal Budget
+                        </AlertDialogAction>
                         {removing.length === 1 &&
                             budget.entries.find(
                                 (entry) => entry.id === removing[0],
@@ -2141,24 +2163,9 @@ export function BudgetTable({
                                         });
                                     }}
                                 >
-                                    Rimuovi dal Budget ed elimina la spesa
+                                    Elimina anche la spesa
                                 </AlertDialogAction>
                             )}
-                        <AlertDialogAction
-                            disabled={busy}
-                            variant="destructive"
-                            onClick={(event) => {
-                                event.preventDefault();
-                                void batch('remove', removing).then((ok) => {
-                                    if (ok) {
-                                        setRemoving([]);
-                                        setSelection({});
-                                    }
-                                });
-                            }}
-                        >
-                            Rimuovi solo dal Budget
-                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
