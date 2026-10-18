@@ -79,4 +79,20 @@ class BackupController extends Controller
 
         return back();
     }
+
+    public function destroy(Request $request, BackupManager $backups, ?Tenant $tenant = null): RedirectResponse
+    {
+        $data = $request->validate([
+            'archives' => ['required', 'array', 'min:1'],
+            'archives.*' => ['required', 'string', 'distinct', 'max:255', 'regex:/^[a-zA-Z0-9-]+\.zip$/D'],
+            'confirmation' => ['required', 'accepted'],
+        ]);
+        try {
+            $backups->delete($tenant, $data['archives']);
+        } catch (RuntimeException $error) {
+            throw ValidationException::withMessages(['archives' => $error->getMessage()]);
+        }
+
+        return back();
+    }
 }

@@ -14,6 +14,7 @@ use RuntimeException;
 use Spatie\Backup\BackupDestination\BackupDestination;
 use Spatie\Backup\Tasks\Cleanup\CleanupJob;
 use Spatie\Backup\Tasks\Cleanup\CleanupStrategy;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
 class BackupManager
@@ -99,6 +100,27 @@ class BackupManager
     public function clean(string $scope): void
     {
         (new CleanupJob(collect([BackupDestination::create('backups', $scope)]), app(CleanupStrategy::class)))->run();
+    }
+
+    /** @param list<string> $names */
+    public function delete(?Tenant $tenant, array $names): void
+    {
+        BackupLock::run(function () use ($tenant, $names): void {
+            // Validate the whole selection before removing any archive.
+            try {
+                foreach ($names as $name) {
+                    $this->path($tenant, $name);
+                }
+            } catch (NotFoundHttpException) {
+                throw new RuntimeException('Un archivio selezionato non è più disponibile. Aggiorna l’elenco: nessun archivio è stato eliminato.');
+            }
+            try {
+                $paths = array_map(fn ($name) => $this->scope($tenant).'/'.$name, $names);
+                BackupArchive::check(Storage::disk('backups')->delete($paths), 'Eliminazione fallita.');
+            } catch (Throwable) {
+                throw new RuntimeException('Eliminazione non completata. Alcuni archivi potrebbero essere già stati rimossi: aggiorna l’elenco e riprova.');
+            }
+        });
     }
 
     /** @return array<int, array{name: string, size: int, created_at: string}> */

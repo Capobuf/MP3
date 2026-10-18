@@ -1,7 +1,18 @@
 import { Head, useForm } from '@inertiajs/react';
-import { Download, LoaderCircle } from 'lucide-react';
+import { Download, LoaderCircle, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { TenantSettingsNav } from '@/components/management/tenant-settings-nav';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -69,7 +80,18 @@ export default function Backups({
         file: null,
         confirmation: false,
     });
-    const busy = create.processing || restore.processing;
+    const [selected, setSelected] = useState<string[]>([]);
+    const [deleting, setDeleting] = useState(false);
+    const removal = useForm({ archives: [] as string[], confirmation: true });
+    const selection = selected.filter((name) =>
+        archives.some((archive) => archive.name === name),
+    );
+    const busy = create.processing || restore.processing || removal.processing;
+    function confirmDelete(names: string[]) {
+        removal.clearErrors();
+        removal.setData('archives', names);
+        setDeleting(true);
+    }
     const content = (
         <>
             <Head
@@ -277,6 +299,16 @@ export default function Backups({
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    {archives.length > 0 && (
+                        <Button
+                            variant="destructive"
+                            disabled={busy || selection.length === 0}
+                            onClick={() => confirmDelete(selection)}
+                        >
+                            <Trash2 data-icon="inline-start" />
+                            Elimina selezionati ({selection.length})
+                        </Button>
+                    )}
                     {archives.length === 0 ? (
                         <Empty>
                             <EmptyHeader>
@@ -289,18 +321,63 @@ export default function Backups({
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>
+                                        <Checkbox
+                                            aria-label="Seleziona tutti gli archivi"
+                                            disabled={busy}
+                                            checked={
+                                                selection.length ===
+                                                archives.length
+                                                    ? true
+                                                    : selection.length > 0
+                                                      ? 'indeterminate'
+                                                      : false
+                                            }
+                                            onCheckedChange={(checked) =>
+                                                setSelected(
+                                                    checked === true
+                                                        ? archives.map(
+                                                              (archive) =>
+                                                                  archive.name,
+                                                          )
+                                                        : [],
+                                                )
+                                            }
+                                        />
+                                    </TableHead>
                                     <TableHead>Archivio</TableHead>
                                     <TableHead>Dimensione</TableHead>
                                     <TableHead>
-                                        <span className="sr-only">
-                                            Download
-                                        </span>
+                                        <span className="sr-only">Azioni</span>
                                     </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {archives.map((archive) => (
                                     <TableRow key={archive.name}>
+                                        <TableCell>
+                                            <Checkbox
+                                                aria-label={`Seleziona ${archive.name}`}
+                                                disabled={busy}
+                                                checked={selection.includes(
+                                                    archive.name,
+                                                )}
+                                                onCheckedChange={(checked) =>
+                                                    setSelected(
+                                                        checked === true
+                                                            ? [
+                                                                  ...selection,
+                                                                  archive.name,
+                                                              ]
+                                                            : selection.filter(
+                                                                  (name) =>
+                                                                      name !==
+                                                                      archive.name,
+                                                              ),
+                                                    )
+                                                }
+                                            />
+                                        </TableCell>
                                         <TableCell
                                             className="max-w-64 truncate"
                                             title={archive.name}
@@ -318,18 +395,36 @@ export default function Backups({
                                             MB
                                         </TableCell>
                                         <TableCell>
-                                            <Button asChild variant="outline">
-                                                <a
-                                                    href={`${path}/${archive.name}`}
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    asChild
+                                                    variant="outline"
                                                 >
-                                                    <Download data-icon="inline-start" />
-                                                    Scarica
-                                                    <span className="sr-only">
-                                                        {' '}
-                                                        {archive.name}
-                                                    </span>
-                                                </a>
-                                            </Button>
+                                                    <a
+                                                        href={`${path}/${archive.name}`}
+                                                    >
+                                                        <Download data-icon="inline-start" />
+                                                        Scarica
+                                                        <span className="sr-only">
+                                                            {' '}
+                                                            {archive.name}
+                                                        </span>
+                                                    </a>
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="icon"
+                                                    disabled={busy}
+                                                    aria-label={`Elimina ${archive.name}`}
+                                                    onClick={() =>
+                                                        confirmDelete([
+                                                            archive.name,
+                                                        ])
+                                                    }
+                                                >
+                                                    <Trash2 data-icon="inline-start" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -338,6 +433,62 @@ export default function Backups({
                     )}
                 </CardContent>
             </Card>
+            <AlertDialog
+                open={deleting}
+                onOpenChange={(open) => {
+                    if (!removal.processing) setDeleting(open);
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Eliminare{' '}
+                            {removal.data.archives.length === 1
+                                ? 'l’archivio selezionato'
+                                : `${removal.data.archives.length} archivi selezionati`}
+                            ?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Gli archivi verranno eliminati definitivamente,
+                            anche se sono le ultime copie disponibili. I dati
+                            attuali dell’applicazione restano invariati.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <ul className="max-h-48 overflow-auto text-sm">
+                        {removal.data.archives.map((name) => (
+                            <li key={name} className="break-all">
+                                {name}
+                            </li>
+                        ))}
+                    </ul>
+                    <FieldError>
+                        {Object.values(removal.errors).join(' ')}
+                    </FieldError>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={removal.processing}>
+                            Annulla
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="destructive"
+                            disabled={removal.processing}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                removal.delete(path, {
+                                    preserveScroll: true,
+                                    onSuccess: () => {
+                                        setSelected([]);
+                                        setDeleting(false);
+                                    },
+                                });
+                            }}
+                        >
+                            {removal.processing
+                                ? 'Eliminazione…'
+                                : 'Elimina definitivamente'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             {tenant && (
                 <Card>
                     <CardHeader>

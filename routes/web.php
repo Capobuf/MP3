@@ -41,6 +41,7 @@ Route::middleware('auth')->group(function () {
         Route::get('settings/backups', [BackupController::class, 'index'])->name('backups.index');
         Route::post('settings/backups', [BackupController::class, 'store'])->middleware('throttle:3,1')->name('backups.store');
         Route::put('settings/backups', [BackupController::class, 'update'])->name('backups.update');
+        Route::delete('settings/backups', [BackupController::class, 'destroy'])->name('backups.destroy');
         Route::get('settings/backups/{archive}', [BackupController::class, 'download'])->name('backups.download');
         Route::get('settings/email', [EmailSettingsController::class, 'edit'])->name('email.edit');
         Route::put('settings/email', [EmailSettingsController::class, 'update'])->name('email.update');
@@ -79,6 +80,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/', [BackupController::class, 'index'])->name('backups.index');
             Route::post('/', [BackupController::class, 'store'])->middleware('throttle:3,1')->name('backups.store');
             Route::post('restore', [BackupController::class, 'restore'])->middleware('throttle:3,1')->name('backups.restore');
+            Route::delete('/', [BackupController::class, 'destroy'])->name('backups.destroy');
             Route::get('{archive}', [BackupController::class, 'download'])->name('backups.download');
         });
         Route::prefix('settings/data')->withoutMiddleware(RecordUndo::class)->group(function () {

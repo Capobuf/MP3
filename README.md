@@ -420,6 +420,11 @@ che offre URL temporanei. Il download passa sempre da una rotta autenticata.
 Sono dati altamente sensibili: non pubblicare la directory e conserva anche
 le copie scaricate in un luogo protetto. Lo ZIP non ha una password separata.
 
+L’elenco permette di eliminare un archivio o selezionarne più di uno, anche tutti.
+La conferma mostra i nomi e avvisa che la cancellazione è definitiva, comprese
+le ultime copie disponibili. Vale sia per piattaforma sia per tenant, con gli
+stessi permessi del download; i dati attuali dell’applicazione non vengono eliminati.
+
 Spatie Laravel Backup **v10 richiede PHP 8.4**; Compose e CI usano questa
 versione. Sono necessari `zip`, `mysqldump` e, per ripristinare, il client
 `mysql` (presenti in Sail). Dopo l’aggiornamento installare i lockfile, applicare

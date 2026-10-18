@@ -129,6 +129,45 @@ class BackupTest extends TestCase
         $this->get('/platform/settings/backups/example.zip')->assertOk()->assertDownload('example.zip');
     }
 
+    public function test_archive_deletion_is_confirmed_scoped_and_supports_single_and_multiple_files(): void
+    {
+        $tenant = $this->tenant('delete-source');
+        $other = $this->tenant('delete-other');
+        $member = User::factory()->create();
+        $tenant->users()->attach($member);
+        $path = '/t/'.$tenant->slug.'/settings/backups';
+        $disk = Storage::disk('backups');
+        foreach (['platform', 'tenant-'.$tenant->id, 'tenant-'.$other->id] as $scope) {
+            foreach (['one.zip', 'two.zip', 'three.zip'] as $name) {
+                $disk->put($scope.'/'.$name, 'archive');
+            }
+        }
+        $data = ['archives' => ['one.zip'], 'confirmation' => true];
+        $this->delete($path, $data)->assertRedirect('/login');
+        $this->actingAs(User::factory()->create())->delete($path, $data)->assertForbidden();
+        $this->actingAs($member)->delete('/platform/settings/backups', $data)->assertForbidden();
+        $this->delete('/t/'.$other->slug.'/settings/backups', $data)->assertForbidden();
+        $this->delete($path, ['archives' => ['one.zip']])->assertSessionHasErrors('confirmation');
+        $this->delete($path, ['archives' => [], 'confirmation' => true])->assertSessionHasErrors('archives');
+        $this->delete($path, ['archives' => ['one.zip', '../platform/two.zip'], 'confirmation' => true])->assertSessionHasErrors('archives.1');
+        $this->delete($path, ['archives' => ['one.zip', 'missing.zip'], 'confirmation' => true])->assertSessionHasErrors('archives');
+        $disk->assertExists('tenant-'.$tenant->id.'/one.zip');
+        BackupLock::run(fn () => $this->delete($path, $data)->assertSessionHasErrors('archives'));
+        $disk->assertExists('tenant-'.$tenant->id.'/one.zip');
+        $this->delete($path, $data)->assertRedirect()->assertSessionHasNoErrors();
+        $disk->assertMissing('tenant-'.$tenant->id.'/one.zip');
+        $this->delete($path, ['archives' => ['two.zip', 'three.zip'], 'confirmation' => true])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame([], $disk->files('tenant-'.$tenant->id));
+        $this->assertCount(3, $disk->files('tenant-'.$other->id));
+        $this->assertCount(3, $disk->files('platform'));
+        $this->assertDatabaseHas('tenant_user', ['tenant_id' => $tenant->id, 'user_id' => $member->id]);
+        $admin = User::factory()->create(['is_super_admin' => true]);
+        $this->actingAs($admin)->delete('/platform/settings/backups', ['archives' => ['one.zip', 'two.zip'], 'confirmation' => true])->assertRedirect()->assertSessionHasNoErrors();
+        $disk->assertMissing('platform/one.zip');
+        $disk->assertMissing('platform/two.zip');
+        $disk->assertExists('platform/three.zip');
+    }
+
     public function test_restore_rejects_populated_tenant_and_identity_conflicts_atomically(): void
     {
         [$tenant, $user] = $this->fixture();

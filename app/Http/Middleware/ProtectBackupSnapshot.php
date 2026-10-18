@@ -12,7 +12,7 @@ class ProtectBackupSnapshot
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->isMethodSafe() || $request->routeIs('platform.backups.store', 'tenant.backups.store', 'tenant.backups.restore')) {
+        if ($request->isMethodSafe() || $request->routeIs('platform.backups.store', 'tenant.backups.store', 'tenant.backups.restore', 'platform.backups.destroy', 'tenant.backups.destroy')) {
             return $next($request);
         }
 
