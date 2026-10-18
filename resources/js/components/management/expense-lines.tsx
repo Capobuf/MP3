@@ -12,14 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { dateLabel, decimalInput, money, varianceTextClass } from './helpers';
-import { DateField } from './date-field';
+import { decimalInput, money, varianceTextClass } from './helpers';
 import { MoneyField, MoneyOutput } from './money-field';
-import {
-    ExpensePeriodFields,
-    periodCrossesYears,
-    periodYear,
-} from './expense-period-fields';
+import { ExpensePeriodFields } from './expense-period-fields';
 import type { ExpenseLine, RecordData } from './types';
 import {
     useTableView,
@@ -29,7 +24,7 @@ import {
     TableViewSettings,
 } from './table-view';
 
-export type DraftLine = ExpenseLine & { key: string };
+export type DraftLine = ExpenseLine & { key: string; yearEdited?: boolean };
 
 let nextLineKey = 0;
 function lineKey(): string {
@@ -144,8 +139,6 @@ export function ExpenseLines({
                 .toLocaleLowerCase('it')
                 .includes(search.toLocaleLowerCase('it')),
     );
-    const showYearColumn =
-        !!onSaveLine || (contractMode && visible.some(periodCrossesYears));
     const selectedLines = lines.filter((line) => selected.includes(line.key));
     const visibleSelected = visible.filter((line) =>
         selected.includes(line.key),
@@ -249,29 +242,16 @@ export function ExpenseLines({
                 value: (line) => lineCents(line) ?? undefined,
                 className: 'text-right',
             },
-            ...(contractMode
-                ? [
-                      {
-                          id: 'period_starts_on',
-                          label: 'Inizio',
-                          value: (line: DraftLine) => line.period_starts_on,
-                      },
-                      {
-                          id: 'period_ends_on',
-                          label: 'Fine',
-                          value: (line: DraftLine) => line.period_ends_on,
-                      },
-                  ]
-                : []),
-            ...(showYearColumn
-                ? [
-                      {
-                          id: 'year',
-                          label: 'Anno di imputazione',
-                          value: (line: DraftLine) => Number(line.year),
-                      },
-                  ]
-                : []),
+            {
+                id: 'year',
+                label: 'Anno di imputazione',
+                value: (line) =>
+                    Number(
+                        line.year ??
+                            defaultPeriod?.year ??
+                            economicContext!.year,
+                    ),
+            },
             ...(!readOnly
                 ? [
                       {
@@ -298,21 +278,11 @@ export function ExpenseLines({
         onChange?.(
             lines.map((line) => {
                 if (line.key !== key) return line;
-                const next = { ...line, ...patch };
-                if ('period_starts_on' in patch || 'period_ends_on' in patch)
-                    next.year = periodYear(
-                        {
-                            year: String(
-                                next.year ??
-                                    defaultPeriod?.year ??
-                                    economicContext!.year,
-                            ),
-                            period_starts_on: next.period_starts_on ?? '',
-                            period_ends_on: next.period_ends_on ?? '',
-                        },
-                        !line.period_starts_on || !line.period_ends_on,
-                    );
-                return next;
+                return {
+                    ...line,
+                    ...patch,
+                    yearEdited: line.yearEdited || 'year' in patch,
+                };
             }),
         );
     }
@@ -322,17 +292,9 @@ export function ExpenseLines({
             filter === 'actual' ? 'actual' : 'allocated',
             defaultDescription,
         );
-        if (contractMode) {
-            line.period_starts_on = defaultPeriod?.period_starts_on ?? '';
-            line.period_ends_on = defaultPeriod?.period_ends_on ?? '';
-            line.year = periodYear(
-                {
-                    ...defaultPeriod,
-                    year: defaultPeriod?.year ?? String(economicContext!.year),
-                },
-                true,
-            );
-        }
+        line.year = defaultPeriod?.year ?? String(economicContext!.year);
+        line.period_starts_on = null;
+        line.period_ends_on = null;
         pendingFocus.current = line.key;
         setSearch('');
         onChange?.([...lines, line]);
@@ -1014,141 +976,66 @@ export function ExpenseLines({
                                                     />
                                                 )}
                                             </TableCell>
-                                            {contractMode &&
-                                                (
-                                                    [
-                                                        'period_starts_on',
-                                                        'period_ends_on',
-                                                    ] as const
-                                                ).map((field) => (
-                                                    <TableCell
-                                                        key={field}
-                                                        className="min-w-44"
-                                                    >
-                                                        {readOnly ? (
-                                                            editable(
-                                                                line,
-                                                                field,
-                                                                `${field === 'period_starts_on' ? 'Dal' : 'Al'} ${label}`,
-                                                                dateLabel(
-                                                                    line[field],
-                                                                ),
-                                                            )
-                                                        ) : (
-                                                            <DateField
-                                                                id={`${line.key}-${field}`}
-                                                                aria-label={`${field === 'period_starts_on' ? 'Inizio' : 'Fine'} ${label}`}
-                                                                value={
-                                                                    line[
-                                                                        field
-                                                                    ] ?? ''
-                                                                }
-                                                                onChange={(
-                                                                    value,
-                                                                ) =>
-                                                                    change(
-                                                                        line.key,
-                                                                        {
-                                                                            [field]:
-                                                                                value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                                disabled={
-                                                                    disabled
-                                                                }
-                                                                aria-invalid={
-                                                                    !!fieldError(
-                                                                        field,
-                                                                    )
-                                                                }
-                                                                aria-describedby={
-                                                                    fieldError(
-                                                                        field,
-                                                                    )
-                                                                        ? `${line.key}-${field}-error`
-                                                                        : undefined
-                                                                }
-                                                            />
-                                                        )}
-                                                        {fieldError(field) && (
-                                                            <p
-                                                                id={`${line.key}-${field}-error`}
-                                                                role="alert"
-                                                                className="text-sm text-destructive"
-                                                            >
-                                                                {fieldError(
-                                                                    field,
-                                                                )}
-                                                            </p>
-                                                        )}
-                                                    </TableCell>
-                                                ))}
-                                            {showYearColumn && (
-                                                <TableCell
-                                                    key="year"
-                                                    className="w-px"
-                                                >
-                                                    {readOnly ? (
-                                                        onSaveLine ? (
-                                                            editable(
-                                                                line,
-                                                                'year',
-                                                                `Anno ${label}`,
-                                                                line.year,
-                                                            )
-                                                        ) : periodCrossesYears(
-                                                              line,
-                                                          ) ? (
-                                                            line.year
-                                                        ) : null
+                                            <TableCell
+                                                key="year"
+                                                className="w-px"
+                                            >
+                                                {readOnly ? (
+                                                    onSaveLine ? (
+                                                        editable(
+                                                            line,
+                                                            'year',
+                                                            `Anno ${label}`,
+                                                            line.year ??
+                                                                defaultPeriod?.year ??
+                                                                economicContext!
+                                                                    .year,
+                                                        )
                                                     ) : (
-                                                        <ExpensePeriodFields
-                                                            compact
-                                                            values={{
-                                                                period_starts_on:
-                                                                    line.period_starts_on ??
-                                                                    '',
-                                                                period_ends_on:
-                                                                    line.period_ends_on ??
-                                                                    '',
-                                                                year: String(
-                                                                    line.year ??
-                                                                        '',
-                                                                ),
-                                                            }}
-                                                            onChange={(
-                                                                _,
-                                                                value,
-                                                            ) =>
-                                                                change(
-                                                                    line.key,
-                                                                    {
-                                                                        year: value,
-                                                                    },
-                                                                )
-                                                            }
-                                                            disabled={disabled}
-                                                            errors={
-                                                                fieldError(
-                                                                    'year',
-                                                                )
-                                                                    ? {
-                                                                          year: [
-                                                                              fieldError(
-                                                                                  'year',
-                                                                              )!,
-                                                                          ],
-                                                                      }
-                                                                    : {}
-                                                            }
-                                                            showPeriod={false}
-                                                            idPrefix={line.key}
-                                                            yearLabel={`Anno ${label}`}
-                                                        />
-                                                    )}
-                                                </TableCell>
-                                            )}
+                                                        (line.year ??
+                                                        defaultPeriod?.year ??
+                                                        economicContext!.year)
+                                                    )
+                                                ) : (
+                                                    <ExpensePeriodFields
+                                                        compact
+                                                        values={{
+                                                            period_starts_on:
+                                                                line.period_starts_on ??
+                                                                '',
+                                                            period_ends_on:
+                                                                line.period_ends_on ??
+                                                                '',
+                                                            year: String(
+                                                                line.year ??
+                                                                    defaultPeriod?.year ??
+                                                                    economicContext!
+                                                                        .year,
+                                                            ),
+                                                        }}
+                                                        onChange={(_, value) =>
+                                                            change(line.key, {
+                                                                year: value,
+                                                            })
+                                                        }
+                                                        disabled={disabled}
+                                                        errors={
+                                                            fieldError('year')
+                                                                ? {
+                                                                      year: [
+                                                                          fieldError(
+                                                                              'year',
+                                                                          )!,
+                                                                      ],
+                                                                  }
+                                                                : {}
+                                                        }
+                                                        showPeriod={false}
+                                                        idPrefix={line.key}
+                                                        yearLabel={`Anno ${label}`}
+                                                    />
+                                                )}
+                                            </TableCell>
                                             {!readOnly && (
                                                 <TableCell key="actions">
                                                     <div className="flex gap-1">

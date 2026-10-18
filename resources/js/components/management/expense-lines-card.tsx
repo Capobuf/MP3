@@ -1,3 +1,4 @@
+import { usePage } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
@@ -23,7 +24,6 @@ import { FieldError } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { draftLines, emptyDraftLine, ExpenseLines } from './expense-lines';
 import type { DraftLine } from './expense-lines';
-import { periodYear } from './expense-period-fields';
 import { ApiError, decimalInput } from './helpers';
 import { saveInlineRecord } from './inline-edit';
 import type { Expense, ExpenseLine } from './types';
@@ -36,7 +36,7 @@ function lineData(line: ExpenseLine, year: number) {
         quantity: decimalInput(line.quantity),
         period_starts_on: line.period_starts_on || null,
         period_ends_on: line.period_ends_on || null,
-        year: line.year ?? year,
+        year: 'year' in line ? line.year : year,
     };
 }
 
@@ -49,6 +49,7 @@ export function ExpenseLinesCard({
     url: string;
     onEditingChange: (editing: boolean) => void;
 }) {
+    const { economicContext } = usePage().props;
     const lines = expense.lines ?? [];
     const [draft, setDraft] = useState<DraftLine[] | null>(null);
     const [focusKey, setFocusKey] = useState<string>();
@@ -72,11 +73,9 @@ export function ExpenseLinesCard({
         if (add && next.length < 500) {
             const line = {
                 ...emptyDraftLine('allocated', expense.title),
-                year: expense.contract_id
-                    ? periodYear(defaultPeriod, true)
-                    : expense.year,
-                period_starts_on: expense.period_starts_on,
-                period_ends_on: expense.period_ends_on,
+                year: economicContext!.year,
+                period_starts_on: null,
+                period_ends_on: null,
             };
             next.push(line);
             setFocusKey(line.key);
@@ -204,6 +203,7 @@ export function ExpenseLinesCard({
                     ) : (
                         <ExpenseLines
                             key="reading"
+                            defaultPeriod={defaultPeriod}
                             readOnly
                             onSaveLine={(key, field, value) =>
                                 saveInlineRecord(url, {

@@ -62,6 +62,28 @@ class AnnualBudgetTest extends TestCase
         return app(AnnualBudget::class)->snapshot($this->tenant, $this->year);
     }
 
+    public function test_moving_a_line_year_moves_budget_totals_without_changing_historical_dates(): void
+    {
+        $contract = $this->tenant->contracts()->create(['name' => 'Storico', 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31']);
+        $response = $this->postJson('/t/budget/expenses', ['title' => 'Canone', 'year' => 2026, 'contract_id' => $contract->id,
+            'lines' => [['description' => 'Riga', 'type' => 'allocated', 'unit_price' => '100', 'year' => 2026,
+                'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31']],
+        ])->assertCreated();
+        $past = $this->tenant->budgetYears()->create(['year' => 2024]);
+        foreach ([$this->year, $past] as $year) {
+            $year->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'contract', 'contract_id' => $contract->id]);
+        }
+        $this->assertSame('100.00', $this->state()['totals']['allocated']);
+        $this->patchJson('/t/budget/expenses/'.$response->json('record.id'), ['lines' => [
+            ['description' => 'Riga', 'type' => 'allocated', 'unit_price' => '100', 'year' => 2024,
+                'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'],
+        ]])->assertOk();
+        $this->assertNull($this->state()['totals']['allocated']);
+        $this->assertSame('100.00', app(AnnualBudget::class)->snapshot($this->tenant, $past)['totals']['allocated']);
+        $this->assertDatabaseCount('expenses', 1);
+        $this->assertDatabaseCount('expense_lines', 1);
+    }
+
     public function test_creation_uses_the_standard_form_and_validates_budget_context_atomically(): void
     {
         $context = ['budget_year_id' => $this->year->id, 'year' => 2026];

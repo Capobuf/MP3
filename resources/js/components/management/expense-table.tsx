@@ -36,13 +36,7 @@ import { cn } from '@/lib/utils';
 import { costCenterLabel } from './cost-center-tags';
 import { CostCenterSelect } from './cost-center-select';
 import { RecordSelect } from './record-select';
-import {
-    api,
-    dateLabel,
-    decimalInput,
-    money,
-    varianceTextClass,
-} from './helpers';
+import { api, decimalInput, money, varianceTextClass } from './helpers';
 import type {
     DeletionResult,
     Expense,
@@ -297,11 +291,6 @@ export function ExpenseTable({
                 : []),
             ...(contractMode
                 ? [
-                      {
-                          id: 'period_starts_on',
-                          label: 'Periodo coperto',
-                          value: (row: Expense) => row.period_starts_on,
-                      },
                       {
                           id: 'year',
                           label: 'Anno di imputazione',
@@ -685,17 +674,6 @@ export function ExpenseTable({
                                         )}
                                         {contractMode && (
                                             <>
-                                                <TableCell
-                                                    key="period_starts_on"
-                                                    className={amountCell}
-                                                >
-                                                    <span>
-                                                        {expense.period_starts_on &&
-                                                        expense.period_ends_on
-                                                            ? `${dateLabel(expense.period_starts_on)} – ${dateLabel(expense.period_ends_on)}`
-                                                            : 'Periodo non indicato'}
-                                                    </span>
-                                                </TableCell>
                                                 <TableCell
                                                     key="year"
                                                     className={amountCell}

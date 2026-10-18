@@ -125,6 +125,10 @@ class TenantCsvTransferTest extends TestCase
             ['description' => 'Zero', 'type' => 'allocated', 'unit_price' => '0.00', 'quantity' => '1.0000', 'year' => 2026, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'],
             ['description' => 'Negativo', 'type' => 'allocated', 'unit_price' => '-12.34', 'quantity' => '2.5000', 'year' => 2027, 'period_starts_on' => '2027-01-01', 'period_ends_on' => '2027-12-31'],
         ]]);
+        $lines = $expense->lines->map(fn ($line) => Arr::only($line->toArray(), ['description', 'type', 'unit_price', 'quantity', 'period_starts_on', 'period_ends_on', 'year']))->all();
+        $lines[1]['year'] = 2024;
+        $this->patchJson('/t/origine/expenses/'.$expense->id, ['lines' => $lines])->assertOk();
+        $expense->refresh();
         $legacy = $source->expenses()->create(['title' => 'Legacy', 'year' => 2026, 'allocated_amount' => null, 'actual_amount' => '0.00']);
         $year = $source->budgetYears()->create(['year' => 2026, 'structure_copied' => true, 'dismissed_sources' => ['expense:'.$legacy->id]]);
         $free = $source->expenses()->create(['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '0.00', 'actual_amount' => null]);
@@ -145,6 +149,8 @@ class TenantCsvTransferTest extends TestCase
         $new = $target->expenses()->where('title', 'Pluriennale')->firstOrFail();
         $this->assertNotSame($expense->id, $new->id);
         $this->assertSame($expense->allocated_amount, $new->allocated_amount);
+        $this->assertSame($expense->getRawOriginal('period_starts_on'), $new->getRawOriginal('period_starts_on'));
+        $this->assertSame($expense->getRawOriginal('period_ends_on'), $new->getRawOriginal('period_ends_on'));
         $this->assertNull($new->actual_amount);
         $this->assertSame($expense->created_at->format('Y-m-d H:i:s'), $new->created_at->format('Y-m-d H:i:s'));
         $fields = ['description', 'type', 'unit_price', 'quantity', 'total', 'position', 'period_starts_on', 'period_ends_on', 'year'];

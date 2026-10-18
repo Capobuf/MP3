@@ -201,6 +201,28 @@ class ManagementTest extends TestCase
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0));
     }
 
+    public function test_contract_first_expense_uses_the_chosen_year_and_keeps_explicit_line_years(): void
+    {
+        foreach ([2026, 2024] as $year) {
+            $this->get('/t/alfa/contracts/create?year=2026')->assertOk();
+            $response = $this->postJson('/t/alfa/contracts', [
+                'name' => 'Scelta '.$year, 'year' => $year, 'starts_on' => '2024-01-01', 'ends_on' => '2025-12-31',
+                'initial_expense' => ['title' => 'Prima spesa', 'year' => $year, 'lines' => [
+                    ['description' => 'Predefinita', 'type' => 'allocated', 'unit_price' => '100', 'year' => $year],
+                    ['description' => 'Esplicita', 'type' => 'actual', 'unit_price' => '80', 'year' => 2027],
+                ]],
+            ])->assertCreated();
+            $expense = $this->tenant->expenses()->where('contract_id', $response->json('record.id'))->sole();
+            $this->assertSame([$year, 2027], $expense->lines()->pluck('year')->all());
+            $this->assertNull($expense->period_starts_on);
+            $this->assertNull($expense->period_ends_on);
+            $this->assertSame([null, null], $expense->lines()->pluck('period_starts_on')->all());
+            $this->assertSame(2026, session('economic_year.'.$this->tenant->id));
+            $this->get('/t/alfa/contracts/'.$expense->contract_id.'?year='.$year)->assertInertia(fn (Assert $page) => $page
+                ->where('economicContext.year', $year)->where('totals.allocated', '100.00'));
+        }
+    }
+
     public function test_contract_initial_expense_reuses_zero_and_missing_type_semantics(): void
     {
         foreach (['allocated', 'actual'] as $type) {
@@ -256,9 +278,7 @@ class ManagementTest extends TestCase
             [['period_ends_on' => null], 'period_ends_on'],
             [['period_ends_on' => '2026-01-01'], 'period_ends_on'],
             [['period_starts_on' => 'not-a-date'], 'period_starts_on'],
-            [['year' => 2025], 'year'],
             [['year' => 2101], 'year'],
-            [['period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31', 'year' => 2027], 'year'],
         ] as [$invalid, $error]) {
             $this->postJson('/t/alfa/contracts', ['name' => 'Non salvare', 'initial_expense' => [
                 'title' => 'Non salvare', 'year' => 2026, 'lines' => [[...$base, ...$invalid]],
@@ -280,6 +300,11 @@ class ManagementTest extends TestCase
         $lines = $expense->lines->toArray();
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['title' => 'Titolo aggiornato', 'notes' => 'Nota'])->assertOk();
         $this->assertSame($lines, $expense->fresh()->lines->toArray());
+        $data['lines'][1]['year'] = 2024;
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['lines' => $data['lines']])->assertOk()
+            ->assertJsonPath('record.lines.0.year', 2027)->assertJsonPath('record.lines.1.year', 2024)
+            ->assertJsonPath('record.lines.2.year', 2028)->assertJsonPath('record.lines.1.period_starts_on', '2026-01-01')
+            ->assertJsonPath('record.period_starts_on', '2026-01-01')->assertJsonPath('record.period_ends_on', '2028-12-31');
         $this->get('/t/alfa/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page->where('totals.allocated', '500.00'));
     }
 
@@ -292,7 +317,7 @@ class ManagementTest extends TestCase
             [[...$valid, 'lines' => []], 'initial_expense.lines'],
             [[...$valid, 'lines' => [['description' => '', 'type' => 'allocated', 'unit_price' => '100']]], 'initial_expense.lines.0.description'],
             [[...$valid, 'lines' => [['description' => 'Overflow', 'type' => 'allocated', 'unit_price' => '999999999999.99', 'quantity' => '2']]], 'initial_expense.lines.0.unit_price'],
-            [[...$valid, 'year' => 2025], 'initial_expense.year'],
+            [[...$valid, 'year' => 1999], 'initial_expense.year'],
             [[...$valid, 'period_ends_on' => null], 'initial_expense.period_ends_on'],
             [[...$valid, 'contract_id' => 999], 'initial_expense'],
         ] as [$data, $error]) {
