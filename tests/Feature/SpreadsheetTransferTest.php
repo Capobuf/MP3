@@ -7,16 +7,22 @@ use App\Exports\SectionWorkbook;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Services\AnnualBudget;
 use App\Services\ExpenseWriter;
 use App\Services\SectionSpreadsheet;
+use App\Support\ExpenseAnalytics;
+use App\Support\ExpenseOverview;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Inertia\Testing\AssertableInertia as Assert;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SpreadsheetTransferTest extends TestCase
@@ -47,6 +53,53 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
 
         return IOFactory::load($response->baseResponse->getFile()->getPathname());
+    }
+
+    public static function lineLessAmounts(): array
+    {
+        return [
+            'both' => ['100.00', '80.00'],
+            'allocated only' => ['100.00', null],
+            'actual only' => [null, '80.00'],
+            'explicit zeros' => ['0.00', '0.00'],
+            'zero and missing' => ['0.00', null],
+            'negative cents' => ['-12.34', '-0.01'],
+            'missing' => [null, null],
+        ];
+    }
+
+    #[DataProvider('lineLessAmounts')]
+    public function test_saving_empty_lines_preserves_budget_import_amounts(?string $allocated, ?string $actual): void
+    {
+        $tenant = $this->tenant();
+        $year = $tenant->budgetYears()->create(['year' => 2027]);
+        $file = $this->file('budget', [[2027, 'new-expense', null, 'Voce libera', $allocated, $actual, null]]);
+        $preview = $this->postJson('/t/ambiente/budget/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0);
+        $this->postJson('/t/ambiente/budget/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk()->assertJsonPath('created', 1);
+        $expense = $tenant->expenses()->sole();
+        $this->assertSame($allocated, $expense->allocated_amount);
+        $this->assertSame($actual, $expense->actual_amount);
+        $this->assertSame(0, $expense->lines()->count());
+        $request = Request::create('/', 'GET', ['year' => 2027]);
+        $budget = app(AnnualBudget::class)->snapshot($tenant, $year);
+        $totals = ExpenseOverview::totals(ExpenseOverview::query($tenant, $request));
+        $analytics = ExpenseAnalytics::data($tenant, $request);
+        $url = '/t/ambiente/expenses/'.$expense->id;
+        $this->get($url)->assertInertia(fn (Assert $page) => $page
+            ->has('expense.lines', 0)->where('expense.allocated_amount', $allocated)->where('expense.actual_amount', $actual));
+
+        // Gestisci righe sends the explicitly empty list returned by the detail page.
+        $this->patchJson($url, ['lines' => []])->assertOk()
+            ->assertJsonPath('record.allocated_amount', $allocated)->assertJsonPath('record.actual_amount', $actual)
+            ->assertJsonPath('record.variance', $expense->variance)->assertJsonPath('record.year', 2027)->assertJsonCount(0, 'record.lines');
+        $this->assertSame($allocated, $expense->refresh()->allocated_amount);
+        $this->assertSame($actual, $expense->actual_amount);
+        $this->get($url)->assertInertia(fn (Assert $page) => $page
+            ->where('expense.allocated_amount', $allocated)->where('expense.actual_amount', $actual));
+        $this->assertSame($budget, app(AnnualBudget::class)->snapshot($tenant, $year));
+        $this->assertSame($totals, ExpenseOverview::totals(ExpenseOverview::query($tenant, $request)));
+        $this->assertSame($analytics, ExpenseAnalytics::data($tenant, $request));
+        $this->assertSame(0, ExpenseOverview::query($tenant, Request::create('/', 'GET', ['year' => 2026]))->count());
     }
 
     public function test_filtered_export_includes_all_pages_and_writes_user_strings_as_text(): void
