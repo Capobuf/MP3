@@ -45,6 +45,7 @@ return [
         ],
 
         'mysql' => [
+            'dump' => ['use_single_transaction' => true, 'add_extra_option' => '--no-tablespaces', 'mysql_gtid_purged' => 'OFF', 'timeout' => 600],
             'driver' => 'mysql',
             'url' => env('DB_URL'),
             'host' => env('DB_HOST', '127.0.0.1'),

@@ -38,6 +38,15 @@ return [
             'report' => false,
         ],
 
+        'backups' => [
+            'driver' => 'local',
+            'root' => storage_path('app/backups'),
+            'visibility' => 'private',
+            'directory_visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+        ],
+
         'attachments' => [
             'driver' => 'local',
             'root' => storage_path('app/private/attachments'),

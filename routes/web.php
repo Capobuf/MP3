@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Platform\EmailSettingsController;
 use App\Http\Controllers\Platform\PlatformController;
@@ -37,6 +38,10 @@ Route::middleware('auth')->group(function () {
     Route::prefix('platform')->middleware(EnsureSuperAdmin::class)->name('platform.')->group(function () {
         Route::get('/', PlatformController::class)->name('index');
         Route::get('settings/users', [PlatformController::class, 'users'])->name('users.index');
+        Route::get('settings/backups', [BackupController::class, 'index'])->name('backups.index');
+        Route::post('settings/backups', [BackupController::class, 'store'])->middleware('throttle:3,1')->name('backups.store');
+        Route::put('settings/backups', [BackupController::class, 'update'])->name('backups.update');
+        Route::get('settings/backups/{archive}', [BackupController::class, 'download'])->name('backups.download');
         Route::get('settings/email', [EmailSettingsController::class, 'edit'])->name('email.edit');
         Route::put('settings/email', [EmailSettingsController::class, 'update'])->name('email.update');
         Route::post('settings/email/test', [EmailSettingsController::class, 'sendTest'])->middleware('throttle:5,1')->name('email.test');
@@ -70,6 +75,12 @@ Route::middleware('auth')->group(function () {
         Route::post('settings/project-statuses', [ProjectStatusController::class, 'store'])->name('project-statuses.store');
         Route::patch('settings/project-statuses/{status}', [ProjectStatusController::class, 'update'])->whereNumber('status')->name('project-statuses.update');
         Route::delete('settings/project-statuses/{status}', [ProjectStatusController::class, 'destroy'])->whereNumber('status')->name('project-statuses.destroy');
+        Route::prefix('settings/backups')->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('/', [BackupController::class, 'index'])->name('backups.index');
+            Route::post('/', [BackupController::class, 'store'])->middleware('throttle:3,1')->name('backups.store');
+            Route::post('restore', [BackupController::class, 'restore'])->middleware('throttle:3,1')->name('backups.restore');
+            Route::get('{archive}', [BackupController::class, 'download'])->name('backups.download');
+        });
         Route::prefix('settings/data')->withoutMiddleware(RecordUndo::class)->group(function () {
             Route::get('/', [TenantDataTransferController::class, 'index'])->name('data.index');
             Route::get('export.csv', [TenantDataTransferController::class, 'export'])->name('data.export');
