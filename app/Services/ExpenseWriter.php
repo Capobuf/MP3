@@ -6,7 +6,6 @@ use App\Models\Expense;
 use App\Models\Tenant;
 use App\Support\ExpensePeriods;
 use App\Support\Money;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -45,18 +44,15 @@ class ExpenseWriter
         }
         $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
         $individualPeriods = isset($data['lines']) && array_filter($data['lines'], fn ($line) => array_key_exists('year', $line) || array_key_exists('period_starts_on', $line) || array_key_exists('period_ends_on', $line)) !== [];
-        if ($individualPeriods && (! $expense->exists || $expense->contract_id !== null)) {
+        if ($individualPeriods && ! $expense->exists) {
             $starts = array_filter(array_column($data['lines'], 'period_starts_on'));
             $ends = array_filter(array_column($data['lines'], 'period_ends_on'));
             $data['period_starts_on'] = $starts === [] ? null : min($starts);
             $data['period_ends_on'] = $ends === [] ? null : max($ends);
-            if (! $expense->exists) {
-                $data['year'] = $data['lines'][0]['year'] ?? $expense->year;
-            }
+            $data['year'] = $data['lines'][0]['year'] ?? $expense->year;
             $expense->fill(array_diff_key($data, array_flip(['lines', 'cost_center_ids'])));
         }
-        $sharedPeriodUpdate = array_intersect_key($data, array_flip(['year', 'period_starts_on', 'period_ends_on']));
-        ExpensePeriods::validate($expense, $pending, ! $individualPeriods && (! $hasLines || $sharedPeriodUpdate !== []));
+        ExpensePeriods::validate($expense);
         if ($contractEntry && $expense->contract_id === null) {
             throw ValidationException::withMessages(['contract_id' => 'Seleziona il contratto della spesa.']);
         }
@@ -105,9 +101,6 @@ class ExpenseWriter
             $start = array_key_exists('period_starts_on', $line) ? $line['period_starts_on'] : $expense->period_starts_on?->toDateString();
             $end = array_key_exists('period_ends_on', $line) ? $line['period_ends_on'] : $expense->period_ends_on?->toDateString();
             $year = $line['year'] ?? $expense->year;
-            if ($start !== null && $end !== null && ! in_array((int) $year, [Carbon::parse($start)->year, Carbon::parse($end)->year], true)) {
-                throw ValidationException::withMessages(["lines.{$position}.year" => 'Scegli l’anno iniziale o finale del periodo della condizione economica.']);
-            }
             $quantity = (string) ($line['quantity'] ?? '1');
             $parts = explode('.', $quantity);
             $scaledQuantity = (int) $parts[0] * 10000 + (int) str_pad($parts[1] ?? '', 4, '0');

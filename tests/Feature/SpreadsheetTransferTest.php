@@ -11,6 +11,7 @@ use App\Services\ExpenseWriter;
 use App\Services\SectionSpreadsheet;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -90,6 +91,13 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertEquals(2026, $contracts->getSheet(0)->getCell('H2')->getValue());
         $this->assertEquals(2026, $contracts->getSheet(1)->getCell('B2')->getValue());
         $this->assertSame(2, $expense->lines()->count());
+        $lines = $expense->lines->map(fn ($line) => Arr::only($line->toArray(), ['description', 'type', 'unit_price', 'quantity', 'period_starts_on', 'period_ends_on', 'year']))->all();
+        $lines[1]['year'] = 2024;
+        $this->patchJson('/t/ambiente/expenses/'.$expense->id, ['lines' => $lines])->assertOk();
+        $moved = $this->workbook('/t/ambiente/expenses/export.xlsx?year=2024');
+        $this->assertSame(123.45, $moved->getSheet(0)->getCell('I2')->getValue());
+        $this->assertSame('Anno due', $moved->getSheet(1)->getCell('B2')->getValue());
+        $this->assertSame(1, $this->workbook('/t/ambiente/expenses/export.xlsx?year=2027')->getSheet(0)->getHighestDataRow());
     }
 
     public function test_budget_export_uses_the_same_aggregate_variance_as_the_page(): void

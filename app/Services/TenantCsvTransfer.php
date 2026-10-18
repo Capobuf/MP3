@@ -262,11 +262,6 @@ class TenantCsvTransfer
                     } $unique[$key] = true;
                 }
                 if ($type === 'expense-line') {
-                    $start = $data['period_starts_on'];
-                    $end = $data['period_ends_on'];
-                    if ($data['year'] !== null && $start !== null && ! in_array($data['year'], [(int) substr($start, 0, 4), (int) substr($end, 0, 4)], true)) {
-                        Values::invalid('year', 'Anno non coerente con il periodo della riga.');
-                    }
                     $parts = explode('.', $data['quantity']);
                     $scaled = (int) $parts[0] * 10000 + (int) str_pad($parts[1] ?? '', 4, '0');
                     $price = Money::cents($data['unit_price']);

@@ -37,12 +37,11 @@ export default function ExpenseDetail({
         saveInlineRecord(`${path}/${expense.id}`, { [field]: value });
     const lines = expense.lines ?? [];
     const [editingLines, setEditingLines] = useState(false);
-    const years =
-        expense.contract_id && lines.length
-            ? [...new Set(lines.map((line) => line.year ?? expense.year))]
-                  .sort((a, b) => Number(a) - Number(b))
-                  .join(', ')
-            : String(expense.year);
+    const years = lines.length
+        ? [...new Set(lines.map((line) => line.year ?? expense.year))]
+              .sort((a, b) => Number(a) - Number(b))
+              .join(', ')
+        : String(expense.year);
     return (
         <>
             <Head title={`${expense.title} · ${tenant.name}`} />
@@ -79,12 +78,14 @@ export default function ExpenseDetail({
                     >
                         {tenant.name} / Spese / {expense.year}
                     </Link>
-                    {expense.period_starts_on && expense.period_ends_on && (
-                        <div className="mt-3 text-sm text-muted-foreground">
-                            {dateLabel(expense.period_starts_on)} –{' '}
-                            {dateLabel(expense.period_ends_on)}
-                        </div>
-                    )}
+                    {!expense.contract_id &&
+                        expense.period_starts_on &&
+                        expense.period_ends_on && (
+                            <div className="mt-3 text-sm text-muted-foreground">
+                                {dateLabel(expense.period_starts_on)} –{' '}
+                                {dateLabel(expense.period_ends_on)}
+                            </div>
+                        )}
                 </DetailHero>
                 <DetailKpis
                     allocated={expense.allocated_amount}
@@ -118,7 +119,7 @@ export default function ExpenseDetail({
                                 Anno di imputazione
                             </dt>
                             <dd className="mt-1 text-sm font-medium">
-                                {expense.contract_id ? (
+                                {lines.length ? (
                                     years
                                 ) : (
                                     <InlineEdit
@@ -130,17 +131,19 @@ export default function ExpenseDetail({
                                 )}
                             </dd>
                         </div>
-                        {expense.period_starts_on && expense.period_ends_on && (
-                            <div>
-                                <dt className="text-xs text-muted-foreground">
-                                    Periodo coperto
-                                </dt>
-                                <dd className="mt-1 text-sm">
-                                    {dateLabel(expense.period_starts_on)} –{' '}
-                                    {dateLabel(expense.period_ends_on)}
-                                </dd>
-                            </div>
-                        )}
+                        {!expense.contract_id &&
+                            expense.period_starts_on &&
+                            expense.period_ends_on && (
+                                <div>
+                                    <dt className="text-xs text-muted-foreground">
+                                        Periodo coperto
+                                    </dt>
+                                    <dd className="mt-1 text-sm">
+                                        {dateLabel(expense.period_starts_on)} –{' '}
+                                        {dateLabel(expense.period_ends_on)}
+                                    </dd>
+                                </div>
+                            )}
                         {(['vendor', 'contract', 'project'] as const).map(
                             (relation) => {
                                 const label =

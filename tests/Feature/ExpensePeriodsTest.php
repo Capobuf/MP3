@@ -254,28 +254,29 @@ class ExpensePeriodsTest extends TestCase
         $this->patchJson('/t/periodi/expenses/'.$expense->id, ['period_starts_on' => null, 'period_ends_on' => null])->assertOk()->assertJsonPath('record.year', 2026);
     }
 
-    public function test_multi_year_accepts_only_start_or_end_year_and_preserves_choice(): void
+    public function test_attribution_year_is_independent_of_historical_periods(): void
     {
-        foreach ([2026, 2028] as $year) {
-            $data = $this->data('2026-07-01', '2028-06-30', $year);
-            $data['contract_id'] = $this->tenant->contracts()->create(['name' => 'Contratto '.$year])->id;
-            $response = $this->postJson('/t/periodi/expenses', $data)->assertCreated()->assertJsonPath('record.year', $year);
-            $this->patchJson('/t/periodi/expenses/'.$response->json('record.id'), ['title' => 'Rinominata'])->assertOk()->assertJsonPath('record.year', $year);
+        foreach ([2024, 2026, 2027, 2028, 2029] as $year) {
+            $response = $this->postJson('/t/periodi/expenses', $this->data('2026-07-01', '2028-06-30', $year))
+                ->assertCreated()->assertJsonPath('record.year', $year);
+            $this->patchJson('/t/periodi/expenses/'.$response->json('record.id'), ['title' => 'Rinominata'])
+                ->assertOk()->assertJsonPath('record.year', $year);
         }
-        foreach ([2025, 2027, 2029] as $year) {
-            $this->postJson('/t/periodi/expenses', $this->data('2026-07-01', '2028-06-30', $year))->assertUnprocessable()->assertJsonValidationErrors('year');
-        }
-        $this->postJson('/t/periodi/expenses', $this->data('2026-01-01', '2026-12-31', 2027))->assertUnprocessable()->assertJsonValidationErrors('year');
     }
 
-    public function test_year_and_period_partial_changes_validate_the_final_state(): void
+    public function test_simple_expense_can_move_year_without_changing_its_historical_period(): void
     {
-        $expense = $this->createExpense('2026-07-01', '2027-06-30', 2027);
-        $url = '/t/periodi/expenses/'.$expense->id;
-        $this->patchJson($url, ['year' => 2025])->assertUnprocessable()->assertJsonValidationErrors('year');
-        $this->patchJson($url, ['period_ends_on' => '2026-12-31'])->assertUnprocessable()->assertJsonValidationErrors('year');
-        $this->assertSame(2027, $expense->refresh()->year);
-        $this->patchJson($url, ['period_ends_on' => '2026-12-31', 'year' => 2026])->assertOk();
+        $expense = $this->createExpense();
+        $this->patchJson('/t/periodi/expenses/'.$expense->id, ['year' => 2024])->assertOk()
+            ->assertJsonPath('record.year', 2024)->assertJsonPath('record.period_starts_on', '2026-01-01')
+            ->assertJsonPath('record.period_ends_on', '2026-06-30');
+        foreach ([2024 => '650.00', 2026 => '0.00'] as $year => $amount) {
+            foreach (['expenses', 'dashboard'] as $path) {
+                $this->get('/t/periodi/'.$path.'?year='.$year)->assertInertia(fn (Assert $page) => $page
+                    ->where('totals.allocated', $amount));
+            }
+        }
+        $this->assertDatabaseCount('expenses', 1);
     }
 
     public function test_changing_contract_checks_the_destination_and_allows_detachment(): void
@@ -316,7 +317,7 @@ class ExpensePeriodsTest extends TestCase
     {
         $first = $this->createExpense();
         $second = $this->createExpense('2026-09-01', '2026-12-31');
-        foreach ([['year' => 2027], ['period_ends_on' => null]] as $invalid) {
+        foreach ([['year' => 2101], ['period_ends_on' => null]] as $invalid) {
             $this->patchJson('/t/periodi/expenses/batch', ['updates' => [
                 ['id' => $first->id, 'title' => 'Non salvare', 'actual_amount' => '100'],
                 ['id' => $second->id, ...$invalid],

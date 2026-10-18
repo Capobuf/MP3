@@ -32,7 +32,7 @@ import { DateField } from './date-field';
 import { MoneyField } from './money-field';
 import { FormSurface } from './form-surface';
 import { draftLines, emptyDraftLine, ExpenseLines } from './expense-lines';
-import { ExpensePeriodFields, periodYear } from './expense-period-fields';
+import { ExpensePeriodFields } from './expense-period-fields';
 import { dateLabel } from './helpers';
 import type { DraftLine } from './expense-lines';
 import { api, ApiError, decimalInput } from './helpers';
@@ -226,25 +226,6 @@ export function EntityForm({
                 emptyDraftLine('allocated', contractContext.name ?? ''),
             ];
             initial.values.contract_id = String(contractContext.id);
-            if (
-                !contractContext.has_period_expenses &&
-                contractContext.starts_on &&
-                contractContext.ends_on
-            ) {
-                initial.values.period_starts_on =
-                    contractContext.starts_on.slice(0, 10);
-                initial.values.period_ends_on = contractContext.ends_on.slice(
-                    0,
-                    10,
-                );
-                initial.values.year = periodYear(initial.values, true);
-            }
-            initial.lines[0] = {
-                ...initial.lines[0],
-                period_starts_on: initial.values.period_starts_on,
-                period_ends_on: initial.values.period_ends_on,
-                year: initial.values.year,
-            };
             initial.original = snapshot(initial);
         }
         if (kind === 'expenses' && projectContext && !record) {
@@ -266,6 +247,7 @@ export function EntityForm({
         return () => onBusyChange?.(false);
     }, [formBusy, onBusyChange]);
     useImperativeHandle(ref, () => ({ requestClose }));
+    const [confirmYear, setConfirmYear] = useState<number | null>(null);
     const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
     const current = frames[frames.length - 1];
     const initialExpense = current.initialExpense;
@@ -322,13 +304,6 @@ export function EntityForm({
                             : line,
                     );
                 }
-                if (item.kind === 'expenses' && key.startsWith('period_'))
-                    values.year = periodYear(
-                        values,
-                        !item.record &&
-                            (!item.values.period_starts_on ||
-                                !item.values.period_ends_on),
-                    );
                 let initialExpense = item.initialExpense;
                 if (initialExpense && key === 'name') {
                     initialExpense = {
@@ -357,12 +332,6 @@ export function EntityForm({
                 if (index !== previous.length - 1 || !item.initialExpense)
                     return item;
                 const values = { ...item.initialExpense.values, [key]: value };
-                if (key.startsWith('period_'))
-                    values.year = periodYear(
-                        values,
-                        !item.initialExpense.values.period_starts_on ||
-                            !item.initialExpense.values.period_ends_on,
-                    );
                 return {
                     ...item,
                     initialExpense: { ...item.initialExpense, values },
@@ -405,8 +374,11 @@ export function EntityForm({
         navigation.allow();
         onClose();
     }
-    async function save(event: React.SubmitEvent<HTMLFormElement>) {
-        event.preventDefault();
+    async function save(
+        continuationYear = current.kind === 'contracts'
+            ? economicContext!.year
+            : year,
+    ) {
         if (formBusy) return;
         setBusy(true);
         setErrors({});
@@ -421,7 +393,7 @@ export function EntityForm({
             ]),
         );
         if (['contracts', 'projects'].includes(current.kind) && !current.record)
-            payload.year = year;
+            payload.year = continuationYear;
         if (current.kind === 'expenses') {
             const original = JSON.parse(current.original) as Frame;
             if (current.record) {
@@ -474,9 +446,15 @@ export function EntityForm({
         if (initialExpense && initialLines.length > 0) {
             payload.initial_expense = {
                 ...initialExpense.values,
+                year: continuationYear,
                 lines: linePayload(
-                    initialLines.map(({ line }) => line),
-                    initialExpense.values.year,
+                    initialLines.map(({ line }) => ({
+                        ...line,
+                        year: line.yearEdited
+                            ? line.year
+                            : String(continuationYear),
+                    })),
+                    String(continuationYear),
                 ),
             };
         }
@@ -490,7 +468,16 @@ export function EntityForm({
                 payload,
             );
             toast.success(`${singular[current.kind]} salvato.`);
-            if (frames.length > 1) {
+            if (
+                current.kind === 'contracts' &&
+                !current.record &&
+                continuationYear !== economicContext!.year
+            ) {
+                navigation.allow();
+                router.visit(
+                    `/t/${tenant.slug}/contracts/${data.record.id}?year=${continuationYear}`,
+                );
+            } else if (frames.length > 1) {
                 const catalog = current.kind as Catalog;
                 setLocalOptions((previous) => ({
                     ...previous,
@@ -656,7 +643,20 @@ export function EntityForm({
                     data-undo-dirty={dirty}
                     className="flex min-h-0 flex-1 flex-col"
                     onSubmit={(event) => {
-                        void save(event);
+                        event.preventDefault();
+                        const startYear = Number(
+                            current.values.starts_on?.slice(0, 4),
+                        );
+                        if (
+                            current.kind === 'contracts' &&
+                            !current.record &&
+                            startYear &&
+                            startYear !== economicContext!.year
+                        ) {
+                            setConfirmYear(startYear);
+                        } else {
+                            void save();
+                        }
                     }}
                 >
                     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain p-4 sm:p-6">
@@ -685,8 +685,7 @@ export function EntityForm({
                                     contractContext.name}
                                 . Date di riferimento:{' '}
                                 {dateLabel(contractContext.starts_on)} –{' '}
-                                {dateLabel(contractContext.ends_on)}. Puoi
-                                indicare anche un periodo diverso.
+                                {dateLabel(contractContext.ends_on)}.
                             </p>
                         )}
                         <FieldGroup
@@ -732,13 +731,16 @@ export function EntityForm({
                                                 onChange={change}
                                                 disabled={formBusy}
                                                 errors={errors}
+                                                showYear={
+                                                    !current.detailed ||
+                                                    current.lines.length === 0
+                                                }
                                                 showPeriod={
-                                                    !!current.values
-                                                        .contract_id ||
-                                                    !!current.values
+                                                    !contractLines &&
+                                                    (!!current.values
                                                         .period_starts_on ||
-                                                    !!current.values
-                                                        .period_ends_on
+                                                        !!current.values
+                                                            .period_ends_on)
                                                 }
                                             />
                                         );
@@ -853,7 +855,11 @@ export function EntityForm({
                                                                     ...previous,
                                                                     frame(
                                                                         field.catalog!,
-                                                                        year,
+                                                                        field.catalog ===
+                                                                            'contracts'
+                                                                            ? economicContext!
+                                                                                  .year
+                                                                            : year,
                                                                         undefined,
                                                                         field.key,
                                                                     ),
@@ -1271,6 +1277,39 @@ export function EntityForm({
                     </div>
                 </form>
             </FormSurface>
+            <AlertDialog
+                open={confirmYear !== null}
+                onOpenChange={(open) => !open && setConfirmYear(null)}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            Anno di lavoro del contratto
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Il contratto inizia nel {confirmYear}, ma stai
+                            lavorando nel {economicContext!.year}. Vuoi salvare
+                            e passare al {confirmYear}?
+                            {frames.length > 1 &&
+                                ' Passando al nuovo anno aprirai il dettaglio del contratto e lascerai il modulo precedente senza salvarlo.'}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annulla</AlertDialogCancel>
+                        <AlertDialogAction
+                            variant="outline"
+                            onClick={() => void save()}
+                        >
+                            Salva restando nel {economicContext!.year}
+                        </AlertDialogAction>
+                        <AlertDialogAction
+                            onClick={() => void save(confirmYear!)}
+                        >
+                            Salva e passa al {confirmYear}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             <AlertDialog
                 open={discard !== null || navigation.pending !== null}
                 onOpenChange={(open) => {

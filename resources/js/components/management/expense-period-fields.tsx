@@ -1,42 +1,6 @@
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
-import {
-    NativeSelect,
-    NativeSelectOption,
-} from '@/components/ui/native-select';
+import { Input } from '@/components/ui/input';
 import { DateField } from './date-field';
-
-export function periodYear(
-    values: Record<string, string>,
-    preferStart = false,
-): string {
-    const start = values.period_starts_on;
-    const end = values.period_ends_on;
-    if (
-        !/^\d{4}-\d{2}-\d{2}$/.test(start ?? '') ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(end ?? '') ||
-        end < start
-    )
-        return values.year;
-    const first = start.slice(0, 4);
-    const last = end.slice(0, 4);
-    return !preferStart && [first, last].includes(values.year)
-        ? values.year
-        : first;
-}
-
-export function periodCrossesYears(values: {
-    period_starts_on?: string | null;
-    period_ends_on?: string | null;
-}): boolean {
-    const start = values.period_starts_on ?? '';
-    const end = values.period_ends_on ?? '';
-    return (
-        /^\d{4}-\d{2}-\d{2}$/.test(start) &&
-        /^\d{4}-\d{2}-\d{2}$/.test(end) &&
-        end >= start &&
-        start.slice(0, 4) !== end.slice(0, 4)
-    );
-}
 
 export function ExpensePeriodFields({
     values,
@@ -44,6 +8,7 @@ export function ExpensePeriodFields({
     disabled,
     errors,
     showPeriod,
+    showYear = true,
     idPrefix = 'entity',
     yearLabel = 'Anno di imputazione economica',
     compact = false,
@@ -53,13 +18,11 @@ export function ExpensePeriodFields({
     disabled: boolean;
     errors: Record<string, string[]>;
     showPeriod: boolean;
+    showYear?: boolean;
     idPrefix?: string;
     yearLabel?: string;
     compact?: boolean;
 }) {
-    const first = values.period_starts_on?.slice(0, 4);
-    const last = values.period_ends_on?.slice(0, 4);
-    const multipleYears = periodCrossesYears(values);
     return (
         <>
             {showPeriod &&
@@ -92,7 +55,7 @@ export function ExpensePeriodFields({
                         </FieldError>
                     </Field>
                 ))}
-            {multipleYears && (
+            {showYear && (
                 <Field
                     className="min-w-0 gap-2"
                     data-invalid={!!errors.year}
@@ -105,7 +68,11 @@ export function ExpensePeriodFields({
                     >
                         {yearLabel}
                     </FieldLabel>
-                    <NativeSelect
+                    <Input
+                        type="number"
+                        min={2000}
+                        max={2100}
+                        required
                         id={`${idPrefix}-year`}
                         value={values.year}
                         onChange={(event) =>
@@ -121,14 +88,7 @@ export function ExpensePeriodFields({
                                   ? undefined
                                   : `${idPrefix}-year-description`
                         }
-                    >
-                        <NativeSelectOption value={first}>
-                            {compact ? first : `Anno iniziale · ${first}`}
-                        </NativeSelectOption>
-                        <NativeSelectOption value={last}>
-                            {compact ? last : `Anno finale · ${last}`}
-                        </NativeSelectOption>
-                    </NativeSelect>
+                    />
                     {!compact && (
                         <p
                             id={`${idPrefix}-year-description`}
@@ -142,9 +102,6 @@ export function ExpensePeriodFields({
                         {errors.year?.[0]}
                     </FieldError>
                 </Field>
-            )}
-            {!multipleYears && errors.year && (
-                <FieldError>{errors.year[0]}</FieldError>
             )}
         </>
     );
