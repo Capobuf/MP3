@@ -2106,18 +2106,18 @@ export function BudgetTable({
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            Rimuovere {removing.length} voci dal Budget?
+                            Rimuovere {removing.length}{' '}
+                            {removing.length === 1 ? 'voce' : 'voci'} dal
+                            Budget?
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             Verranno rimossi i riferimenti annuali selezionati.
                             Puoi conservare la spesa nell’archivio oppure
                             eliminarla se non è usata altrove. Contratti e
-                            progetti rimangono negli archivi. Le eventuali spese
-                            ancora coperte da altre voci incluse saranno
-                            riattribuite.
+                            progetti rimangono negli archivi.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
+                    <AlertDialogFooter className="min-w-0 flex-wrap *:h-auto *:min-h-9 *:whitespace-normal">
                         <AlertDialogCancel disabled={busy}>
                             Annulla
                         </AlertDialogCancel>
