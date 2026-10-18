@@ -30,6 +30,9 @@ class ExpenseWriter
      */
     public function persist(Expense $expense, array $data, array $pending = [], bool $write = true, bool $preserveMissing = false): void
     {
+        if ($expense->exists && $expense->source_expense_id !== null && isset($data['year']) && (int) $data['year'] !== $expense->year) {
+            throw ValidationException::withMessages(['year' => 'L’anno di una spesa importata non può essere cambiato. Importala nel Budget dell’anno successivo.']);
+        }
         $hasLines = $expense->exists && $expense->lines()->exists();
         $contractEntry = $data['contract_entry'] ?? false;
         unset($data['contract_entry']);

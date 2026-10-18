@@ -33,6 +33,7 @@ class ExpenseRequest extends FormRequest
         $required = $partial ? ['sometimes', 'required'] : ['required'];
         $rules = [
             'tenant_id' => ['prohibited'],
+            'source_expense_id' => ['missing'],
             'title' => [...$required, 'string', 'max:255'],
             'year' => [...$required, 'integer', 'between:2000,2100'],
             'period_starts_on' => ['nullable', 'date_format:Y-m-d'],

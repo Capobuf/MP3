@@ -20,6 +20,9 @@ class AttachmentFiles
     // The caller locks the owner and opens a transaction, also for batch deletions.
     public function delete(Attachment|Contract|Expense|Project $record): void
     {
+        if ($record instanceof Expense && Expense::where('tenant_id', $record->tenant_id)->where('source_expense_id', $record->id)->exists()) {
+            throw ValidationException::withMessages(['expense' => 'Eliminazione bloccata: questa spesa è l’origine di una copia annuale.']);
+        }
         if ($record instanceof Contract || $record instanceof Project || $record instanceof Expense) {
             $field = match (true) {
                 $record instanceof Contract => 'contract_id',

@@ -66,12 +66,16 @@ type Source = {
     cost_centers: Center[];
     budget_cost_center: Center | null;
     expenses: SourceExpense[];
+    allocated?: string | null;
+    actual?: string | null;
+    has_target_year?: boolean;
 };
 type Preview = {
     source_year: number;
     target_year: number;
     contracts?: Source[];
     projects?: Source[];
+    expenses?: Source[];
     project_statuses: { key: string; name: string }[];
     legacy_count: number;
 };
@@ -94,7 +98,9 @@ export function AnnualContractImport({
     onClose: () => void;
     onImported: (budget: BudgetSnapshot) => void;
 }) {
-    const [kind, setKind] = useState<'contract' | 'project'>('contract');
+    const [kind, setKind] = useState<'contract' | 'project' | 'expense'>(
+        'contract',
+    );
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selection, setSelection] = useState<Record<number, Selection>>({});
     const [summary, setSummary] = useState(false);
@@ -104,9 +110,22 @@ export function AnnualContractImport({
     const [status, setStatus] = useState('all');
     const [showActual, setShowActual] = useState(false);
     const isProject = kind === 'project';
-    const resource = isProject ? 'projects' : 'contracts';
-    const plural = isProject ? 'progetti' : 'contratti';
-    const singular = isProject ? 'progetto' : 'contratto';
+    const isExpense = kind === 'expense';
+    const resource = isExpense
+        ? 'expenses'
+        : isProject
+          ? 'projects'
+          : 'contracts';
+    const plural = isExpense
+        ? 'spese singole'
+        : isProject
+          ? 'progetti'
+          : 'contratti';
+    const singular = isExpense
+        ? 'spesa singola'
+        : isProject
+          ? 'progetto'
+          : 'contratto';
     const lock = useRef(false);
     const form = useRef<HTMLFormElement>(null);
     const content = useRef<HTMLDivElement>(null);
@@ -119,7 +138,7 @@ export function AnnualContractImport({
             setPreview(result);
             setSelection(
                 Object.fromEntries(
-                    (isProject ? [] : (result.contracts ?? []))
+                    (kind === 'contract' ? (result.contracts ?? []) : [])
                         .filter((source) => !source.already_imported)
                         .map((source) => [source.id, initial(source)]),
                 ),
@@ -130,7 +149,7 @@ export function AnnualContractImport({
             setError(
                 failure instanceof Error
                     ? failure.message
-                    : `Impossibile caricare i ${plural}.`,
+                    : `Impossibile caricare ${isExpense ? 'le' : 'i'} ${plural}.`,
             );
         } finally {
             setBusy(false);
@@ -146,8 +165,8 @@ export function AnnualContractImport({
         return {
             id: source.id,
             token: source.token,
-            starts_on: source.starts_on,
-            ends_on: source.ends_on,
+            starts_on: source.starts_on ?? null,
+            ends_on: source.ends_on ?? null,
             expense_ids: [],
         };
     }
@@ -163,6 +182,10 @@ export function AnnualContractImport({
         });
     }
     function selectAllExpenses(checked: boolean) {
+        if (isExpense) {
+            selectAll(checked);
+            return;
+        }
         setSelection((current) => {
             const next = { ...current };
             for (const source of available) {
@@ -208,7 +231,11 @@ export function AnnualContractImport({
             const result = await api<{
                 budget: BudgetSnapshot;
                 message: string;
-            }>(endpoint, 'POST', { [resource]: Object.values(selection) });
+            }>(endpoint, 'POST', {
+                [resource]: Object.values(selection).map((draft) =>
+                    isExpense ? { id: draft.id, token: draft.token } : draft,
+                ),
+            });
             onImported(result.budget);
             toast.success(result.message);
             onClose();
@@ -233,37 +260,51 @@ export function AnnualContractImport({
                 ? source.status === null
                 : source.status === status),
     );
-    const available = visible.filter((source) => !source.already_imported);
+    const available = visible.filter(
+        (source) =>
+            !source.already_imported &&
+            (!isExpense || source.allocated != null),
+    );
     const visibleChosenCount = available.filter(
         (source) => selection[source.id],
     ).length;
-    const visibleExpenseCount = available.reduce(
-        (count, source) =>
-            count + (selection[source.id]?.expense_ids.length ?? 0),
-        0,
-    );
-    const expenseCount = available.reduce(
-        (count, source) =>
-            count +
-            source.expenses.filter((expense) => expense.allocated !== null)
-                .length,
-        0,
-    );
-    const selectedExpenseCount = Object.values(selection).reduce(
-        (count, draft) => count + draft.expense_ids.length,
-        0,
-    );
+    const visibleExpenseCount = isExpense
+        ? visibleChosenCount
+        : available.reduce(
+              (count, source) =>
+                  count + (selection[source.id]?.expense_ids.length ?? 0),
+              0,
+          );
+    const expenseCount = isExpense
+        ? available.length
+        : available.reduce(
+              (count, source) =>
+                  count +
+                  source.expenses.filter(
+                      (expense) => expense.allocated !== null,
+                  ).length,
+              0,
+          );
+    const selectedExpenseCount = isExpense
+        ? chosen.length
+        : Object.values(selection).reduce(
+              (count, draft) => count + draft.expense_ids.length,
+              0,
+          );
     const total = chosen.reduce(
         (sum, source) =>
             sum +
-            source.expenses
-                .filter((expense) =>
-                    selection[source.id].expense_ids.includes(expense.id),
-                )
-                .reduce(
-                    (amount, expense) => amount + cents(expense.allocated!),
-                    0,
-                ),
+            (isExpense
+                ? cents(source.allocated!)
+                : source.expenses
+                      .filter((expense) =>
+                          selection[source.id].expense_ids.includes(expense.id),
+                      )
+                      .reduce(
+                          (amount, expense) =>
+                              amount + cents(expense.allocated!),
+                          0,
+                      )),
         0,
     );
     function outside(draft: Selection) {
@@ -277,13 +318,15 @@ export function AnnualContractImport({
     }
     const tables =
         preview &&
-        (isProject
-            ? ['Progetti']
-            : [
-                  `Validi nel ${preview.target_year}`,
-                  `Scaduti nel ${preview.source_year} / Da rinnovare`,
-                  'Altri',
-              ]
+        (isExpense
+            ? ['Spese singole']
+            : isProject
+              ? ['Progetti']
+              : [
+                    `Validi nel ${preview.target_year}`,
+                    `Scaduti nel ${preview.source_year} / Da rinnovare`,
+                    'Altri',
+                ]
         ).map((label, group) => {
             const sources = (summary ? chosen : visible).filter(
                 (source) => source.group === group,
@@ -305,12 +348,16 @@ export function AnnualContractImport({
                                         </span>
                                     </TableHead>
                                     <TableHead>Descrizione</TableHead>
-                                    <TableHead className="w-40">
-                                        Data iniziale
-                                    </TableHead>
-                                    <TableHead className="w-40">
-                                        Data finale
-                                    </TableHead>
+                                    {!isExpense && (
+                                        <>
+                                            <TableHead className="w-40">
+                                                Data iniziale
+                                            </TableHead>
+                                            <TableHead className="w-40">
+                                                Data finale
+                                            </TableHead>
+                                        </>
+                                    )}
                                     <TableHead className="w-36 text-right">
                                         Allocato{' '}
                                         {summary
@@ -349,7 +396,10 @@ export function AnnualContractImport({
                                                         disabled={
                                                             summary ||
                                                             busy ||
-                                                            source.already_imported
+                                                            source.already_imported ||
+                                                            (isExpense &&
+                                                                source.allocated ==
+                                                                    null)
                                                         }
                                                         checked={!!draft}
                                                         onCheckedChange={(
@@ -364,7 +414,7 @@ export function AnnualContractImport({
                                                 </TableCell>
                                                 <TableCell className="whitespace-normal">
                                                     <div className="flex items-center gap-2">
-                                                        {summary ? (
+                                                        {isExpense ? null : summary ? (
                                                             <ChevronDown
                                                                 className="mx-3 size-4 shrink-0"
                                                                 aria-hidden="true"
@@ -418,13 +468,55 @@ export function AnnualContractImport({
                                                     {source.already_imported && (
                                                         <Badge
                                                             variant="secondary"
-                                                            className="ml-10"
+                                                            className={
+                                                                isExpense
+                                                                    ? undefined
+                                                                    : 'ml-10'
+                                                            }
                                                         >
-                                                            Già importato
+                                                            {isExpense
+                                                                ? 'Già importata'
+                                                                : 'Già importato'}
                                                         </Badge>
                                                     )}
+                                                    {isExpense &&
+                                                        source.allocated ===
+                                                            null && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Nessun allocato
+                                                                da importare
+                                                            </p>
+                                                        )}
+                                                    {isExpense &&
+                                                        summary &&
+                                                        source.has_target_year && (
+                                                            <p
+                                                                role="note"
+                                                                className="mt-1 text-xs text-muted-foreground"
+                                                            >
+                                                                Attenzione: la
+                                                                spesa sorgente
+                                                                ha già righe nel{' '}
+                                                                {
+                                                                    preview.target_year
+                                                                }
+                                                                . Restano
+                                                                invariate;
+                                                                questa
+                                                                operazione
+                                                                aggiunge una
+                                                                nuova previsione
+                                                                dalla quota{' '}
+                                                                {
+                                                                    preview.source_year
+                                                                }
+                                                                .
+                                                            </p>
+                                                        )}
                                                     {summary && (
-                                                        <div className="mt-1 flex flex-col gap-1 pl-10 text-xs text-muted-foreground">
+                                                        <div
+                                                            className={`mt-1 flex flex-col gap-1 text-xs text-muted-foreground ${isExpense ? '' : 'pl-10'}`}
+                                                        >
                                                             <p>
                                                                 {isProject
                                                                     ? 'Stato: '
@@ -464,7 +556,8 @@ export function AnnualContractImport({
                                                                       )
                                                                     : 'Nessuno'}
                                                             </p>
-                                                            {!isProject &&
+                                                            {kind ===
+                                                                'contract' &&
                                                                 outside(
                                                                     draft,
                                                                 ) && (
@@ -489,7 +582,7 @@ export function AnnualContractImport({
                                                         </div>
                                                     )}
                                                     {!summary &&
-                                                        !isProject &&
+                                                        kind === 'contract' &&
                                                         source.group === 1 &&
                                                         draft && (
                                                             <Button
@@ -539,93 +632,111 @@ export function AnnualContractImport({
                                                             </Button>
                                                         )}
                                                 </TableCell>
-                                                {(
-                                                    [
-                                                        'starts_on',
-                                                        'ends_on',
-                                                    ] as const
-                                                ).map((field, index) => (
-                                                    <TableCell key={field}>
-                                                        {summary ? (
-                                                            <div className="flex flex-col gap-1">
-                                                                <span>
-                                                                    {dateLabel(
-                                                                        draft[
-                                                                            field
-                                                                        ],
-                                                                    )}
-                                                                </span>
-                                                                {draft[
-                                                                    field
-                                                                ] !==
-                                                                    source[
-                                                                        field
-                                                                    ] && (
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        Prima:{' '}
+                                                {!isExpense &&
+                                                    (
+                                                        [
+                                                            'starts_on',
+                                                            'ends_on',
+                                                        ] as const
+                                                    ).map((field, index) => (
+                                                        <TableCell key={field}>
+                                                            {summary ? (
+                                                                <div className="flex flex-col gap-1">
+                                                                    <span>
                                                                         {dateLabel(
-                                                                            source[
+                                                                            draft[
                                                                                 field
                                                                             ],
                                                                         )}
                                                                     </span>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            <Field>
-                                                                <FieldLabel
-                                                                    className="sr-only"
-                                                                    htmlFor={`annual-${index ? 'end' : 'start'}-${source.id}`}
-                                                                >
-                                                                    Data{' '}
-                                                                    {index
-                                                                        ? 'finale'
-                                                                        : 'iniziale'}{' '}
-                                                                    di{' '}
-                                                                    {
-                                                                        source.display_name
-                                                                    }
-                                                                </FieldLabel>
-                                                                <DateField
-                                                                    id={`annual-${index ? 'end' : 'start'}-${source.id}`}
-                                                                    value={
-                                                                        (draft ??
-                                                                            source)[
+                                                                    {draft[
+                                                                        field
+                                                                    ] !==
+                                                                        source[
                                                                             field
-                                                                        ] ?? ''
-                                                                    }
-                                                                    disabled={
-                                                                        busy ||
-                                                                        !draft
-                                                                    }
-                                                                    onChange={(
-                                                                        value,
-                                                                    ) =>
-                                                                        change(
-                                                                            source,
-                                                                            {
-                                                                                [field]:
-                                                                                    value ||
-                                                                                    null,
-                                                                            },
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </Field>
-                                                        )}
-                                                    </TableCell>
-                                                ))}
+                                                                        ] && (
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            Prima:{' '}
+                                                                            {dateLabel(
+                                                                                source[
+                                                                                    field
+                                                                                ],
+                                                                            )}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ) : (
+                                                                <Field>
+                                                                    <FieldLabel
+                                                                        className="sr-only"
+                                                                        htmlFor={`annual-${index ? 'end' : 'start'}-${source.id}`}
+                                                                    >
+                                                                        Data{' '}
+                                                                        {index
+                                                                            ? 'finale'
+                                                                            : 'iniziale'}{' '}
+                                                                        di{' '}
+                                                                        {
+                                                                            source.display_name
+                                                                        }
+                                                                    </FieldLabel>
+                                                                    <DateField
+                                                                        id={`annual-${index ? 'end' : 'start'}-${source.id}`}
+                                                                        value={
+                                                                            (draft ??
+                                                                                source)[
+                                                                                field
+                                                                            ] ??
+                                                                            ''
+                                                                        }
+                                                                        disabled={
+                                                                            busy ||
+                                                                            !draft
+                                                                        }
+                                                                        onChange={(
+                                                                            value,
+                                                                        ) =>
+                                                                            change(
+                                                                                source,
+                                                                                {
+                                                                                    [field]:
+                                                                                        value ||
+                                                                                        null,
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </Field>
+                                                            )}
+                                                        </TableCell>
+                                                    ))}
                                                 <TableCell className="text-right tabular-nums">
                                                     {money(
-                                                        summary ||
-                                                            allocations.length
-                                                            ? decimal(amount)
-                                                            : null,
+                                                        isExpense
+                                                            ? (source.allocated ??
+                                                                  null)
+                                                            : summary ||
+                                                                allocations.length
+                                                              ? decimal(amount)
+                                                              : null,
                                                         'Non presente',
                                                     )}
+                                                    {isExpense &&
+                                                        showActual &&
+                                                        !summary && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Effettivo:{' '}
+                                                                {money(
+                                                                    source.actual ??
+                                                                        null,
+                                                                    'Non compilato',
+                                                                )}
+                                                            </p>
+                                                        )}
                                                 </TableCell>
                                             </TableRow>
-                                            {open &&
+                                            {!isExpense &&
+                                                open &&
                                                 (expenses.length === 0 ? (
                                                     <TableRow>
                                                         <TableCell
@@ -818,7 +929,8 @@ export function AnnualContractImport({
                         {preview
                             ? `: ${preview.source_year} → ${preview.target_year}`
                             : ''}
-                        . I {plural} saranno copie indipendenti.
+                        . {isExpense ? 'Le' : 'I'} {plural} saranno copie
+                        indipendenti.
                     </DialogDescription>
                 </DialogHeader>
                 {!summary && (
@@ -831,7 +943,9 @@ export function AnnualContractImport({
                                 setPreview(null);
                                 setSelection({});
                                 setStatus('all');
-                                setKind(value as 'contract' | 'project');
+                                setKind(
+                                    value as 'contract' | 'project' | 'expense',
+                                );
                             }}
                         >
                             <SelectTrigger id="annual-kind">
@@ -844,6 +958,9 @@ export function AnnualContractImport({
                                     </SelectItem>
                                     <SelectItem value="project">
                                         Progetti
+                                    </SelectItem>
+                                    <SelectItem value="expense">
+                                        Spese singole
                                     </SelectItem>
                                 </SelectGroup>
                             </SelectContent>
@@ -962,7 +1079,9 @@ export function AnnualContractImport({
                                                 }
                                             />
                                             <FieldLabel htmlFor="annual-all-contracts">
-                                                Tutti i {plural}
+                                                {isExpense
+                                                    ? 'Seleziona tutte'
+                                                    : `Tutti i ${plural}`}
                                             </FieldLabel>
                                         </Field>
                                         <Field
@@ -992,7 +1111,7 @@ export function AnnualContractImport({
                                                 Tutte le spese allocate
                                             </FieldLabel>
                                         </Field>
-                                        {isProject && (
+                                        {(isProject || isExpense) && (
                                             <Field
                                                 orientation="horizontal"
                                                 className="w-auto"
@@ -1018,14 +1137,16 @@ export function AnnualContractImport({
                                 </FieldSet>
                             )}
                             <p className="text-sm text-muted-foreground">
-                                Selezionati: {chosen.length} {plural} ·{' '}
-                                {selectedExpenseCount} spese allocate
+                                Selezionati: {chosen.length} {plural}
+                                {!isExpense &&
+                                    ` · ${selectedExpenseCount} spese allocate`}
                             </p>
                             {records.length === 0 && (
                                 <Empty>
                                     <EmptyHeader>
                                         <EmptyTitle>
-                                            Nessun {singular} nell’anno{' '}
+                                            {isExpense ? 'Nessuna' : 'Nessun'}{' '}
+                                            {singular} nell’anno{' '}
                                             {preview.source_year}
                                         </EmptyTitle>
                                     </EmptyHeader>
@@ -1034,6 +1155,15 @@ export function AnnualContractImport({
                             {tables}
                             {summary && (
                                 <>
+                                    {isExpense && (
+                                        <p className="text-sm text-muted-foreground">
+                                            Effettivi non copiati · Commenti e
+                                            allegati non copiati · Origine
+                                            invariata. Le spese importate
+                                            saranno copie indipendenti nel{' '}
+                                            {preview.target_year}.
+                                        </p>
+                                    )}
                                     {isProject && (
                                         <p className="text-sm text-muted-foreground">
                                             Copie indipendenti:{' '}
