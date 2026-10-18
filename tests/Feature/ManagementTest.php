@@ -259,7 +259,7 @@ class ManagementTest extends TestCase
         $this->get('/t/alfa/contracts/'.$response->json('record.id').'?year=2026')->assertInertia(fn (Assert $page) => $page
             ->where('totals.allocated', '500.00')->where('totals.actual', '0.00')->has('expenses.data', 1));
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
-        $expense->update(['project_id' => $project->id]);
+        $this->patchJson('/t/alfa/expenses/'.$expense->id, ['contract_id' => null, 'project_id' => $project->id])->assertOk();
         $this->get('/t/alfa/projects/'.$project->id.'?year=2027')->assertInertia(fn (Assert $page) => $page
             ->where('totals.allocated', '0.00')->where('totals.actual', '280.00')->where('economicContext.years', [2027, 2026]));
         $initial['lines'][1]['year'] = 2026;
@@ -352,14 +352,16 @@ class ManagementTest extends TestCase
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto', 'vendor_id' => $otherVendor->id, 'starts_on' => '2025-01-01', 'reference_amount' => '99999.99']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $this->postJson('/t/alfa/expenses', [])->assertUnprocessable()->assertJsonValidationErrors(['title', 'year']);
-        $response = $this->postJson('/t/alfa/expenses', ['title' => 'Costo', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '0', 'actual_amount' => null])->assertCreated();
+        $response = $this->postJson('/t/alfa/expenses', ['title' => 'Costo', 'year' => 2026, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'allocated_amount' => '0', 'actual_amount' => null])->assertCreated();
         $id = $response->json('record.id');
         $response->assertJsonPath('record.variance', null)->assertJsonPath('record.year', 2026)->assertJsonMissingPath('record.due_on')->assertJsonMissingPath('record.actual_on');
         $this->patchJson('/t/alfa/expenses/'.$id, ['actual_amount' => '10.01'])->assertOk()->assertJsonPath('record.variance', '10.01')->assertJsonPath('record.vendor_id', $vendor->id)->assertJsonPath('record.year', 2026);
         $expense = Expense::findOrFail($id);
         $this->assertTrue($expense->vendor->is($vendor));
         $this->assertTrue($expense->contract->is($contract));
-        $this->assertTrue($expense->project->is($project));
+        $this->assertNull($expense->project_id);
+        $this->patchJson('/t/alfa/expenses/'.$id, ['contract_id' => null, 'project_id' => $project->id])->assertOk();
+        $this->assertTrue($expense->fresh()->project->is($project));
         $this->get('/t/alfa/expenses/'.$id)->assertOk();
         $this->deleteJson('/t/alfa/expenses/'.$id)->assertOk();
         $this->assertDatabaseMissing('expenses', ['id' => $id]);

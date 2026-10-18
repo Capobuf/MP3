@@ -31,6 +31,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -87,7 +88,7 @@ export function BudgetCenterSelect({
     );
 }
 
-function SourcePicker({
+export function SourcePicker({
     slug,
     year,
     type,
@@ -259,7 +260,9 @@ export function BudgetEntrySheet({
                 <SheetHeader>
                     <SheetTitle>Aggiungi voce</SheetTitle>
                     <SheetDescription>
-                        Scegli cosa includere nel Budget annuale.
+                        Scegli cosa includere nel Budget annuale. Contratti e
+                        progetti comprendono tutte le proprie spese dell’anno;
+                        le spese singole devono essere autonome.
                     </SheetDescription>
                 </SheetHeader>
                 <div className="flex flex-col gap-5 px-4 pb-6">
@@ -445,6 +448,31 @@ export function BudgetMissingSheet({
                         </Empty>
                     ) : (
                         <>
+                            {rows
+                                .filter((row) => row.state === 'blocked')
+                                .map((row) => (
+                                    <Alert key={row.key}>
+                                        <AlertTitle>
+                                            {row.description} · Da risolvere
+                                        </AlertTitle>
+                                        <AlertDescription>
+                                            <p>{row.problem}</p>
+                                            <p>
+                                                Allocato: {money(row.allocated)}{' '}
+                                                · Effettivo: {money(row.actual)}
+                                            </p>
+                                            <Button
+                                                asChild
+                                                variant="outline"
+                                                size="sm"
+                                            >
+                                                <Link href={row.expense_url}>
+                                                    Scegli come correggere
+                                                </Link>
+                                            </Button>
+                                        </AlertDescription>
+                                    </Alert>
+                                ))}
                             {(['missing', 'excluded', 'removed'] as const).map(
                                 (state) => {
                                     const items = rows.filter(

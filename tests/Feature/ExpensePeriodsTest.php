@@ -355,14 +355,14 @@ class ExpensePeriodsTest extends TestCase
             ['description' => 'Ore', 'type' => 'allocated', 'unit_price' => '12.35', 'quantity' => '2.5'],
             ['description' => 'Servizio', 'type' => 'allocated', 'unit_price' => '100', 'quantity' => '3'],
         ];
-        $response = $this->postJson('/t/periodi/expenses', [...$this->data(), 'vendor_id' => $vendor->id, 'project_id' => $project->id, 'cost_center_ids' => [$center->id], 'lines' => $lines])->assertCreated();
+        $response = $this->postJson('/t/periodi/expenses', [...$this->data(), 'vendor_id' => $vendor->id, 'cost_center_ids' => [$center->id], 'lines' => $lines])->assertCreated();
         $expense = Expense::findOrFail($response->json('record.id'));
         $ids = $expense->lines()->pluck('id')->all();
         $url = '/t/periodi/expenses/'.$expense->id;
         $this->patchJson($url, ['period_ends_on' => '2026-07-31'])->assertOk()->assertJsonPath('record.allocated_amount', '330.88')->assertJsonPath('record.actual_amount', null);
         $this->assertSame($ids, $expense->lines()->pluck('id')->all());
         $this->patchJson($url, ['allocated_amount' => '500'])->assertUnprocessable()->assertJsonValidationErrors('lines');
-        $this->patchJson($url, ['lines' => $lines, 'title' => 'Riaperta'])->assertOk()->assertJsonPath('record.allocated_amount', '330.88')
+        $this->patchJson($url, ['lines' => $lines, 'title' => 'Riaperta', 'contract_id' => null, 'project_id' => $project->id])->assertOk()->assertJsonPath('record.allocated_amount', '330.88')
             ->assertJsonPath('record.actual_amount', null)->assertJsonPath('record.vendor_id', $vendor->id)
             ->assertJsonPath('record.project_id', $project->id)->assertJsonPath('record.cost_centers.0.id', $center->id);
         $this->patchJson($url, ['contract_id' => null, 'lines' => $lines])->assertOk()

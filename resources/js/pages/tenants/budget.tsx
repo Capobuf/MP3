@@ -300,6 +300,12 @@ function BudgetWorkspace({
                     <AlertDescription>{error}</AlertDescription>
                 </Alert>
             )}
+            {budget.warnings?.map((warning) => (
+                <Alert key={warning}>
+                    <AlertTitle>Storico da verificare</AlertTitle>
+                    <AlertDescription>{warning}</AlertDescription>
+                </Alert>
+            ))}
             <BudgetTable
                 budgetYearId={year.id}
                 budget={budget}

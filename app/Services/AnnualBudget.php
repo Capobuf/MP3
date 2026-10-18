@@ -5,14 +5,35 @@ namespace App\Services;
 use App\Models\BudgetYear;
 use App\Models\Contract;
 use App\Models\Expense;
+use App\Models\Project;
 use App\Models\Tenant;
 use App\Support\ExpenseOverview;
 use App\Support\Money;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 
 class AnnualBudget
 {
     public const TYPES = ['contract', 'project', 'expense'];
+
+    public static function validateSource(Tenant $tenant, BudgetYear $year, Contract|Project|Expense $source): void
+    {
+        if ($source instanceof Expense) {
+            if ($source->contract_id !== null || $source->project_id !== null) {
+                throw ValidationException::withMessages(['entries' => 'Le spese singole devono essere autonome. Inserisci nel Budget il contratto o progetto della spesa.']);
+            }
+            if (! ExpenseOverview::economicQuery($tenant)->where('id', $source->id)->where('year', $year->year)->exists()) {
+                throw ValidationException::withMessages(['entries' => 'La spesa non ha dati economici nell’anno del Budget.']);
+            }
+        } elseif ($source->year !== $year->year) {
+            throw ValidationException::withMessages(['entries' => 'Il contenitore deve appartenere all’anno del Budget. Correggi l’anno della spesa o scegli un contenitore di questo anno.']);
+        } elseif ($source->expenses()->where(function ($query) use ($year) {
+            $query->where(fn ($q) => $q->whereNotNull('contract_id')->whereNotNull('project_id'))
+                ->orWhereIn('id', $year->entries()->where('type', 'expense')->select('expense_id'));
+        })->exists()) {
+            throw ValidationException::withMessages(['entries' => 'Il contenitore ha spese con collegamenti storici incompatibili o voci Budget dirette. Correggi i collegamenti e rimuovi le sole voci dirette prima di includerlo.']);
+        }
+    }
 
     /** @return Collection<int, Expense> */
     private function expenses(Tenant $tenant, int $year): Collection
@@ -35,12 +56,26 @@ class AnnualBudget
             ->orderBy('position')->orderBy('id')->get();
         $expenses = $this->expenses($tenant, $year->year);
         $owners = [];
-        foreach (self::TYPES as $type) {
-            foreach ($entries->where('type', $type)->where('included', true) as $entry) {
-                foreach ($expenses as $expense) {
-                    if ($this->matches($type, (int) $entry->getAttribute($type.'_id'), $expense)) {
-                        $owners[$expense->id] ??= $entry->id;
+        $warnings = [];
+        foreach ($expenses as $expense) {
+            $type = $expense->contract_id !== null ? 'contract' : ($expense->project_id !== null ? 'project' : 'expense');
+            $id = $type === 'expense' ? $expense->id : $expense->getAttribute($type.'_id');
+            $legacy = ($expense->contract_id !== null && $expense->project_id !== null)
+                || ($type !== 'expense' && $entries->contains(fn ($entry) => $entry->type === 'expense' && $entry->expense_id === $expense->id));
+            if ($legacy) {
+                $warnings[] = "Spesa #{$expense->id}: collegamenti storici incompatibili. I conteggi storici sono conservati; correggi esplicitamente i collegamenti e le voci Budget.";
+                // Restored historical conflicts retain their former attribution until explicitly resolved.
+                foreach (self::TYPES as $legacyType) {
+                    $owner = $entries->first(fn ($entry) => $entry->included && $entry->type === $legacyType && $this->matches($legacyType, (int) $entry->getAttribute($legacyType.'_id'), $expense));
+                    if ($owner !== null) {
+                        $owners[$expense->id] = $owner->id;
+                        break;
                     }
+                }
+            } else {
+                $owner = $entries->first(fn ($entry) => $entry->included && $entry->type === $type && $entry->getAttribute($type.'_id') === $id);
+                if ($owner !== null) {
+                    $owners[$expense->id] = $owner->id;
                 }
             }
         }
@@ -53,12 +88,6 @@ class AnnualBudget
             $contributing = $linked->filter(fn (Expense $expense) => ($owners[$expense->id] ?? null) === $entry->id);
             $parts = $contributing->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount])->values()->all();
             $values = $this->values($parts);
-            // Covered expenses contribute a known zero; a source without annual data stays unknown.
-            if ($parts === [] && $linked->isNotEmpty()) {
-                $values = $this->values($linked->map(fn (Expense $expense) => ['allocated' => $expense->allocated_amount === null ? null : '0.00', 'actual' => $expense->actual_amount === null ? null : '0.00'])->all());
-                $values['incomplete'] = 0;
-                $values['comparable_count'] = 0;
-            }
             $rows[] = [
                 'id' => $entry->id, 'type' => $entry->type, 'source_id' => $source?->id,
                 'description' => $names[$entry->id], 'included' => $entry->included, 'position' => $entry->position,
@@ -93,7 +122,7 @@ class AnnualBudget
         return [
             'entries' => $rows, 'totals' => $this->totals($included), 'groups' => $groups,
             'cost_center_groups' => array_map(fn ($group) => $this->totals($group), $centers),
-            'owners' => $owners,
+            'owners' => $owners, 'warnings' => $warnings,
             'has_missing_entries' => $expenses->contains(fn (Expense $expense) => ! isset($owners[$expense->id])),
         ];
     }
@@ -150,18 +179,6 @@ class AnnualBudget
         $entries = collect($rows);
         $suggestions = [];
         $expenses = $this->expenses($tenant, $year->year);
-        $protectedContainers = [];
-        foreach ($expenses as $expense) {
-            $protected = $entries->contains(fn ($entry) => $entry['type'] === 'expense' && $entry['source_id'] === $expense->id && ! $entry['included'])
-                || in_array('expense:'.$expense->id, $year->dismissed_sources ?? [], true);
-            if ($protected) {
-                foreach (['contract', 'project'] as $type) {
-                    if ($expense->getAttribute($type.'_id') !== null) {
-                        $protectedContainers[$type.':'.$expense->getAttribute($type.'_id')] = true;
-                    }
-                }
-            }
-        }
         foreach ($expenses as $expense) {
             if (isset($snapshot['owners'][$expense->id])) {
                 continue;
@@ -169,29 +186,37 @@ class AnnualBudget
             $type = $expense->contract_id !== null ? 'contract' : ($expense->project_id !== null ? 'project' : 'expense');
             $id = $type === 'expense' ? $expense->id : $expense->getAttribute($type.'_id');
             $key = $type.':'.$id;
-            if (isset($protectedContainers[$key]) || (in_array($type, ['contract', 'project'], true) && $expense->{$type}->year !== $year->year)) {
-                $type = 'expense';
-                $id = $expense->id;
-                $key = $type.':'.$id;
-            }
             $existing = $entries->first(fn ($entry) => $entry['type'] === $type && $entry['source_id'] === $id);
             $state = $existing !== null ? 'excluded' : (in_array($key, $year->dismissed_sources ?? [], true) ? 'removed' : 'missing');
-            // Individually excluded/removed expenses stay out of suggested containers too.
-            $excludedExpense = $entries->first(fn ($entry) => $entry['type'] === 'expense' && $entry['source_id'] === $expense->id && ! $entry['included']);
-            if ($excludedExpense !== null || in_array('expense:'.$expense->id, $year->dismissed_sources ?? [], true)) {
-                $type = 'expense';
-                $id = $expense->id;
-                $key = $type.':'.$id;
-                $existing = $excludedExpense;
-                $state = $existing !== null ? 'excluded' : 'removed';
+            $problem = null;
+            if ($expense->contract_id !== null && $expense->project_id !== null) {
+                $problem = 'La spesa è collegata sia a un contratto sia a un progetto. Scegli esplicitamente un solo collegamento nella modifica spesa.';
+            } elseif ($type !== 'expense' && $expense->{$type}->year !== $year->year) {
+                $problem = 'La spesa è del '.$year->year.', il contenitore è '.($expense->{$type}->year ?? 'senza anno').'. Correggi l’anno o scegli un contenitore dell’anno della spesa.';
+            } elseif ($type !== 'expense' && $entries->contains(fn ($entry) => $entry['type'] === 'expense' && $entry['source_id'] === $expense->id)) {
+                $problem = 'Esiste una precedente scelta sulla spesa singola. Risolvi la voce storica prima di includere il contenitore.';
+            }
+            if ($problem !== null) {
+                $key .= ':expense:'.$expense->id;
+                $state = 'blocked';
             }
             $suggestions[$key] ??= [
                 'key' => $key, 'type' => $type, 'source_id' => $id, 'entry_id' => $existing['id'] ?? null,
-                'description' => $type === 'expense' ? $expense->title : $expense->{$type}?->getAttribute($type === 'contract' ? 'display_name' : 'name'),
-                'state' => $state, 'parts' => [], 'expense_ids' => [],
+                'description' => $problem !== null || $type === 'expense' ? $expense->title : $expense->{$type}?->getAttribute($type === 'contract' ? 'display_name' : 'name'),
+                'state' => $state, 'problem' => $problem, 'parts' => [], 'expense_ids' => [],
+                'expense_url' => '/t/'.$tenant->slug.'/expenses/'.$expense->id.'?year='.$year->year,
             ];
             $suggestions[$key]['parts'][] = ['allocated' => $expense->allocated_amount, 'actual' => $expense->actual_amount];
             $suggestions[$key]['expense_ids'][] = $expense->id;
+        }
+
+        foreach ($suggestions as $blocked) {
+            $key = $blocked['type'].':'.$blocked['source_id'];
+            if ($blocked['state'] === 'blocked' && isset($suggestions[$key])) {
+                $suggestions[$key]['state'] = 'blocked';
+                $suggestions[$key]['problem'] = $blocked['problem'];
+                $suggestions[$key]['expense_url'] = $blocked['expense_url'];
+            }
         }
 
         return array_values(array_map(function ($suggestion) {

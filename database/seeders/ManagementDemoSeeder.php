@@ -81,7 +81,7 @@ class ManagementDemoSeeder extends Seeder
                         'year' => $year,
                         'vendor_id' => $vendors[$vendorIndex]->id,
                         'contract_id' => $contractId,
-                        'project_id' => match ($i % 8) {
+                        'project_id' => $contractId !== null ? null : match ($i % 8) {
                             0, 6 => $projects[0]->id,
                             2, 5 => $projects[1]->id,
                             3 => $projects[2]->id,

@@ -6,6 +6,8 @@ use App\Models\Attachment;
 use App\Models\Tenant;
 use App\Models\UndoAction;
 use App\Models\User;
+use App\Services\ExpenseAllocation;
+use App\Services\ExpenseWriter;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -113,6 +115,35 @@ class UndoTest extends TestCase
         $this->assertSame('30.00', $expense->fresh()->allocated_amount);
         $this->assertSame('Dopo', $expense->fresh()->lines()->sole()->description);
         $this->assertDatabaseCount('cost_center_expense', 0);
+    }
+
+    public function test_annual_expense_split_can_be_undone_and_redone_with_the_same_lines(): void
+    {
+        $original = $this->tenant->projects()->create(['name' => 'Originale', 'year' => 2025]);
+        $target = $this->tenant->projects()->create(['name' => 'Successivo', 'year' => 2026]);
+        $expense = app(ExpenseWriter::class)->create($this->tenant, [
+            'title' => 'Pluriennale', 'year' => 2025, 'project_id' => $original->id,
+            'lines' => [
+                ['description' => 'Prima', 'type' => 'allocated', 'unit_price' => '10', 'year' => 2025],
+                ['description' => 'Dopo', 'type' => 'actual', 'unit_price' => '0', 'year' => 2026],
+            ],
+        ]);
+        $lineIds = $expense->lines()->pluck('id')->all();
+        $token = app(ExpenseAllocation::class)->preview($this->tenant, $expense->fresh())['token'];
+        $copyId = $this->postJson('/t/alfa/expenses/'.$expense->id.'/allocation', [
+            'action' => 'container', 'year' => 2026, 'target_id' => $target->id, 'confirmed' => true, 'token' => $token,
+        ])->assertOk()->json('record.id');
+        $action = $this->undo();
+        $this->assertDatabaseMissing('expenses', ['id' => $copyId]);
+        $this->assertSame($lineIds, $expense->lines()->pluck('id')->all());
+        $this->assertSame('0.00', $expense->fresh()->actual_amount);
+        $this->redo($action);
+        $copy = $this->tenant->expenses()->findOrFail($copyId);
+        $this->assertSame($target->id, $copy->project_id);
+        $this->assertSame([$lineIds[1]], $copy->lines()->pluck('id')->all());
+        $this->assertNull($copy->allocated_amount);
+        $this->assertSame('0.00', $copy->actual_amount);
+        $this->assertNull($expense->fresh()->actual_amount);
     }
 
     public function test_deleted_expense_restores_attachment_bytes_lines_and_links(): void

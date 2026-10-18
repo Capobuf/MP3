@@ -7,6 +7,7 @@ use App\Http\Requests\ExpenseRequest;
 use App\Models\Expense;
 use App\Models\Tenant;
 use App\Services\AttachmentFiles;
+use App\Services\ExpenseAllocation;
 use App\Services\ExpenseWriter;
 use App\Support\ExpenseAnalytics;
 use App\Support\ExpenseOverview;
@@ -30,6 +31,7 @@ class ExpenseController extends Controller
         ]);
         $query = $tenant->expenses()->with('project:id,name');
         if (isset($data['exclude_project_id'])) {
+            $query->whereNull('contract_id')->whereNotIn('id', $tenant->budgetEntries()->whereNotNull('expense_id')->select('expense_id'));
             $query->where(fn ($query) => $query->whereNull('project_id')->orWhere('project_id', '!=', $data['exclude_project_id']));
         }
         if ($search = trim($data['search'] ?? '')) {
@@ -55,6 +57,7 @@ class ExpenseController extends Controller
         return Inertia::render('tenants/expense', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
             'expense' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name']),
+            'allocation' => app(ExpenseAllocation::class)->preview($tenant, $expense),
             'options' => ExpenseOverview::options($tenant),
         ]);
     }
@@ -81,6 +84,19 @@ class ExpenseController extends Controller
         });
 
         return response()->json(['warnings' => array_filter([ExpensePeriods::overlapWarning($expense)]), 'record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])], 201);
+    }
+
+    public function allocation(Request $request, Tenant $tenant, Expense $expense, ExpenseAllocation $allocation): JsonResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['year', 'container'])],
+            'year' => ['required', 'integer', 'between:2000,2100'],
+            'target_id' => ['required_if:action,container', 'nullable', 'integer'],
+            'token' => ['required', 'string'], 'confirmed' => ['required', 'accepted'],
+        ]);
+        $record = $allocation->resolve($tenant, $expense, $data);
+
+        return response()->json(['record' => $record, 'message' => 'Imputazione aggiornata. Verifica le voci da includere nel Budget.']);
     }
 
     public function update(ExpenseRequest $request, Tenant $tenant, Expense $expense): JsonResponse

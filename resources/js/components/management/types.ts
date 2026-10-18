@@ -59,7 +59,11 @@ export type RecordData = {
     lines?: ExpenseLine[];
     cost_centers?: CostCenter[];
 };
-export type Expense = RecordData & { title: string; year: number };
+export type Expense = RecordData & {
+    title: string;
+    year: number;
+    source_expense_id?: number | null;
+};
 export type Pagination<T> = {
     data: T[];
     current_page: number;

@@ -443,11 +443,13 @@ function ExpenseRows({
                             ) : id === 'allocated' || id === 'actual' ? (
                                 <ExpenseAmount
                                     value={
-                                        expense[
-                                            id === 'allocated'
-                                                ? 'allocated_amount'
-                                                : 'actual_amount'
-                                        ]
+                                        expense.contributes
+                                            ? expense[
+                                                  id === 'allocated'
+                                                      ? 'allocated_amount'
+                                                      : 'actual_amount'
+                                              ]
+                                            : null
                                     }
                                     label={`Modifica ${columnNames[id]} della spesa ${expense.title}`}
                                     busy={busy}
@@ -1072,16 +1074,7 @@ export function BudgetTable({
                         row.original.source_id &&
                         row.original.expenses[0] ? (
                             <ExpenseAmount
-                                value={
-                                    row.original.expenses[0] &&
-                                    !row.original.expenses[0].contributes
-                                        ? row.original.expenses[0][
-                                              field === 'allocated'
-                                                  ? 'allocated_amount'
-                                                  : 'actual_amount'
-                                          ]
-                                        : row.original[field]
-                                }
+                                value={row.original[field]}
                                 busy={busy}
                                 label={`Modifica ${columnNames[field]} della spesa ${row.original.description}`}
                                 expense={row.original.expenses[0]}

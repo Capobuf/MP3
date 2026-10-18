@@ -136,6 +136,7 @@ Route::middleware('auth')->group(function () {
         Route::delete('expenses/batch', [ExpenseController::class, 'destroyBatch'])->name('expenses.destroy-batch');
         Route::get('expenses/{expense}', [ExpenseController::class, 'show'])->name('expenses.show');
         Route::patch('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
+        Route::post('expenses/{expense}/allocation', [ExpenseController::class, 'allocation'])->name('expenses.allocation');
         Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
         Route::get('{catalog}/options', [CatalogController::class, 'options'])->whereIn('catalog', ['vendors', 'contracts', 'projects'])->name('catalog.options');
         Route::get('{catalog}', [CatalogController::class, 'index'])->whereIn('catalog', ['vendors', 'contracts', 'projects'])->name('catalog.index');

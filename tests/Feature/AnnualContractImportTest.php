@@ -13,6 +13,17 @@ class AnnualContractImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_ambiguous_historical_source_is_not_silently_normalized_by_annual_copy(): void
+    {
+        [$tenant, $year, $contract, $path] = $this->context();
+        $project = $tenant->projects()->create(['name' => 'Storico', 'year' => 2026]);
+        $expense = $tenant->expenses()->create(['title' => 'Ambigua', 'year' => 2026, 'contract_id' => $contract->id, 'project_id' => $project->id, 'allocated_amount' => '10']);
+        $this->postJson($path, ['contracts' => [$this->selection($path, $contract->id, [$expense->id])]])->assertUnprocessable();
+        $this->assertSame(0, $tenant->contracts()->where('year', 2027)->count());
+        $this->assertSame(0, $year->entries()->count());
+        $this->assertSame($project->id, $expense->fresh()->project_id);
+    }
+
     private function context(): array
     {
         $this->actingAs(User::factory()->create(['is_super_admin' => true]));
@@ -88,8 +99,7 @@ class AnnualContractImportTest extends TestCase
     public function test_only_source_allocated_lines_are_copied_including_inherited_zero_and_negative_values(): void
     {
         [$tenant, $year, $contract, $path] = $this->context();
-        $project = $tenant->projects()->create(['name' => 'Vecchio progetto']);
-        $expense = app(ExpenseWriter::class)->create($tenant, ['title' => 'Mista', 'contract_id' => $contract->id, 'project_id' => $project->id, 'year' => 2026, 'lines' => [
+        $expense = app(ExpenseWriter::class)->create($tenant, ['title' => 'Mista', 'contract_id' => $contract->id, 'year' => 2026, 'lines' => [
             ['description' => 'Zero', 'type' => 'allocated', 'unit_price' => '0', 'year' => null],
             ['description' => 'Rettifica', 'type' => 'allocated', 'unit_price' => '-10', 'quantity' => '2.5', 'year' => 2026],
             ['description' => 'Futuro', 'type' => 'allocated', 'unit_price' => '100', 'year' => 2027],
@@ -168,7 +178,7 @@ class AnnualContractImportTest extends TestCase
         $project->costCenters()->sync([$center->id]);
         $previous = $tenant->budgetYears()->create(['year' => 2026]);
         $previous->entries()->create(['tenant_id' => $tenant->id, 'type' => 'project', 'project_id' => $project->id, 'cost_center_id' => $center->id]);
-        $expense = app(ExpenseWriter::class)->create($tenant, ['title' => 'Previsione', 'notes' => 'Note', 'vendor_id' => $vendor->id, 'project_id' => $project->id, 'contract_id' => $contract->id, 'year' => 2026, 'cost_center_ids' => [$center->id], 'lines' => [
+        $expense = app(ExpenseWriter::class)->create($tenant, ['title' => 'Previsione', 'notes' => 'Note', 'vendor_id' => $vendor->id, 'project_id' => $project->id, 'year' => 2026, 'cost_center_ids' => [$center->id], 'lines' => [
             ['description' => 'Zero', 'type' => 'allocated', 'unit_price' => '0', 'year' => null],
             ['description' => 'Rettifica', 'type' => 'allocated', 'unit_price' => '-10', 'quantity' => '2.5', 'year' => 2026, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'],
             ['description' => 'Futuro', 'type' => 'allocated', 'unit_price' => '100', 'year' => 2027, 'period_starts_on' => null, 'period_ends_on' => null],
@@ -186,8 +196,8 @@ class AnnualContractImportTest extends TestCase
         $before = $expense->fresh()->load('lines', 'costCenters')->toArray();
         $this->getJson($path)->assertOk()->assertJsonPath('projects.0.expenses.0.allocated', '-25.00')->assertJsonPath('projects.0.expenses.0.has_target_year', true)->assertJsonPath('projects.0.status', 'attivo');
         $this->assertSame(0, $year->entries()->count());
-        // Separate imports intentionally produce independent forecasts for a shared expense.
-        $this->postJson($contractPath, ['contracts' => [$this->selection($contractPath, $contract->id, [$expense->id])]])->assertOk();
+        $contractExpense = app(ExpenseWriter::class)->create($tenant, ['title' => 'Contratto separato', 'contract_id' => $contract->id, 'year' => 2026, 'allocated_amount' => '25.00']);
+        $this->postJson($contractPath, ['contracts' => [$this->selection($contractPath, $contract->id, [$contractExpense->id])]])->assertOk();
         $payload = ['projects' => [$this->selection($path, $project->id, [$expense->id])]];
         $this->postJson($path, $payload)->assertOk();
         $copy = $tenant->projects()->where('year', 2027)->sole();

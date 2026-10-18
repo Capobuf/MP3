@@ -151,6 +151,9 @@ class AnnualContractImport
     /** @param array<string, mixed> $expense */
     private function copyExpense(Tenant $tenant, BudgetYear $target, array $expense, string $type, ?int $parentId = null): Expense
     {
+        if ($expense['contract_id'] !== null && $expense['project_id'] !== null) {
+            throw ValidationException::withMessages([$type.'s' => 'La spesa sorgente appartiene sia a un contratto sia a un progetto. Risolvi il collegamento nello storico prima di importarla.']);
+        }
         if ($expense['allocated'] === null) {
             throw ValidationException::withMessages([$type.'s' => 'La spesa selezionata non ha allocati nell’anno sorgente.']);
         }

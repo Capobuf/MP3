@@ -63,7 +63,8 @@ class SectionSpreadsheet
                 'Centri di costo: nome univoco o percorso Padre / Figlio. Separa più centri con punto e virgola. Importa prima i centri padre, poi i figli.',
                 'Progetti: usa il nome esatto di uno stato definito nelle impostazioni ambiente. Vuoto significa nessuno stato.',
                 'Budget: anno già creato, tipo new-expense, contract, project o expense. Per new-expense usa descrizione e importi: verrà creata una spesa reale; per gli altri usa una sorgente esistente e lascia descrizione e importi vuoti.',
-                'Spese: una riga rappresenta una spesa semplice. Le condizioni avanzate si gestiscono in MP3 o si trasferiscono con il CSV tecnico.',
+                'Budget: expense ammette solo spese autonome presenti nell’anno; contratti e progetti devono appartenere all’anno del Budget.',
+                'Spese: scegli un solo contratto o progetto. Una riga rappresenta una spesa semplice. Le condizioni avanzate si gestiscono in MP3 o si trasferiscono con il CSV tecnico.',
                 'Non inserire formule. Correggi gli errori nel file e caricalo nuovamente. Nessuna modifica viene salvata prima della conferma.',
             ])),
         ]);

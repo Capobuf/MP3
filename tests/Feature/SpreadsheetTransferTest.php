@@ -29,6 +29,26 @@ class SpreadsheetTransferTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_xlsx_rejects_double_links_and_linked_expense_budget_entries_without_partial_writes(): void
+    {
+        $tenant = $this->tenant();
+        $tenant->budgetYears()->create(['year' => 2026]);
+        $contract = $tenant->contracts()->create(['name' => 'Contratto', 'year' => 2026]);
+        $tenant->projects()->create(['name' => 'Progetto', 'year' => 2026]);
+        $tenant->expenses()->create(['title' => 'Collegata', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '10']);
+        foreach ([
+            'expenses' => [['Valida', 2026, null, null, null, null, null, null, 0, null, null], ['Invalida', 2026, null, 'Contratto', 'Progetto', null, null, null, 10, null, null]],
+            'budget' => [[2026, 'new-expense', null, 'Non salvare', 10, null, null], [2026, 'expense', 'Collegata', null, null, null, null]],
+        ] as $resource => $rows) {
+            $file = $this->file($resource, $rows);
+            $path = '/t/ambiente/'.$resource.'/import';
+            $preview = $this->postJson($path.'/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', $resource === 'expenses' ? 2 : 1)->assertJsonPath('new', 1);
+            $this->postJson($path.'/commit', ['file' => $file, 'token' => $preview->json('token')])->assertUnprocessable();
+            $this->assertSame(1, $tenant->expenses()->count());
+            $this->assertSame(0, $tenant->budgetEntries()->count());
+        }
+    }
+
     private function tenant(): Tenant
     {
         $tenant = Tenant::create(['name' => 'Ambiente', 'slug' => 'ambiente']);

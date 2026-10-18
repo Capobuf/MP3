@@ -97,7 +97,7 @@ class EconomicYearContextTest extends TestCase
         $contract = $this->tenant->contracts()->create(['name' => 'Pluriennale', 'vendor_id' => $vendor->id, 'starts_on' => '2020-01-01', 'ends_on' => '2029-12-31']);
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $expense = app(ExpenseWriter::class)->create($this->tenant, [
-            'title' => 'Due anni', 'year' => 2025, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id, 'project_id' => $project->id,
+            'title' => 'Due anni', 'year' => 2025, 'vendor_id' => $vendor->id, 'contract_id' => $contract->id,
             'lines' => [
                 ['description' => 'Previsto 2025', 'type' => 'allocated', 'quantity' => 1, 'unit_price' => '100.01', 'year' => 2025, 'period_starts_on' => '2025-01-01', 'period_ends_on' => '2025-12-31'],
                 ['description' => 'Effettivo 2025', 'type' => 'actual', 'quantity' => 1, 'unit_price' => '80.02', 'year' => 2025, 'period_starts_on' => '2025-01-01', 'period_ends_on' => '2025-12-31'],
@@ -105,6 +105,8 @@ class EconomicYearContextTest extends TestCase
                 ['description' => 'Effettivo 2026', 'type' => 'actual', 'quantity' => 1, 'unit_price' => '-10.04', 'year' => 2026, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'],
             ],
         ]);
+        // Historical overlapping links must remain readable in all economic views.
+        $expense->update(['project_id' => $project->id]);
         $this->tenant->expenses()->create(['title' => 'Solo 2025', 'year' => 2025, 'allocated_amount' => '7.00', 'actual_amount' => '6.00']);
 
         return ['vendors' => $vendor, 'contracts' => $contract, 'projects' => $project, 'expense' => $expense];
