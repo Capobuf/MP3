@@ -298,11 +298,13 @@ export default function Backups({
                         Download privati riservati agli utenti autorizzati.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    {archives.length > 0 && (
+                <CardContent className="flex flex-col gap-4">
+                    {selection.length > 1 && (
                         <Button
-                            variant="destructive"
-                            disabled={busy || selection.length === 0}
+                            variant="outline"
+                            size="sm"
+                            className="self-start"
+                            disabled={busy}
                             onClick={() => confirmDelete(selection)}
                         >
                             <Trash2 data-icon="inline-start" />
