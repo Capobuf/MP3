@@ -1,5 +1,6 @@
 import {
     FileText,
+    CalendarDays,
     Calculator,
     FolderKanban,
     Handshake,
@@ -43,6 +44,13 @@ export function getPrimaryNavItems(
             title: 'Contratti',
             href: `/t/${tenant.slug}/contracts`,
             icon: FileText,
+            items: [
+                {
+                    title: 'Scadenzario',
+                    href: `/t/${tenant.slug}/scadenzario`,
+                    icon: CalendarDays,
+                },
+            ],
         },
         {
             title: 'Progetti',

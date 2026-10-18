@@ -7,9 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/** @property array<string, mixed>|null $contract_reminders */
 #[Fillable(['name', 'slug'])]
 class Tenant extends Model
 {
+    /** @return array<string, string> */
+    protected function casts(): array
+    {
+        return ['contract_reminders' => 'array'];
+    }
+
     protected static function booted(): void
     {
         static::created(function (Tenant $tenant): void {
