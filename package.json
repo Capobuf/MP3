@@ -47,6 +47,7 @@
         "cmdk": "^1.1.1",
         "concurrently": "^10.0.3",
         "date-fns": "^4.4.0",
+        "html2pdf.js": "^0.14.0",
         "input-otp": "^1.4.2",
         "laravel-vite-plugin": "^3.0.0",
         "lucide-react": "^0.475.0",
@@ -80,6 +81,9 @@
         "lightningcss-win32-x64-msvc": "^1.29.1"
     },
     "overrides": {
+        "html2pdf.js": {
+            "html2canvas": "npm:html2canvas-pro@2.5.2"
+        },
         "vite": "$vite"
     }
 }

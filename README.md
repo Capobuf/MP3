@@ -720,11 +720,22 @@ la tabella di riconciliazione è un blocco indipendente.
 Il configuratore permette di modificare titolo, nome azienda, sottotitolo e titoli
 dei blocchi; nascondere anno, logo, data, filtri/conteggi; riordinare e selezionare
 blocchi e colonne. Il formato iniziale è A4 verticale. Tutto è attivo inizialmente
-tranne la colonna Stato. Titolo, reset e opzioni sono accanto al rispettivo blocco;
+tranne la colonna Stato e la numerazione delle pagine. Titolo, reset e opzioni sono accanto al rispettivo blocco;
 disattivandolo si nascondono le sue opzioni. La data nel Footer è automatica, rilevata
-all’apertura del report, e può essere mostrata o nascosta. La tabella
+all’apertura del report, e può essere mostrata o nascosta. Il Footer contiene
+data a sinistra e logo MP3 centrato ed è ripetuto in fondo a ogni pagina, sia in stampa sia
+nel PDF scaricato; uno spazio riservato lo separa dal contenuto. L’anteprima
+continua lo mostra in fondo al documento. **Numeri di pagina** aggiunge i numeri
+in basso a destra. Disattivando **Includi la prima pagina**, il primo foglio resta
+senza numero e il secondo parte da 1. La stampa usa i contatori CSS nei margini
+di pagina (supportati da Chromium 131+); il PDF scaricato include direttamente
+i numeri, indipendentemente dal supporto di stampa del browser. La tabella
 può raggruppare per tipo con subtotali facoltativi, rispettando l’ordine delle voci
 all’interno dei gruppi. Ogni sezione del configuratore ha un reset indipendente.
+Le opzioni seguono l’ordine del documento e sono raccolte in pannelli
+richiudibili, inizialmente chiusi, anche per i singoli blocchi. I pulsanti con
+l’occhio mostrano o nascondono gli elementi e portano l’anteprima alla zona
+interessata, mantenendo il focus sul comando.
 Le impostazioni valgono per il report aperto. I grafici aggiuntivi sono Distribuzione Fornitore (barre di allocato/effettivo),
 confronto per progetti/contratti e scostamenti.
 Le classifiche mostrano le prime 10 voci più «Altri»; gli scostamenti mostrano
@@ -738,7 +749,14 @@ ricaricare il Budget prima di aprire un nuovo report.
 Il report usa lo stesso font di sistema dell’applicazione: la famiglia effettiva
 può variare tra sistemi operativi. La palette resta chiara anche con il tema dark.
 
-**Stampa / Salva PDF** apre la stampa del browser tramite `react-to-print`:
+**Scarica PDF** genera e scarica direttamente un PDF composto da immagini tramite
+`html2pdf.js`, con A4 verticale/orizzontale e le opzioni del report corrente.
+Il testo del file non è selezionabile; la tabella non ripete l’intestazione su
+ogni pagina. L’override `html2canvas-pro` supporta i colori CSS usati da Tailwind 4.
+Il generatore viene caricato solo al clic. I report troppo lunghi per il canvas
+vengono bloccati con un messaggio: restringere i filtri oppure usare **Stampa**.
+
+**Stampa** apre la stampa del browser tramite `react-to-print`:
 in Chrome scegliere **Salva come PDF**, carta A4, scala 100% e controllare tutte
 le pagine. L’anteprima nell’app mostra il documento continuo; quella di Chrome
 mostra l’impaginazione effettiva. Le impostazioni del browser possono prevalere
@@ -747,7 +765,7 @@ su formato e margini CSS. Il POC riguarda esclusivamente il Budget.
 Controlli del prototipo, con database PHP separato `testing`:
 
 ```bash
-npx vp test tests/frontend/budget-report.test.tsx --bail=1
+npx vp test tests/frontend/budget-report.test.tsx tests/frontend/budget-pdf.test.ts --bail=1
 npm run check
 npm run types:check
 npm run build

@@ -93,6 +93,68 @@ function table(search = '', sorted = true) {
 }
 
 describe('Budget report', () => {
+    it.each([true, false])(
+        'previews the first page number only when included=%s',
+        (numberFirstPage) => {
+            const html = renderToStaticMarkup(
+                <BudgetReport
+                    data={{ budget: summary, filters: [] }}
+                    options={{
+                        ...defaultBudgetReportOptions('Nirolabel'),
+                        blocks: ['kpis'],
+                        showPageNumbers: true,
+                        numberFirstPage,
+                    }}
+                    tenantName="Nirolabel"
+                    year={2026}
+                    createdAt="20/10/2026"
+                />,
+            );
+            expect(html).toContain(
+                `<p class="budget-report-page-number">${numberFirstPage ? '1' : ''}</p>`,
+            );
+        },
+    );
+    it.each([
+        [true, true],
+        [true, false],
+        [false, true],
+        [false, false],
+    ])(
+        'renders footer branding=%s and date=%s independently',
+        (showBranding, showDate) => {
+            const html = renderToStaticMarkup(
+                <BudgetReport
+                    data={{ budget: summary, filters: [] }}
+                    options={{
+                        ...defaultBudgetReportOptions('Nirolabel'),
+                        blocks: ['kpis'],
+                        showBranding,
+                        showDate,
+                        showCompany: false,
+                    }}
+                    tenantName="Nirolabel"
+                    year={2026}
+                    createdAt="20/10/2026"
+                />,
+            );
+            const footer = html.match(/<footer\b[^>]*>(.*?)<\/footer>/s)![1];
+            expect(footer.includes('/branding/mp3-logo-black.svg')).toBe(
+                showBranding,
+            );
+            expect(footer.includes('Elaborato il 20/10/2026')).toBe(showDate);
+            expect(footer).not.toContain('Nirolabel');
+            expect(footer).not.toContain('Budget 2026');
+            expect(html).not.toContain('budget-report-brand');
+            expect(html).not.toContain('budget-report-eyebrow');
+            if (showBranding && showDate) {
+                expect(footer.indexOf('<img')).toBeLessThan(
+                    footer.indexOf('Elaborato il'),
+                );
+            }
+            if (!showBranding && !showDate) expect(footer).toBe('');
+        },
+    );
     it('captures all sorted filtered leaves, including collapsed groups, without controls or pagination', () => {
         const report = captureBudgetReport(table(), summary, ['Tutte']);
         expect(report.budget.entries.map((entry) => entry.id)).toEqual([

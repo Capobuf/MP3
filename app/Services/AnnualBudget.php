@@ -118,7 +118,7 @@ class AnnualBudget
         $vendors = [];
         foreach ($included as $row) {
             $centers[(string) ($row['cost_center_id'] ?? 'none')][] = $row;
-            $vendors[(string) ($row['vendor']?->id ?? 'none')][] = $row;
+            $vendors[(string) ($row['vendor']->id ?? 'none')][] = $row;
         }
 
         return [

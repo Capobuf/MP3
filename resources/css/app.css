@@ -486,8 +486,10 @@
     --report-line: #dbe3ed;
     --report-accent: #41649b;
     box-sizing: border-box;
+    position: relative;
     width: 297mm;
-    padding: 12mm;
+    min-height: 210mm;
+    padding: 12mm 12mm 44mm;
     background: #fff;
     color: var(--report-ink);
     color-scheme: light;
@@ -498,6 +500,7 @@
 }
 .budget-report[data-orientation='portrait'] {
     width: 210mm;
+    min-height: 297mm;
 }
 .budget-report h1 {
     margin: 3mm 0 1.5mm;
@@ -524,7 +527,11 @@
     flex-shrink: 0;
 }
 .budget-report-date {
-    margin-bottom: 2mm;
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 7pt;
+    line-height: 1.5;
+    color: var(--report-muted);
 }
 .budget-report h3 {
     margin-bottom: 3mm;
@@ -551,13 +558,6 @@
     font-size: 9pt;
     font-weight: 500;
     color: var(--report-muted);
-}
-.budget-report-brand {
-    border-right: 0.3mm solid var(--report-line);
-    padding-right: 3mm;
-    color: var(--report-ink);
-    font-weight: 800;
-    letter-spacing: -0.06em;
 }
 .budget-report-subtitle {
     color: var(--report-muted);
@@ -745,19 +745,44 @@
     break-inside: avoid;
 }
 .budget-report-footer {
-    margin-top: 5mm;
-    padding-top: 3mm;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 9mm minmax(0, 1fr);
+    align-items: center;
+    column-gap: 4mm;
+    position: absolute;
+    right: 12mm;
+    bottom: 12mm;
+    left: 12mm;
+    height: 20mm;
+    margin-top: 0;
+    padding: 3mm 0;
     border-top: 0.2mm solid var(--report-line);
 }
-.budget-report-signature {
-    display: flex;
-    justify-content: space-between;
-    gap: 4mm;
-    margin-top: 3mm;
-    color: var(--report-ink);
+.budget-report-footer-space {
+    display: none;
 }
-.budget-report-signature strong {
-    letter-spacing: -0.06em;
+.budget-report-footer:empty {
+    border-top: 0;
+}
+.budget-report-footer-logo {
+    grid-column: 2;
+    grid-row: 1;
+    display: flex;
+    width: 9mm;
+    height: 9mm;
+    margin-inline: auto;
+}
+.budget-report-page-number {
+    grid-column: 3;
+    grid-row: 1;
+    text-align: right;
+    font:
+        500 8pt/4mm Arial,
+        sans-serif;
+    font-variant-numeric: tabular-nums;
+}
+.html2pdf__container .budget-report-page-number {
+    visibility: hidden;
 }
 .budget-report-group-title {
     margin-top: 4mm;
@@ -780,19 +805,51 @@
 .budget-report th[data-column='status'] {
     width: 17mm;
 }
+.html2pdf__container .budget-report,
+.html2pdf__container .budget-report[data-orientation='portrait'] {
+    width: 100%;
+    min-height: 0;
+    padding: 0;
+}
+.html2pdf__container
+    .budget-report:not([data-pdf-footer])
+    .budget-report-footer {
+    display: none;
+}
+.html2pdf__container .budget-report[data-pdf-footer] .budget-report-footer {
+    position: static;
+}
 @media print {
     html:has(.budget-report),
     body:has(.budget-report) {
         height: auto;
         overflow: visible;
-        background: #fff;
+        background: transparent;
     }
     .budget-report,
     .budget-report[data-orientation='portrait'] {
+        display: table;
         width: 100%;
+        min-height: 0;
         padding: 0;
+        /* Let page-margin numbers remain visible inside the footer area. */
+        background: transparent;
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
+    }
+    .budget-report-page-body {
+        display: table-row-group;
+    }
+    .budget-report-page-content {
+        display: table-cell;
+    }
+    /* A repeating footer group reserves space for the fixed footer on every page. */
+    .budget-report-footer-space {
+        display: table-footer-group;
+        break-inside: avoid;
+    }
+    .budget-report-footer-space > div {
+        height: 24mm;
     }
     .budget-report thead {
         display: table-header-group;
@@ -800,5 +857,14 @@
     .budget-report tr {
         break-inside: avoid;
         page-break-inside: avoid;
+    }
+    .budget-report-footer {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+    }
+    .budget-report-page-number {
+        visibility: hidden;
     }
 }

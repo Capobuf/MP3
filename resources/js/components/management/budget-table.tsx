@@ -1644,7 +1644,6 @@ export function BudgetTable({
                 <BudgetPrintDialog
                     data={report}
                     tenantName={tenantName}
-                    tenantSlug={slug}
                     logoUrl={logoUrl}
                     year={year}
                     onClose={() => setReport(null)}

@@ -17,9 +17,15 @@ import {
     verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/utils';
 import type { ClientRect, UniqueIdentifier } from '@dnd-kit/core';
 
@@ -38,15 +44,18 @@ type Column = {
     icon?: LucideIcon;
     actions?: ReactNode;
     content?: ReactNode;
+    onOpen?: () => void;
 };
 
 function SortableColumn({
     column,
     onVisibilityChange,
     disabled,
+    visibilityToggle,
 }: {
     column: Column;
     disabled: boolean;
+    visibilityToggle: boolean;
     onVisibilityChange: (id: string, visible: boolean) => void;
 }) {
     const {
@@ -60,48 +69,96 @@ function SortableColumn({
     } = useSortable({ id: column.id, disabled });
     const Icon = column.icon;
     return (
-        <li
-            ref={setNodeRef}
-            style={{ transform: CSS.Transform.toString(transform), transition }}
-            className={cn(
-                'flex flex-col gap-3 rounded-md',
-                isDragging && 'bg-accent opacity-50',
-            )}
+        <Collapsible
+            asChild
+            disabled={disabled}
+            onOpenChange={(open) => {
+                if (open) column.onOpen?.();
+            }}
         >
-            <div className="flex items-center gap-2">
-                {Icon && (
-                    <Icon
-                        className="size-4 shrink-0 text-muted-foreground"
-                        aria-hidden="true"
-                    />
+            <li
+                ref={setNodeRef}
+                style={{
+                    transform: CSS.Transform.toString(transform),
+                    transition,
+                }}
+                className={cn(
+                    'flex flex-col gap-3 rounded-md',
+                    isDragging && 'bg-accent opacity-50',
                 )}
-                <Checkbox
-                    aria-label={`Mostra ${column.label}`}
-                    checked={column.visible}
-                    disabled={disabled || !column.canHide}
-                    onCheckedChange={(value) =>
-                        onVisibilityChange(column.id, value === true)
-                    }
-                />
-                <span className="flex-1 text-sm">{column.label}</span>
-                {column.visible && column.actions}
-                <Button
-                    disabled={disabled}
-                    ref={setActivatorNodeRef}
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="cursor-grab touch-none active:cursor-grabbing"
-                    {...attributes}
-                    {...listeners}
-                    aria-label={`Trascina ${column.label}`}
-                    title={`Trascina ${column.label} per riordinare`}
-                >
-                    <GripVertical />
-                </Button>
-            </div>
-            {column.visible && column.content}
-        </li>
+            >
+                <div className="flex items-center gap-2">
+                    {Icon && (
+                        <Icon
+                            className="size-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                        />
+                    )}
+                    {!visibilityToggle && (
+                        <Checkbox
+                            aria-label={`Mostra ${column.label}`}
+                            checked={column.visible}
+                            disabled={disabled || !column.canHide}
+                            onCheckedChange={(value) =>
+                                onVisibilityChange(column.id, value === true)
+                            }
+                        />
+                    )}
+                    {column.visible && column.content ? (
+                        <CollapsibleTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                className="group h-auto min-h-9 min-w-0 flex-1 justify-start text-left whitespace-normal"
+                                aria-label={`Opzioni ${column.label}`}
+                            >
+                                {column.label}
+                                <ChevronDown
+                                    className="ml-auto group-data-[state=open]:rotate-180"
+                                    aria-hidden="true"
+                                />
+                            </Button>
+                        </CollapsibleTrigger>
+                    ) : (
+                        <span className="flex-1 text-sm">{column.label}</span>
+                    )}
+                    {visibilityToggle && (
+                        <Toggle
+                            aria-label={column.label}
+                            title={`${column.visible ? 'Nascondi' : 'Mostra'} ${column.label.toLowerCase()}`}
+                            pressed={column.visible}
+                            disabled={disabled || !column.canHide}
+                            onPressedChange={(visible) =>
+                                onVisibilityChange(column.id, visible)
+                            }
+                        >
+                            {column.visible ? (
+                                <Eye aria-hidden="true" />
+                            ) : (
+                                <EyeOff aria-hidden="true" />
+                            )}
+                        </Toggle>
+                    )}
+                    {column.visible && column.actions}
+                    <Button
+                        disabled={disabled}
+                        ref={setActivatorNodeRef}
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="cursor-grab touch-none active:cursor-grabbing"
+                        {...attributes}
+                        {...listeners}
+                        aria-label={`Trascina ${column.label}`}
+                        title={`Trascina ${column.label} per riordinare`}
+                    >
+                        <GripVertical />
+                    </Button>
+                </div>
+                {column.visible && column.content && (
+                    <CollapsibleContent>{column.content}</CollapsibleContent>
+                )}
+            </li>
+        </Collapsible>
     );
 }
 
@@ -110,10 +167,12 @@ export function TableColumnOrder({
     onVisibilityChange,
     onOrderChange,
     disabled = false,
+    visibilityToggle = false,
     label: listLabel = 'Ordine delle colonne',
 }: {
     columns: Column[];
     disabled?: boolean;
+    visibilityToggle?: boolean;
     label?: string;
     onVisibilityChange: (id: string, visible: boolean) => void;
     onOrderChange: (ids: string[]) => void;
@@ -199,6 +258,7 @@ export function TableColumnOrder({
                             key={column.id}
                             column={column}
                             disabled={disabled}
+                            visibilityToggle={visibilityToggle}
                             onVisibilityChange={onVisibilityChange}
                         />
                     ))}
