@@ -1,6 +1,6 @@
 import html2pdf from 'html2pdf.js';
 import type { jsPDF } from 'jspdf';
-import type { BudgetReportOptions } from './budget-report';
+import type { PrintReportOptions } from './report-document';
 
 export async function downloadBudgetPdf(
     element: HTMLElement,
@@ -10,7 +10,7 @@ export async function downloadBudgetPdf(
         showPageNumbers,
         numberFirstPage,
     }: Pick<
-        BudgetReportOptions,
+        PrintReportOptions,
         'orientation' | 'showPageNumbers' | 'numberFirstPage'
     >,
 ) {

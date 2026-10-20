@@ -1,4 +1,5 @@
 import { CommentsSection } from '@/components/management/comments-section';
+import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
 import { ExpenseAllocation } from '@/components/management/expense-allocation';
 import type { Allocation } from '@/components/management/expense-allocation';
 import { ArrowUpRight, ReceiptText } from 'lucide-react';
@@ -63,6 +64,14 @@ export default function ExpenseDetail({
                             <DetailEditAction
                                 href={`${path}/${expense.id}/edit`}
                                 label="Modifica spesa"
+                                disabled={editingLines}
+                            />
+                            <SpreadsheetActions
+                                slug={tenant.slug}
+                                resource="expenses"
+                                label="Spesa"
+                                filters={{ record: expense.id }}
+                                printOnly
                                 disabled={editingLines}
                             />
                         </>

@@ -20,6 +20,7 @@ use App\Http\Controllers\Tenant\ExpenseController;
 use App\Http\Controllers\Tenant\IdentityController;
 use App\Http\Controllers\Tenant\ProjectStatusController;
 use App\Http\Controllers\Tenant\SearchController;
+use App\Http\Controllers\Tenant\SectionReportController;
 use App\Http\Controllers\Tenant\SpreadsheetController;
 use App\Http\Controllers\Tenant\TenantDataTransferController;
 use App\Http\Controllers\Tenant\UndoController;
@@ -67,6 +68,7 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::prefix('t/{tenant:slug}')->middleware(['can:view,tenant', RecordUndo::class])->scopeBindings()->name('tenant.')->group(function () {
+        Route::get('{resource}/report', SectionReportController::class)->whereIn('resource', ['contracts', 'projects', 'expenses'])->name('section-report');
         Route::prefix('{resource}')->whereIn('resource', ['vendors', 'contracts', 'projects', 'expenses', 'cost-centers', 'budget'])->withoutMiddleware(RecordUndo::class)->group(function () {
             Route::get('export.xlsx', [SpreadsheetController::class, 'export'])->name('spreadsheet.export');
             Route::get('import-template.xlsx', [SpreadsheetController::class, 'template'])->name('spreadsheet.template');

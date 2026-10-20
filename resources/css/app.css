@@ -701,6 +701,10 @@
     :is(
         [data-column='allocated'],
         [data-column='actual'],
+        [data-column='allocated_amount'],
+        [data-column='actual_amount'],
+        [data-column='reference_amount'],
+        [data-column='expenses_count'],
         [data-column='variance']
     ),
 .budget-report-distribution :is(td, th:not(:first-child)) {
@@ -797,6 +801,53 @@
 .budget-report-chart-batch {
     margin: 4mm 0;
     break-inside: avoid;
+}
+.section-report-detail {
+    margin: 4mm 0;
+}
+.budget-report .section-report-table {
+    table-layout: auto;
+}
+.budget-report .section-report-table th[data-column='status'] {
+    width: auto;
+}
+.section-report-table
+    :is(
+        [data-column='year'],
+        [data-column='starts_on'],
+        [data-column='ends_on'],
+        [data-column='period_starts_on'],
+        [data-column='period_ends_on']
+    ) {
+    width: 1%;
+    overflow-wrap: normal;
+}
+.section-report-table
+    td:is(
+        [data-column='starts_on'],
+        [data-column='ends_on'],
+        [data-column='period_starts_on'],
+        [data-column='period_ends_on']
+    ) {
+    white-space: nowrap;
+}
+.section-report-detail h3 {
+    break-after: avoid;
+}
+.section-report-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2mm 4mm;
+    margin-bottom: 3mm;
+}
+.section-report-fields dt {
+    color: var(--report-muted);
+    font-size: 7pt;
+}
+.section-report-text {
+    margin: 2mm 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
 }
 .budget-report section > .budget-report-note,
 .budget-report-chart-batch > .budget-report-note {

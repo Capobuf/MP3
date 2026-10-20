@@ -742,6 +742,24 @@ Le classifiche mostrano le prime 10 voci più «Altri»; gli scostamenti mostran
 i 5 maggiori sforamenti e i 5 maggiori risparmi, come nella panoramica.
 Non vengono caricati storico, stati dei progetti o scadenze dalla panoramica.
 
+## Stampa di contratti, progetti e spese
+
+**Stampa report** è disponibile nel menu di esportazione delle tre liste e delle
+schede di contratti e progetti; nella scheda di una spesa è un pulsante dedicato.
+Il report recupera tutte le righe filtrate nell’ordinamento corrente, oltre la
+pagina visibile. Dalla scheda recupera soltanto l’elemento aperto.
+
+Il configuratore, l’intestazione, il footer e il download PDF sono condivisi con
+il Budget. L’elenco, il riepilogo e, per contratti/progetti, **Spese collegate**
+sono inizialmente visibili. L’utente può nasconderli e attivare **Dettagli**,
+che aggiunge anche note e condizioni delle spese collegate visibili. Le colonne
+dell’elenco sono selezionabili e riordinabili. I totali riguardano le spese
+dell’esercizio selezionato; le condizioni di altri anni non vengono incluse.
+Gli elementi storici senza anno restano visibili come nelle liste e sono
+indicati come **Non classificato**.
+
+## Formato e verifiche dei report
+
 Il logo si carica in **Impostazioni ambiente → Identità azienda** (PNG/JPG,
 2 MB, massimo 4096 × 4096 pixel). È conservato sul disco privato esistente e
 accessibile soltanto agli utenti del tenant o ai super admin. Dopo averlo modificato,
@@ -760,16 +778,16 @@ vengono bloccati con un messaggio: restringere i filtri oppure usare **Stampa**.
 in Chrome scegliere **Salva come PDF**, carta A4, scala 100% e controllare tutte
 le pagine. L’anteprima nell’app mostra il documento continuo; quella di Chrome
 mostra l’impaginazione effettiva. Le impostazioni del browser possono prevalere
-su formato e margini CSS. Il POC riguarda esclusivamente il Budget.
+su formato e margini CSS.
 
 Controlli del prototipo, con database PHP separato `testing`:
 
 ```bash
-npx vp test tests/frontend/budget-report.test.tsx tests/frontend/budget-pdf.test.ts --bail=1
+npx vp test --bail=1
 npm run check
 npm run types:check
 npm run build
-php artisan test --filter='AnnualBudgetTest|TenantIdentityTest|SpreadsheetTransferTest|EconomicYearContextTest' --stop-on-failure
+php artisan test --filter='SectionReportTest|AnnualBudgetTest|TenantIdentityTest|SpreadsheetTransferTest|EconomicYearContextTest' --stop-on-error --stop-on-failure
 ```
 
 Prima dell’approvazione verificare nell’app: filtri singoli e combinati, zero/una/

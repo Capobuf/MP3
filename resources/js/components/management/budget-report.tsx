@@ -1,5 +1,6 @@
 import type { Ref } from 'react';
-import AppLogoIcon from '@/components/app-logo-icon';
+import { ReportDocument, defaultPrintReportOptions } from './report-document';
+import type { PrintReportOptions } from './report-document';
 import {
     ChartNoAxesCombined,
     GitFork,
@@ -56,51 +57,21 @@ export type BudgetReportData = {
     budget: BudgetSnapshot;
     filters: string[];
 };
-export type BudgetReportOptions = {
-    title: string;
-    company: string;
-    subtitle: string;
-    orientation: 'portrait' | 'landscape';
-    showCompany: boolean;
-    showYear: boolean;
-    showLogo: boolean;
-    showScope: boolean;
-    showDate: boolean;
-    showBranding: boolean;
-    showPageNumbers: boolean;
-    numberFirstPage: boolean;
-    blocks: BudgetReportBlock[];
-    hiddenBlocks: BudgetReportBlock[];
-    titles: Record<BudgetReportBlock, string>;
-    sankeyMetric: 'allocated' | 'actual' | 'both';
-    reconciliationMetric: 'allocated' | 'actual' | 'both';
-    groupByType: boolean;
-    subtotals: boolean;
-    columns: BudgetReportColumn[];
-};
+export type BudgetReportOptions = PrintReportOptions<
+    BudgetReportBlock,
+    BudgetReportColumn
+>;
 export function defaultBudgetReportOptions(
     tenantName: string,
 ): BudgetReportOptions {
     return {
-        title: 'Budget annuale',
-        company: tenantName,
-        subtitle: 'Report economico',
-        orientation: 'portrait',
-        showCompany: true,
-        showYear: true,
-        showLogo: true,
-        showScope: true,
-        showDate: true,
-        showBranding: true,
-        showPageNumbers: false,
-        numberFirstPage: true,
-        blocks: Object.keys(budgetReportBlocks) as BudgetReportBlock[],
-        hiddenBlocks: [],
-        titles: { ...budgetReportBlocks },
-        sankeyMetric: 'both',
-        reconciliationMetric: 'both',
+        ...defaultPrintReportOptions(
+            tenantName,
+            'Budget annuale',
+            budgetReportColumns,
+            budgetReportBlocks,
+        ),
         groupByType: true,
-        subtotals: true,
         columns: (
             Object.keys(budgetReportColumns) as BudgetReportColumn[]
         ).filter((key) => key !== 'status'),
@@ -395,105 +366,47 @@ export function BudgetReport({
         }
     };
     return (
-        <article
+        <ReportDocument
             ref={ref}
-            className="budget-report"
-            data-orientation={options.orientation}
-            aria-label="Anteprima report Budget"
+            options={options}
+            tenantName={tenantName}
+            logoUrl={logoUrl}
+            year={year}
+            createdAt={createdAt}
+            filters={data.filters}
+            label="Budget"
+            counts={
+                <>
+                    <strong>{budget.entries.length}</strong> righe nel report ·{' '}
+                    <strong>{budget.totals.count}</strong> voci incluse nei
+                    totali · <strong>{budget.totals.incomplete}</strong> con
+                    dati incompleti
+                </>
+            }
         >
-            <div className="budget-report-page-body">
-                <div className="budget-report-page-content">
-                    <header className="budget-report-header">
-                        <div className="budget-report-heading">
-                            {options.showCompany && (
-                                <p className="budget-report-eyebrow">
-                                    {options.company}
-                                </p>
-                            )}
-                            <h1>{options.title}</h1>
-                            <p className="budget-report-subtitle">
-                                {options.subtitle}
-                            </p>
-                        </div>
-                        <div className="budget-report-identity">
-                            {options.showLogo && logoUrl && (
-                                <img src={logoUrl} alt={`Logo ${tenantName}`} />
-                            )}
-                            {options.showYear && (
-                                <p className="budget-report-year">
-                                    <span>Esercizio</span>
-                                    <strong>{year}</strong>
-                                </p>
-                            )}
-                        </div>
-                    </header>
-                    {options.showScope && (
-                        <div className="budget-report-scope">
-                            <div className="budget-report-scope-heading">
-                                <strong>Perimetro del report</strong>
-                            </div>
-                            <p>{data.filters.join(' · ')}</p>
-                            <p className="budget-report-counts">
-                                <strong>{budget.entries.length}</strong> righe
-                                nel report ·{' '}
-                                <strong>{budget.totals.count}</strong> voci
-                                incluse nei totali ·{' '}
-                                <strong>{budget.totals.incomplete}</strong> con
-                                dati incompleti
-                            </p>
-                        </div>
-                    )}
-                    {options.blocks
-                        .filter(
-                            (block) => !options.hiddenBlocks.includes(block),
-                        )
-                        .map((block) => {
-                            const Icon = budgetReportIcons[block];
-                            return (
-                                <section
-                                    key={block}
-                                    data-report-block={block}
-                                    aria-label={options.titles[block]}
-                                    className={
-                                        block === 'kpis' || block === 'totals'
-                                            ? 'budget-report-block'
-                                            : undefined
-                                    }
-                                >
-                                    <h2>
-                                        <Icon aria-hidden="true" />
-                                        {options.titles[block]}
-                                    </h2>
-                                    {renderBlock(block)}
-                                </section>
-                            );
-                        })}
-                </div>
-            </div>
-            <div className="budget-report-footer-space" aria-hidden="true">
-                <div />
-            </div>
-            <footer
-                className="budget-report-note budget-report-footer"
-                aria-label="Piè di pagina"
-            >
-                {options.showBranding && (
-                    <AppLogoIcon
-                        variant="black"
-                        className="budget-report-footer-logo"
-                    />
-                )}
-                {options.showDate && (
-                    <p className="budget-report-date">
-                        Elaborato il {createdAt}
-                    </p>
-                )}
-                {options.showPageNumbers && (
-                    <p className="budget-report-page-number">
-                        {options.numberFirstPage ? '1' : null}
-                    </p>
-                )}
-            </footer>
-        </article>
+            {options.blocks
+                .filter((block) => !options.hiddenBlocks.includes(block))
+                .map((block) => {
+                    const Icon = budgetReportIcons[block];
+                    return (
+                        <section
+                            key={block}
+                            data-report-block={block}
+                            aria-label={options.titles[block]}
+                            className={
+                                block === 'kpis' || block === 'totals'
+                                    ? 'budget-report-block'
+                                    : undefined
+                            }
+                        >
+                            <h2>
+                                <Icon aria-hidden="true" />
+                                {options.titles[block]}
+                            </h2>
+                            {renderBlock(block)}
+                        </section>
+                    );
+                })}
+        </ReportDocument>
     );
 }
