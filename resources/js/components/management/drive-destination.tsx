@@ -61,11 +61,11 @@ export function DriveDestination({
             <CardHeader>
                 <CardTitle>Cartella di destinazione</CardTitle>
                 <CardDescription>
-                    La cartella MP3 con report e backup viene spostata qui.
+                    La cartella di Obake con report e backup viene spostata qui.
                 </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-                <p>{destination?.name ?? 'Il mio Drive'} / MP3</p>
+                <p>Destinazione: {destination?.name ?? 'Il mio Drive'}</p>
                 <Collapsible open={configOpen} onOpenChange={setConfigOpen}>
                     <CollapsibleTrigger asChild>
                         <Button variant="ghost">
@@ -203,7 +203,7 @@ export function DriveDestination({
                         oauth-token={token}
                         origin={window.location.origin}
                         locale="it"
-                        title="Scegli dove salvare MP3"
+                        title="Scegli dove salvare Obake"
                         max-items={1}
                         onCanceled={() => setToken(null)}
                         onOauthError={pickerError['onpicker-error']}

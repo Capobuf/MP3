@@ -339,7 +339,7 @@ export default function Sync({
                                 target="_blank"
                                 rel="noreferrer"
                             >
-                                Apri cartella MP3
+                                Apri cartella Obake
                             </a>
                         )}
                         {(connectionError || errors.sync) && (
@@ -396,7 +396,7 @@ export default function Sync({
                     </CardTitle>
                     <CardDescription>
                         Report annuali aggiornati ogni giorno alle 03:00. Solo
-                        MP3 → Drive.
+                        Obake → Drive.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

@@ -9,9 +9,11 @@ use Throwable;
 
 class RestorePlatformBackup extends Command
 {
-    protected $signature = 'mp3:restore {archive : Percorso locale dello ZIP globale} {--verify : Verifica senza ripristinare} {--force : Conferma il ripristino su destinazione vuota in manutenzione}';
+    protected $signature = 'obake:restore {archive : Percorso locale dello ZIP globale} {--verify : Verifica senza ripristinare} {--force : Conferma il ripristino su destinazione vuota in manutenzione}';
 
-    protected $description = 'Verifica o ripristina database MySQL, storage e .env di un backup MP3 compatibile';
+    protected $aliases = ['mp3:restore'];
+
+    protected $description = 'Verifica o ripristina database MySQL, storage e .env di un backup Obake compatibile';
 
     public function handle(PlatformBackup $backup): int
     {

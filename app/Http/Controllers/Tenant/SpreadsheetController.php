@@ -22,14 +22,14 @@ class SpreadsheetController extends Controller
     public function export(Request $request, Tenant $tenant, string $resource, SectionSpreadsheet $reports): BinaryFileResponse
     {
         $suffix = in_array($resource, ['expenses', 'budget', 'contracts', 'projects'], true) ? '_'.EconomicYearContext::year($tenant, $request) : '';
-        $name = 'MP3_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $tenant->slug).'-'.$resource.$suffix.'_'.now()->toDateString().'.xlsx';
+        $name = 'obake_'.preg_replace('/[^a-zA-Z0-9_-]/', '_', $tenant->slug).'-'.$resource.$suffix.'_'.now()->toDateString().'.xlsx';
 
         return Excel::download($reports->export($tenant, $resource, $request), $name, \Maatwebsite\Excel\Excel::XLSX, ['Cache-Control' => 'private, no-store']);
     }
 
     public function template(Tenant $tenant, string $resource, SectionSpreadsheet $reports): BinaryFileResponse
     {
-        return Excel::download($reports->template($resource), 'MP3_modello-'.$resource.'.xlsx', \Maatwebsite\Excel\Excel::XLSX, ['Cache-Control' => 'private, no-store']);
+        return Excel::download($reports->template($resource), 'obake_modello-'.$resource.'.xlsx', \Maatwebsite\Excel\Excel::XLSX, ['Cache-Control' => 'private, no-store']);
     }
 
     public function preview(Request $request, Tenant $tenant, string $resource, SpreadsheetImport $import): JsonResponse

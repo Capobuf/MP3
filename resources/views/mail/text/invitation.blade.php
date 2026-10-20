@@ -1,8 +1,8 @@
-MP3
+Obake
 
 {!! filled($organizationName) ? "Invito a un'Organizzazione" : "Invito alla Piattaforma" !!}
 
-Hai ricevuto un invito per accedere a MP3.
+Hai ricevuto un invito per accedere a Obake.
 @if (filled($organizationName))
 Organizzazione: {!! $organizationName !!}
 @endif

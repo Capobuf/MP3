@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\Fakes\DriveServer;
 use Tests\TestCase;
@@ -118,6 +119,7 @@ class DriveSyncTest extends TestCase
         $sync->sync($tenant);
         $ids = DB::table('drive_objects')->orderBy('id')->pluck('file_id')->all();
         $this->assertCount(4, $this->server->files);
+        $this->assertSame('Obake', $this->server->files[$sync->objectId('root')]['name']);
         $this->assertSame('success', $sync->state($tenant)['last_status']);
         $expense->update(['title' => 'Aggiornata']);
         $sync->sync($tenant);
@@ -127,6 +129,36 @@ class DriveSyncTest extends TestCase
         $this->assertSame([], Storage::disk('local')->allFiles());
         $this->assertDatabaseCount('undo_actions', 0);
         $this->assertStringContainsString('2 file annuali', $sync->state($tenant)['last_message']);
+    }
+
+    public function test_legacy_root_and_file_mappings_are_reused_without_renaming_or_creating_folders(): void
+    {
+        $this->connected();
+        $tenant = $this->tenant();
+        $tenant->expenses()->create(['title' => 'Report', 'year' => 2026]);
+        $sync = app(DriveSync::class);
+        $sync->enable($tenant, true);
+        $sync->sync($tenant);
+        $rootId = $sync->objectId('root');
+        $this->server->files[$rootId]['name'] = 'MP3';
+        $root = $this->server->files[$rootId];
+        $mapping = (array) DB::table('drive_objects')->where('object_key', 'root')->sole();
+        $ids = DB::table('drive_objects')->orderBy('id')->pluck('file_id')->all();
+        $this->server->requests = [];
+
+        $sync->initialize();
+        $sync->sync($tenant);
+
+        $this->assertSame($root, $this->server->files[$rootId]);
+        $this->assertSame($mapping, (array) DB::table('drive_objects')->where('object_key', 'root')->sole());
+        $this->assertSame($ids, DB::table('drive_objects')->orderBy('id')->pluck('file_id')->all());
+        $this->assertCount(3, $this->server->files);
+        foreach ($this->server->requests as [$method, $path]) {
+            if (str_starts_with($path, '/drive/v3/files')) {
+                $this->assertSame('GET', $method);
+            }
+        }
+        $this->assertSame('success', $sync->state($tenant)['last_status']);
     }
 
     public function test_missing_or_moved_folders_upload_failures_and_bad_checksums_never_create_copies_or_report_success(): void
@@ -241,7 +273,13 @@ class DriveSyncTest extends TestCase
         $this->assertFalse((bool) app(DriveSync::class)->state($other)['enabled']);
     }
 
-    public function test_daily_command_continues_after_one_tenant_fails_and_skips_disabled_tenants(): void
+    public static function syncCommands(): array
+    {
+        return [['obake:drive-sync'], ['mp3:drive-sync']];
+    }
+
+    #[DataProvider('syncCommands')]
+    public function test_daily_command_continues_after_one_tenant_fails_and_skips_disabled_tenants(string $command): void
     {
         $this->connected();
         $first = $this->tenant();
@@ -253,8 +291,8 @@ class DriveSyncTest extends TestCase
             $mock->shouldReceive('sync')->once()->withArgs(fn ($tenant) => $tenant->id === $first->id)->andThrow(new RuntimeException('Errore esplicito'));
             $mock->shouldReceive('sync')->once()->withArgs(fn ($tenant) => $tenant->id === $second->id);
         });
-        $this->artisan('mp3:drive-sync')->expectsOutput('Ambiente '.$first->id.': Errore esplicito')->assertFailed();
-        $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains($event->command ?? '', 'mp3:drive-sync'));
+        $this->artisan($command)->expectsOutput('Ambiente '.$first->id.': Errore esplicito')->assertFailed();
+        $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains($event->command ?? '', 'obake:drive-sync'));
         $this->assertSame('0 3 * * *', $event->expression);
         $this->assertSame('Europe/Rome', $event->timezone);
         $this->assertTrue($event->withoutOverlapping);

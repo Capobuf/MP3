@@ -14,7 +14,7 @@ Per importare, scaricare il modello della sezione e compilare il foglio **Dati**
 - Importare i centri padre prima dei figli; sono ammessi due livelli.
 - Budget: creare prima l’anno dall’interfaccia. Usare `new-expense` per creare spese autonome, oppure `contract`, `project`, `expense` con una sorgente esistente. Sorgenti rimosse richiedono il ripristino dall’interfaccia.
 
-Premere **Valida e mostra anteprima**, controllare nuovi record, duplicati ed errori, quindi **Conferma importazione**. I duplicati certi vengono saltati; corrispondenze ambigue o differenti bloccano il file. Nessun record viene aggiornato. Una riga Spese crea una spesa semplice con righe economiche per gli importi specificati; condizioni avanzate restano nell’editor MP3.
+Premere **Valida e mostra anteprima**, controllare nuovi record, duplicati ed errori, quindi **Conferma importazione**. I duplicati certi vengono saltati; corrispondenze ambigue o differenti bloccano il file. Nessun record viene aggiornato. Una riga Spese crea una spesa semplice con righe economiche per gli importi specificati; condizioni avanzate restano nell’editor Obake.
 
 La validazione non scrive nel database. La conferma invia nuovamente il file e ripete tutti i controlli dentro una transazione. Un token cifrato, valido 30 minuti, lega anteprima, tenant, sezione, contenuto del file e piano di inserimento. Se questi cambiano, ripetere l’anteprima. Qualsiasi errore causa rollback completo. Gli import non sono registrati nello storico Annulla.
 

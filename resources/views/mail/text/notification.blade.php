@@ -1,4 +1,4 @@
-MP3
+Obake
 
 {!! $title !!}
 

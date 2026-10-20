@@ -145,7 +145,7 @@ class DriveSyncController extends Controller
                 try {
                     $sync->initialize();
                 } catch (\Throwable) {
-                    $google->fail('Account collegato, ma creazione/verifica della cartella MP3 fallita. Verifica accesso Drive e ricollega l’account.');
+                    $google->fail('Account collegato, ma creazione/verifica della cartella Obake fallita. Verifica accesso Drive e ricollega l’account.');
                 }
             });
         } catch (RuntimeException $error) {

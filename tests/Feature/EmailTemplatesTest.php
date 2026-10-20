@@ -20,7 +20,7 @@ class EmailTemplatesTest extends TestCase
         $html = view('mail.test')->render();
         $this->assertStringContainsString('Email di Test Ricevuta', $html);
         $this->assertStringContainsString('Messaggio ricevuto', $html);
-        $this->assertStringContainsString('mp3-logo-email.png', $html);
+        $this->assertStringContainsString('obake-logo-email.png', $html);
         $this->assertStringContainsString('max-width:544px', $html);
         $this->assertStringContainsString('<!--[if mso]>', $html);
         $this->assertStringNotContainsString('<a ', $html);
@@ -40,14 +40,14 @@ class EmailTemplatesTest extends TestCase
             $this->assertStringContainsString(e($message->actionUrl), $html);
             $this->assertStringContainsString('/reset-password/broker-token', $html);
             $this->assertStringContainsString('email=recipient%40example.test', $html);
-            $this->assertStringContainsString('mp3-logo-email.png', $html);
+            $this->assertStringContainsString('obake-logo-email.png', $html);
             $this->assertStringNotContainsString('example.invalid', $html);
             $this->assertStringNotContainsString('<script>', $html);
             if ($tenant) {
                 $this->assertStringContainsString(e($tenant->name), $html);
-                $this->assertStringContainsString('mp3-organization-icon.png', $html);
+                $this->assertStringContainsString('obake-organization-icon.png', $html);
             } else {
-                $this->assertStringNotContainsString('mp3-organization-icon.png', $html);
+                $this->assertStringNotContainsString('obake-organization-icon.png', $html);
                 $this->assertStringNotContainsString('>Organizzazione</p>', $html);
             }
         }
@@ -86,13 +86,13 @@ class EmailTemplatesTest extends TestCase
     public function test_assets_follow_configured_application_and_asset_urls(): void
     {
         config(['app.url' => 'http://localhost:8000', 'app.asset_url' => null]);
-        $this->assertStringContainsString('src="http://localhost:8000/branding/email/mp3-logo-email.png"', view('mail.test')->render());
+        $this->assertStringContainsString('src="http://localhost:8000/branding/email/obake-logo-email.png"', view('mail.test')->render());
         config(['app.url' => 'https://app.example.test']);
-        $this->assertStringContainsString('src="https://app.example.test/branding/email/mp3-logo-email.png"', view('mail.test')->render());
+        $this->assertStringContainsString('src="https://app.example.test/branding/email/obake-logo-email.png"', view('mail.test')->render());
         config(['app.asset_url' => 'https://assets.example.test/']);
-        $this->assertStringContainsString('src="https://assets.example.test/branding/email/mp3-logo-email.png"', view('mail.test')->render());
-        $this->assertFileExists(public_path('branding/email/mp3-logo-email.png'));
-        $this->assertFileExists(public_path('branding/email/mp3-organization-icon.png'));
+        $this->assertStringContainsString('src="https://assets.example.test/branding/email/obake-logo-email.png"', view('mail.test')->render());
+        $this->assertFileExists(public_path('branding/email/obake-logo-email.png'));
+        $this->assertFileExists(public_path('branding/email/obake-organization-icon.png'));
     }
 
     public function test_native_notification_delivery_uses_html_and_text_without_altering_actions(): void
@@ -107,6 +107,12 @@ class EmailTemplatesTest extends TestCase
         $this->assertCount(2, $messages);
         $newAccount = $messages[0]->getOriginalMessage();
         $existingAccount = $messages[1]->getOriginalMessage();
+        foreach ([$newAccount, $existingAccount] as $message) {
+            foreach ([$message->getSubject(), $message->getHtmlBody(), $message->getTextBody()] as $content) {
+                $this->assertStringContainsString('Obake', $content);
+                $this->assertStringNotContainsString('MP3', $content);
+            }
+        }
         $this->assertStringContainsString('Imposta la password', $newAccount->getHtmlBody());
         $this->assertStringContainsString($invitation->actionUrl, $newAccount->getTextBody());
         $this->assertStringNotContainsString('&amp;', $newAccount->getTextBody());

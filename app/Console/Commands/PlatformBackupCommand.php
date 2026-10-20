@@ -10,7 +10,9 @@ use Throwable;
 
 class PlatformBackupCommand extends Command
 {
-    protected $signature = 'mp3:backup {--scheduled : Esegue solo il backup pianificato per questo minuto}';
+    protected $signature = 'obake:backup {--scheduled : Esegue solo il backup pianificato per questo minuto}';
+
+    protected $aliases = ['mp3:backup'];
 
     protected $description = 'Crea e verifica un backup locale completo della piattaforma, poi applica la rotazione Spatie';
 

@@ -6,7 +6,7 @@
   <meta name="x-apple-disable-message-reformatting">
   <meta name="color-scheme" content="light">
   <meta name="supported-color-schemes" content="light">
-  <title>MP3</title>
+  <title>Obake</title>
   <!--[if mso]><style>body,table,td,h1,p,a{font-family:Arial,Helvetica,sans-serif!important;}</style><![endif]-->
   <style>
     @media screen and (max-width:600px) {
@@ -26,8 +26,8 @@
         <tr><td bgcolor="#ffffff" class="email-card" style="background-color:#ffffff;border:1px solid #e8e8e7;border-radius:12px;padding:35px 40px 40px;">
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
             <tr>
-              <td width="34" valign="middle" style="width:34px;vertical-align:middle;padding:0 10px 0 0;"><img src="{{ rtrim(config('app.asset_url') ?: config('app.url'), '/') }}/branding/email/mp3-logo-email.png" alt="" width="28" height="28" style="display:block;width:28px;height:28px;border:0;"></td>
-              <td valign="middle" style="vertical-align:middle;color:#202124;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:19px;font-weight:700;line-height:26px;letter-spacing:-0.35px;">MP3</td>
+              <td width="34" valign="middle" style="width:34px;vertical-align:middle;padding:0 10px 0 0;"><img src="{{ rtrim(config('app.asset_url') ?: config('app.url'), '/') }}/branding/email/obake-logo-email.png" alt="" width="28" height="28" style="display:block;width:28px;height:28px;border:0;"></td>
+              <td valign="middle" style="vertical-align:middle;color:#202124;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:19px;font-weight:700;line-height:26px;letter-spacing:-0.35px;">Obake</td>
             </tr>
           </table>
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;border-collapse:collapse;">

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\BackupManager;
+use App\Services\PlatformBackup;
 use App\Services\TenantBackup;
 use App\Support\Backups\BackupArchive;
 use App\Support\Backups\BackupLock;
@@ -14,6 +15,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class BackupTest extends TestCase
@@ -74,6 +76,8 @@ class BackupTest extends TestCase
         $path = $backups->path($source, $name);
         $zip = BackupArchive::open($path);
         $manifest = BackupArchive::verify($zip, 'tenant');
+        $this->assertSame('mp3-backup', $manifest['format']);
+        $this->assertSame(1, $manifest['version']);
         $this->assertArrayHasKey('attachments/'.$source->attachments()->sole()->id, $manifest['files']);
         $this->assertStringNotContainsString('password', $zip->getFromName('data.json'));
         $zip->close();
@@ -340,6 +344,25 @@ class BackupTest extends TestCase
         }
     }
 
+    public static function commandPrefixes(): array
+    {
+        return [['obake'], ['mp3']];
+    }
+
+    #[DataProvider('commandPrefixes')]
+    public function test_backup_and_restore_commands_keep_the_same_arguments_and_options(string $prefix): void
+    {
+        $this->partialMock(BackupManager::class, function ($mock): void {
+            $mock->shouldReceive('create')->once()->andReturn('verified.zip');
+        });
+        $this->mock(PlatformBackup::class, function ($mock): void {
+            $mock->shouldReceive('restore')->once()->with('/private/legacy.zip', true);
+        });
+        $this->artisan($prefix.':backup')->expectsOutput('Backup verificato: verified.zip')->assertSuccessful();
+        $this->artisan($prefix.':restore /private/legacy.zip --verify')->expectsOutput('Archivio integro e compatibile.')->assertSuccessful();
+        $this->artisan($prefix.':restore /private/legacy.zip')->expectsOutput('Usa --verify per controllare l’archivio; --force conferma il ripristino su destinazione vuota.')->assertFailed();
+    }
+
     public function test_scheduled_command_runs_once_and_disabled_schedule_does_nothing(): void
     {
         $this->travelTo(Carbon::parse('2026-10-20 01:15:00', 'UTC'));
@@ -347,7 +370,7 @@ class BackupTest extends TestCase
         $this->partialMock(BackupManager::class, function ($mock): void {
             $mock->shouldReceive('create')->once()->andReturn('verified.zip');
         });
-        $this->artisan('mp3:backup --scheduled')->assertSuccessful();
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
         $this->artisan('mp3:backup --scheduled')->assertSuccessful();
         DB::table('backup_settings')->where('scope', 'platform')->update(['frequency' => 'disabled', 'last_scheduled_slot' => null]);
         $this->artisan('mp3:backup --scheduled')->assertSuccessful();

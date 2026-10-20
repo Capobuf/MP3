@@ -49,7 +49,7 @@ class DriveSync
 
     public function initialize(): void
     {
-        $this->folder(app(GoogleDrive::class)->drive(), 'root', 'MP3');
+        $this->folder(app(GoogleDrive::class)->drive(), 'root', 'Obake');
     }
 
     /** @return array{id: string|null, name: string}|null */
@@ -81,15 +81,15 @@ class DriveSync
                 $destination = $this->destinationFolder($drive, $id);
                 $object = $this->object($drive, 'root');
                 if ($id === $object->file_id) {
-                    throw new RuntimeException('Scegli la cartella che deve contenere MP3.');
+                    throw new RuntimeException('Scegli la cartella che deve contenere Obake.');
                 }
                 if (! $object->created) {
-                    $this->folder($drive, 'root', 'MP3');
+                    $this->folder($drive, 'root', 'Obake');
                 }
                 // Read the actual parents so a retry also recovers a move whose response was lost.
                 $root = $this->remote($drive, $object, self::FOLDER, null);
                 if ($root === null) {
-                    throw new RuntimeException('Cartella MP3 non disponibile. Ricollega Google e riprova.');
+                    throw new RuntimeException('Cartella Obake non disponibile. Ricollega Google e riprova.');
                 }
                 $parents = (array) $root->getParents();
                 if (! in_array($id, $parents, true)) {
@@ -97,7 +97,7 @@ class DriveSync
                         'addParents' => $id, 'removeParents' => implode(',', $parents), 'fields' => 'id,parents',
                     ]);
                     if ($moved->getId() !== $object->file_id || ! in_array($id, $moved->getParents() ?? [], true)) {
-                        throw new RuntimeException('Google non ha confermato lo spostamento della cartella MP3.');
+                        throw new RuntimeException('Google non ha confermato lo spostamento della cartella Obake.');
                     }
                 }
                 DB::table('drive_objects')->where('id', $object->id)->update(['parent_id' => $id, 'parent_name' => $destination->getName()]);
@@ -143,7 +143,7 @@ class DriveSync
             try {
                 $drive = app(GoogleDrive::class)->drive();
                 $stage = 'verifica delle cartelle Drive';
-                $root = $this->folder($drive, 'root', 'MP3');
+                $root = $this->folder($drive, 'root', 'Obake');
                 $folder = $this->folder($drive, 'tenant-'.$tenant->id, $tenant->name.' ('.$tenant->id.')', $root);
                 $reports = app(SectionSpreadsheet::class);
                 $years = $reports->annualYears($tenant);
@@ -298,7 +298,7 @@ class DriveSync
                 $object = $this->object($drive, 'backup-'.$name);
                 DB::table('drive_objects')->where('id', $object->id)->update(['last_status' => 'running', 'last_message' => 'Copia Drive in corso.', 'last_attempted_at' => now()]);
                 try {
-                    $folder = $this->folder($drive, 'backups', 'Backup globali', $this->folder($drive, 'root', 'MP3'));
+                    $folder = $this->folder($drive, 'backups', 'Backup globali', $this->folder($drive, 'root', 'Obake'));
                     $this->upload($drive, 'backup-'.$name, $name, $folder, app(BackupManager::class)->path(null, $name), 'application/zip');
                 } catch (Throwable $error) {
                     DB::table('drive_objects')->where('id', $object->id)->update(['last_status' => 'failed', 'last_message' => $this->error('copia backup', $error)]);

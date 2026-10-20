@@ -1,4 +1,6 @@
-# MP3
+# Obake
+
+Repository: [Capobuf/obake](https://github.com/Capobuf/obake).
 
 Base applicativa Laravel 13 creata con lo starter kit React ufficiale. Include React 19 con TypeScript, Inertia.js 3, Tailwind CSS 4, shadcn/ui, Vite e autenticazione Laravel Fortify.
 
@@ -56,6 +58,34 @@ npm run build
 
 Il file `.env` non deve essere versionato e non deve contenere credenziali di produzione nel repository.
 
+## Aggiornamento del nome prodotto
+
+Negli ambienti già installati impostare solo `APP_NAME=Obake` nel proprio `.env`,
+senza sostituire il file o i suoi segreti. `VITE_APP_NAME` e `MAIL_FROM_NAME`
+nell'esempio derivano da `${APP_NAME}`: se erano stati impostati esplicitamente,
+verificarli e aggiornare il solo nome prodotto. Ricompilare gli asset e lanciare
+`php artisan optimize:clear`. Un mittente SMTP personalizzato salvato nelle
+impostazioni della piattaforma resta sotto il controllo dell'amministratore.
+Il cambio di `APP_NAME` può richiedere un nuovo login perché Laravel ne deriva
+il nome del cookie, salvo `SESSION_COOKIE` esplicito.
+
+I comandi preferiti sono `obake:backup`, `obake:restore` e `obake:drive-sync`;
+`mp3:backup`, `mp3:restore` e `mp3:drive-sync` restano alias compatibili,
+con gli stessi argomenti e opzioni. Non è necessario cambiare cron già attivi.
+Il formato archivio `mp3-backup` versione 1 e il formato CSV `mp3-tenant`
+restano invariati, così come database, volumi, file salvati e chiavi delle
+preferenze del browser. `DB_DATABASE=mp3` nel file di esempio è un identificativo
+legacy, non il nome visualizzato del prodotto.
+
+Non rinominare la cartella di un deployment esistente senza verificare il
+progetto Compose e i suoi volumi. I riferimenti operativi `mp3-app` e
+`/etc/cron.d/mp3-scheduler` qui documentati identificano l'ambiente esistente
+e vanno conservati. Per checkout già presenti aggiornare il remote con:
+
+```sh
+git remote set-url origin https://github.com/Capobuf/obake.git
+```
+
 ## Email della piattaforma
 
 I super admin possono aprire **Impostazioni Piattaforma → Email** e salvare
@@ -83,7 +113,7 @@ trasporto e non contattano server SMTP esterni.
 ### Template email HTML
 
 Il test SMTP, gli inviti e le notifiche di accesso usano il layout Blade
-condiviso `resources/views/mail/layouts/mp3.blade.php`. Markup, tipografia e
+condiviso `resources/views/mail/layouts/obake.blade.php`. Markup, tipografia e
 PNG provengono dalla proposta V2 del commit
 `cf65b3a9352570ddf1d80d2be4d895d2ca0c6bfb`, conservata nel branch
 `issue-assets/email-templates-v2`. Gli asset sono in `public/branding/email`.
@@ -382,11 +412,11 @@ In produzione è necessario eseguire Laravel Scheduler **ogni minuto**, per
 esempio con questo cron sull’host (adattare il percorso del deployment):
 
 ```cron
-* * * * * cd /percorso/MP3 && docker compose exec -T laravel.test php artisan schedule:run >> /var/log/mp3-scheduler.log 2>&1
+* * * * * cd /percorso/obake && docker compose exec -T laravel.test php artisan schedule:run >> /var/log/obake-scheduler.log 2>&1
 ```
 
 Per installazioni senza Compose, usare il nome reale del container, ad esempio
-`docker exec mp3-app php artisan schedule:run`. Verificare il cron dell’host:
+`docker exec obake-app php artisan schedule:run`. Verificare il cron dell’host:
 registrare il comando in `routes/console.php` da solo non avvia lo scheduler.
 Non sono necessari worker, broker o nuovi container. `php artisan schedule:list`
 mostra la pianificazione. Il comando `php artisan contracts:remind` permette un
@@ -447,7 +477,7 @@ il ritorno all’ora solare. Come per qualsiasi schedule Laravel, il server deve
 eseguire `php artisan schedule:run` ogni minuto. Esempio di crontab con Sail:
 
 ```cron
-* * * * * cd /percorso/MP3 && docker compose exec -T laravel.test php artisan schedule:run >> storage/logs/scheduler.log 2>&1
+* * * * * cd /percorso/obake && docker compose exec -T laravel.test php artisan schedule:run >> storage/logs/scheduler.log 2>&1
 ```
 
 Nell’ambiente attuale `10.0.0.30:8000` i container sono autonomi: usare
@@ -456,14 +486,14 @@ Non avviare un secondo progetto Compose sugli stessi dati. Il runtime del
 container applicativo è stato aggiornato a PHP 8.4; per una futura ricreazione
 utilizzare il runtime Sail 8.4 indicato nel repository.
 
-Il comando operativo è `php artisan mp3:backup`. Usa Spatie per dump e ZIP,
+Il comando operativo è `php artisan obake:backup`. Usa Spatie per dump e ZIP,
 verifica il manifest e ogni file con SHA-256, poi pubblica l’archivio nell’elenco
 e applica la **DefaultStrategy Spatie**. La politica standard conserva tutti
 gli archivi per 7 giorni, poi copie giornaliere per 16 giorni, settimanali per
 8 settimane, mensili per 4 mesi e annuali per 2 anni; soglia di 5 GB per ambito,
 con conservazione dell’archivio più recente. Si configura in `config/backup.php`
 secondo Spatie. La stessa strategia vale per gli ZIP tenant. I comandi Spatie
-`backup:run` lavorano nella directory di staging `.pending`: usare `mp3:backup`
+`backup:run` lavorano nella directory di staging `.pending`: usare `obake:backup`
 per ottenere archivi verificati e visibili nell’applicazione.
 
 La schermata conserva ultimo avvio, esito ed errore sanitizzato, senza dump,
@@ -531,9 +561,9 @@ archivi provenienti da installazioni affidabili.
 3. Copiare lo ZIP in un percorso privato e verificare:
 
     ```sh
-    php artisan mp3:restore /percorso/backup.zip --verify
+    php artisan obake:restore /percorso/backup.zip --verify
     php artisan down
-    php artisan mp3:restore /percorso/backup.zip --force
+    php artisan obake:restore /percorso/backup.zip --force
     ```
 
 4. Il comando importa il dump, ripristina lo storage e `.env`/`APP_KEY`, mantenendo
@@ -621,7 +651,13 @@ conservate per un eventuale ricollegamento.
 
 ### Report di consultazione
 
-MP3 crea inizialmente una cartella `MP3` in Il mio Drive e, alla prima sincronizzazione di ogni ambiente
+Le configurazioni Drive esistenti riutilizzano gli ID in `drive_objects`:
+una cartella già chiamata `MP3` mantiene nome, posizione e contenuti.
+Il rebranding non la rinomina e non crea una cartella sostitutiva. I nomi
+`Obake` e `Obake/Backup globali` descrivono le nuove configurazioni; per quelle
+legacy si applicano alla cartella già collegata.
+
+Per nuove configurazioni Obake crea una cartella `Obake` in Il mio Drive e, alla prima sincronizzazione di ogni ambiente
 abilitato, una cartella `Nome ambiente (ID)`. Gli anni derivano esclusivamente da
 spese, righe economiche e annualità Budget effettivamente presenti: non dipendono
 dall’anno selezionato nell’interfaccia. Un ambiente senza anni crea la propria
@@ -632,10 +668,10 @@ Spese, righe e Budget sono limitati all’anno; contratti e progetti comprendono
 l’anagrafica completa dell’ambiente. I report riutilizzano `SectionSpreadsheet`,
 `SectionWorkbook`, `ReportSheet` e le query economiche correnti, mantenendo la
 distinzione tra importi mancanti e zero. Non sono backup o modelli di import.
-Le modifiche su Drive non rientrano in MP3 e possono essere sovrascritte.
+Le modifiche su Drive non rientrano in Obake e possono essere sovrascritte.
 
 Dopo il collegamento, **Cartella di destinazione → Scegli cartella** apre il
-selettore ufficiale Google. La scelta sposta l’intera cartella `MP3`, inclusi
+selettore ufficiale Google. La scelta sposta l’intera cartella `Obake`, inclusi
 report e backup esistenti, nella cartella selezionata mantenendo gli ID. La
 scelta è conservata separatamente per account Google; ricollegare lo stesso
 account la mantiene. Le sincronizzazioni successive verificano la destinazione
@@ -660,7 +696,7 @@ errore esplicito, senza creare copie sostitutive. Ripristinare l’oggetto nella
 cartella assegnata e riprovare. Nessuna sincronizzazione cancella file remoti,
 anche quando un anno non è più presente nei dati locali.
 
-Il comando `php artisan mp3:drive-sync` sincronizza tutti gli ambienti abilitati,
+Il comando `php artisan obake:drive-sync` sincronizza tutti gli ambienti abilitati,
 continua sugli altri se uno fallisce e restituisce errore se almeno uno non è
 completato. Laravel Scheduler lo avvia ogni giorno alle **03:00 Europe/Rome**.
 Il server deve eseguire il consueto `php artisan schedule:run` ogni minuto;
@@ -679,7 +715,7 @@ il protocollo resumable e verificano il checksum del file completato.
 
 In **Impostazioni Piattaforma → Backup**, abilitare **Copia i nuovi backup globali
 su Google Drive** e salvare. La copia parte dopo creazione, verifica e rotazione
-locale dell’archivio, nella sottocartella `MP3/Backup globali`. Gli archivi già
+locale dell’archivio, nella sottocartella `Obake/Backup globali`. Gli archivi già
 presenti possono essere copiati o ritentati con **Copia su Drive**, senza
 rigenerarli. Il caricamento legge il file a blocchi e non mantiene l’intero ZIP
 in memoria.
@@ -723,7 +759,7 @@ blocchi e colonne. Il formato iniziale è A4 verticale. Tutto è attivo inizialm
 tranne la colonna Stato e la numerazione delle pagine. Titolo, reset e opzioni sono accanto al rispettivo blocco;
 disattivandolo si nascondono le sue opzioni. La data nel Footer è automatica, rilevata
 all’apertura del report, e può essere mostrata o nascosta. Il Footer contiene
-data a sinistra e logo MP3 centrato ed è ripetuto in fondo a ogni pagina, sia in stampa sia
+data a sinistra e logo Obake centrato ed è ripetuto in fondo a ogni pagina, sia in stampa sia
 nel PDF scaricato; uno spazio riservato lo separa dal contenuto. L’anteprima
 continua lo mostra in fondo al documento. **Numeri di pagina** aggiunge i numeri
 in basso a destra. Disattivando **Includi la prima pagina**, il primo foglio resta
