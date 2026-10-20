@@ -47,3 +47,5 @@ yarn-error.log
 /storage/app/backup-temp
 /storage/framework/backup.lock
 /.env.before-restore
+
+/storage/framework/drive-sync.lock

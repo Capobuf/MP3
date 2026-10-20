@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DriveSyncController;
 use App\Http\Controllers\Platform\EmailSettingsController;
 use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
@@ -37,9 +38,16 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('platform')->middleware(EnsureSuperAdmin::class)->name('platform.')->group(function () {
         Route::get('/', PlatformController::class)->name('index');
+        Route::get('settings/sync', [DriveSyncController::class, 'index'])->name('sync.index');
+        Route::post('settings/sync/connect', [DriveSyncController::class, 'connect'])->name('sync.connect');
+        Route::get('settings/sync/callback', [DriveSyncController::class, 'callback'])->name('sync.callback');
+        Route::delete('settings/sync/connect', [DriveSyncController::class, 'disconnect'])->name('sync.disconnect');
+        Route::put('settings/sync/tenants/{tenant}', [DriveSyncController::class, 'update'])->name('sync.update');
+        Route::post('settings/sync/tenants/{tenant}', [DriveSyncController::class, 'store'])->middleware('throttle:3,1')->name('sync.store');
         Route::get('settings/users', [PlatformController::class, 'users'])->name('users.index');
         Route::get('settings/backups', [BackupController::class, 'index'])->name('backups.index');
         Route::post('settings/backups', [BackupController::class, 'store'])->middleware('throttle:3,1')->name('backups.store');
+        Route::post('settings/backups/drive', [BackupController::class, 'copyToDrive'])->middleware('throttle:3,1')->name('backups.drive');
         Route::put('settings/backups', [BackupController::class, 'update'])->name('backups.update');
         Route::delete('settings/backups', [BackupController::class, 'destroy'])->name('backups.destroy');
         Route::get('settings/backups/{archive}', [BackupController::class, 'download'])->name('backups.download');
@@ -76,6 +84,10 @@ Route::middleware('auth')->group(function () {
         Route::post('settings/project-statuses', [ProjectStatusController::class, 'store'])->name('project-statuses.store');
         Route::patch('settings/project-statuses/{status}', [ProjectStatusController::class, 'update'])->whereNumber('status')->name('project-statuses.update');
         Route::delete('settings/project-statuses/{status}', [ProjectStatusController::class, 'destroy'])->whereNumber('status')->name('project-statuses.destroy');
+        Route::prefix('settings/sync')->withoutMiddleware(RecordUndo::class)->group(function () {
+            Route::get('/', [DriveSyncController::class, 'index'])->name('sync.index');
+            Route::post('/', [DriveSyncController::class, 'store'])->middleware('throttle:3,1')->name('sync.store');
+        });
         Route::prefix('settings/backups')->withoutMiddleware(RecordUndo::class)->group(function () {
             Route::get('/', [BackupController::class, 'index'])->name('backups.index');
             Route::post('/', [BackupController::class, 'store'])->middleware('throttle:3,1')->name('backups.store');

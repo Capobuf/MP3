@@ -7,6 +7,7 @@ use App\Exports\SectionWorkbook;
 use App\Models\Contract;
 use App\Models\CostCenter;
 use App\Models\Expense;
+use App\Models\Project;
 use App\Models\Tenant;
 use App\Models\Vendor;
 use App\Support\CatalogQuery;
@@ -15,6 +16,7 @@ use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 
@@ -122,6 +124,42 @@ class SectionSpreadsheet
         }
         $sort = in_array($request->input('sort'), ['name', 'updated_at'], true) ? $request->input('sort') : 'name';
         $items = $query->orderBy($sort, $request->input('direction') === 'desc' ? 'desc' : 'asc')->orderBy('id')->get();
+        $sheets = [$this->catalogSheet($tenant, $resource, $items)];
+        if ($resource !== 'vendors') {
+            $expenses = ExpenseOverview::economicQuery($tenant)->whereIn($resource === 'contracts' ? 'contract_id' : 'project_id', $items->pluck('id'));
+            $expenses->where('year', $selected);
+            $sheets[] = $this->expensesSheet('Spese collegate', $expenses->with(['vendor', 'contract', 'project', 'costCenters.parent'])->orderBy('year')->orderBy('title')->get());
+            $sheets[] = $this->periodSheet($selected);
+        }
+
+        return new SectionWorkbook($sheets);
+    }
+
+    /** @return array<int, int> */
+    public function annualYears(Tenant $tenant): array
+    {
+        return $tenant->expenses()->pluck('year')
+            ->merge(DB::table('expense_lines')->join('expenses', 'expenses.id', '=', 'expense_lines.expense_id')
+                ->where('expenses.tenant_id', $tenant->id)->whereNotNull('expense_lines.year')->pluck('expense_lines.year'))
+            ->merge($tenant->budgetYears()->pluck('year'))
+            ->map(fn ($year) => (int) $year)->unique()->sort()->values()->all();
+    }
+
+    public function annual(Tenant $tenant, int $year): SectionWorkbook
+    {
+        $request = Request::create('/', 'GET', ['year' => $year]);
+
+        return new SectionWorkbook([
+            ...array_slice($this->export($tenant, 'expenses', $request)->sheets(), 0, 2),
+            $this->catalogSheet($tenant, 'contracts', $tenant->contracts()->with(['vendor', 'costCenters.parent'])->orderBy('name')->orderBy('id')->get()),
+            $this->catalogSheet($tenant, 'projects', $tenant->projects()->with('costCenters.parent')->orderBy('name')->orderBy('id')->get()),
+            $this->budget($tenant, $request)->sheets()[0],
+        ]);
+    }
+
+    /** @param Collection<int, covariant Vendor|Contract|Project> $items */
+    private function catalogSheet(Tenant $tenant, string $resource, Collection $items): ReportSheet
+    {
         $statusNames = $tenant->projectStatuses()->pluck('name', 'key');
         $rows = $items->map(function ($item) use ($statusNames): array {
             if ($item instanceof Vendor) {
@@ -136,15 +174,8 @@ class SectionSpreadsheet
         $formats = match ($resource) {
             'contracts' => ['C' => self::DATE, 'D' => self::DATE, 'E' => self::EUR], 'projects' => ['D' => self::DATE, 'E' => self::DATE], default => []
         };
-        $sheets = [new ReportSheet(self::LABELS[$resource], array_keys(self::columns($resource)), $rows, $formats)];
-        if ($resource !== 'vendors') {
-            $expenses = ExpenseOverview::economicQuery($tenant)->whereIn($resource === 'contracts' ? 'contract_id' : 'project_id', $items->pluck('id'));
-            $expenses->where('year', $selected);
-            $sheets[] = $this->expensesSheet('Spese collegate', $expenses->with(['vendor', 'contract', 'project', 'costCenters.parent'])->orderBy('year')->orderBy('title')->get());
-            $sheets[] = $this->periodSheet($selected);
-        }
 
-        return new SectionWorkbook($sheets);
+        return new ReportSheet(self::LABELS[$resource], array_keys(self::columns($resource)), $rows, $formats);
     }
 
     private function periodSheet(int $year): ReportSheet

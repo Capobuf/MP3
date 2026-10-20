@@ -19,3 +19,5 @@ Schedule::command('undo:prune')->hourly()->withoutOverlapping();
 Schedule::command('contracts:remind')->cron('0 8-23 * * *')->timezone(ContractSchedule::TIMEZONE)->withoutOverlapping();
 
 Schedule::command('mp3:backup --scheduled')->everyMinute()->withoutOverlapping();
+
+Schedule::command('mp3:drive-sync')->dailyAt('03:00')->timezone('Europe/Rome')->withoutOverlapping();

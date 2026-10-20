@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\PlatformDriveSetting;
 use App\Services\BackupManager;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,11 @@ class PlatformBackupCommand extends Command
         }
         try {
             $this->info('Backup verificato: '.$backups->create());
+            $drive = PlatformDriveSetting::query()->find(1);
+            if ($drive?->backup_enabled) {
+                $message = 'Copia Drive: '.$drive->backup_last_message;
+                $drive->backup_last_status === 'success' ? $this->info($message) : $this->warn($message);
+            }
 
             return self::SUCCESS;
         } catch (Throwable $error) {

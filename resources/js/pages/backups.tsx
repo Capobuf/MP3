@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { Download, LoaderCircle, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { TenantSettingsNav } from '@/components/management/tenant-settings-nav';
@@ -60,12 +60,27 @@ export default function Backups({
     archives,
     empty,
     maxFileKb,
+    drive,
+    driveCopies,
 }: {
     tenant: Tenant | null;
     settings: Settings;
     archives: { name: string; size: number; created_at: string }[];
     empty: boolean;
     maxFileKb: number;
+    drive: {
+        backup_enabled: boolean;
+        backup_last_status: string | null;
+        backup_last_name: string | null;
+        backup_last_message: string | null;
+        backup_last_attempted_at: string | null;
+    } | null;
+    driveCopies: {
+        object_key: string;
+        last_status: string | null;
+        last_message: string | null;
+        last_synced_at: string | null;
+    }[];
 }) {
     const path = tenant
         ? `/t/${tenant.slug}/settings/backups`
@@ -75,7 +90,9 @@ export default function Backups({
         frequency: settings.frequency,
         time: settings.time,
         weekday: settings.weekday,
+        drive_enabled: !!drive?.backup_enabled,
     });
+    const copy = useForm<{ archive: string; drive?: string }>({ archive: '' });
     const restore = useForm<{ file: File | null; confirmation: boolean }>({
         file: null,
         confirmation: false,
@@ -86,7 +103,11 @@ export default function Backups({
     const selection = selected.filter((name) =>
         archives.some((archive) => archive.name === name),
     );
-    const busy = create.processing || restore.processing || removal.processing;
+    const busy =
+        create.processing ||
+        restore.processing ||
+        removal.processing ||
+        copy.processing;
     function confirmDelete(names: string[]) {
         removal.clearErrors();
         removal.setData('archives', names);
@@ -277,6 +298,39 @@ export default function Backups({
                                         </FieldError>
                                     </Field>
                                 )}
+                                <Field orientation="horizontal">
+                                    <Checkbox
+                                        id="backup-drive"
+                                        checked={schedule.data.drive_enabled}
+                                        disabled={busy || schedule.processing}
+                                        onCheckedChange={(checked) =>
+                                            schedule.setData(
+                                                'drive_enabled',
+                                                checked === true,
+                                            )
+                                        }
+                                    />
+                                    <FieldLabel htmlFor="backup-drive">
+                                        Copia i nuovi backup globali su Google
+                                        Drive
+                                    </FieldLabel>
+                                </Field>
+                                <p className="text-sm text-muted-foreground">
+                                    La copia remota usa l’account configurato in{' '}
+                                    <Link
+                                        href="/platform/settings/sync"
+                                        className="text-primary hover:opacity-80"
+                                    >
+                                        Sync
+                                    </Link>
+                                    . Include dati, configurazione e chiavi
+                                    segrete. L’esito è separato dal backup
+                                    locale; i file remoti non vengono eliminati
+                                    dalla rotazione locale.
+                                </p>
+                                <FieldError>
+                                    {schedule.errors.drive_enabled}
+                                </FieldError>
                                 <Button
                                     type="submit"
                                     disabled={busy || schedule.processing}
@@ -291,6 +345,30 @@ export default function Backups({
                     </CardContent>
                 </Card>
             )}
+            {!tenant && drive?.backup_last_message && (
+                <Alert
+                    variant={
+                        drive.backup_last_status === 'failed'
+                            ? 'destructive'
+                            : 'default'
+                    }
+                >
+                    <AlertTitle>
+                        Ultima copia Drive ·{' '}
+                        {drive.backup_last_status === 'success'
+                            ? 'Completata'
+                            : drive.backup_last_status === 'failed'
+                              ? 'Errore'
+                              : 'In corso'}{' '}
+                        · {drive.backup_last_attempted_at} UTC
+                    </AlertTitle>
+                    <AlertDescription>
+                        <p className="break-all">{drive.backup_last_name}</p>
+                        <p>{drive.backup_last_message}</p>
+                    </AlertDescription>
+                </Alert>
+            )}
+            <FieldError>{copy.errors.drive}</FieldError>
             <Card>
                 <CardHeader>
                     <CardTitle>Archivi disponibili</CardTitle>
@@ -385,6 +463,34 @@ export default function Backups({
                                             title={archive.name}
                                         >
                                             {archive.name}
+                                            {!tenant &&
+                                                driveCopies
+                                                    .filter(
+                                                        (item) =>
+                                                            item.object_key ===
+                                                            `backup-${archive.name}`,
+                                                    )
+                                                    .map((item) => (
+                                                        <p
+                                                            key={
+                                                                item.object_key
+                                                            }
+                                                            className="text-sm whitespace-normal"
+                                                            title={
+                                                                item.last_message ??
+                                                                undefined
+                                                            }
+                                                        >
+                                                            Drive:{' '}
+                                                            {item.last_status ===
+                                                            'success'
+                                                                ? `copiato il ${item.last_synced_at} UTC`
+                                                                : item.last_status ===
+                                                                    'failed'
+                                                                  ? item.last_message
+                                                                  : 'copia in corso'}
+                                                        </p>
+                                                    ))}
                                         </TableCell>
                                         <TableCell>
                                             {(
@@ -413,6 +519,33 @@ export default function Backups({
                                                         </span>
                                                     </a>
                                                 </Button>
+                                                {!tenant &&
+                                                    drive?.backup_enabled && (
+                                                        <Button
+                                                            variant="outline"
+                                                            disabled={busy}
+                                                            onClick={() => {
+                                                                copy.transform(
+                                                                    () => ({
+                                                                        archive:
+                                                                            archive.name,
+                                                                    }),
+                                                                );
+                                                                copy.post(
+                                                                    '/platform/settings/backups/drive',
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                    },
+                                                                );
+                                                            }}
+                                                        >
+                                                            Copia su Drive
+                                                            <span className="sr-only">
+                                                                {' '}
+                                                                {archive.name}
+                                                            </span>
+                                                        </Button>
+                                                    )}
                                                 <Button
                                                     variant="outline"
                                                     size="icon"
