@@ -6,6 +6,7 @@ use App\Models\PlatformDriveSetting;
 use App\Models\Tenant;
 use App\Services\DriveSync;
 use App\Services\GoogleDrive;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -29,6 +30,9 @@ class DriveSyncController extends Controller
             'account' => $tenant === null ? $settings?->account_email : null,
             'connectionError' => $tenant === null ? $settings?->last_error : null,
             'redirectUri' => $tenant === null ? $google->redirectUri() : null,
+            'destination' => $tenant === null ? $sync->destination() : null,
+            'pickerApiKey' => $tenant === null ? $settings?->picker_api_key : null,
+            'pickerAppId' => $tenant === null ? $settings?->picker_app_id : null,
             'rootFolderId' => $tenant === null ? $sync->objectId('root') : null,
             'tenants' => ($tenant ? collect([$tenant]) : Tenant::query()->orderBy('name')->get())->map(fn ($item) => [
                 ...$item->only('id', 'name', 'slug'), ...$sync->state($item),
@@ -61,6 +65,51 @@ class DriveSyncController extends Controller
             throw ValidationException::withMessages(['client_id' => $error->getMessage()]);
         }
         $request->session()->forget('google_drive_oauth');
+
+        return back();
+    }
+
+    public function pickerSettings(Request $request, DriveSync $sync): RedirectResponse
+    {
+        $data = $request->validate([
+            'picker_api_key' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z0-9_-]+$/D'],
+            'picker_app_id' => ['required', 'string', 'max:30', 'regex:/^[0-9]+$/D'],
+        ]);
+        try {
+            $sync->locked(fn () => PlatformDriveSetting::query()->updateOrCreate(['id' => 1], $data));
+        } catch (RuntimeException $error) {
+            throw ValidationException::withMessages(['picker_api_key' => $error->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function pickerToken(DriveSync $sync, GoogleDrive $google): JsonResponse
+    {
+        try {
+            $token = $sync->locked(function () use ($google): string {
+                $settings = PlatformDriveSetting::query()->find(1);
+                if (! $settings?->picker_api_key || ! $settings->picker_app_id) {
+                    throw new RuntimeException('Salva prima la configurazione del selettore Google.');
+                }
+
+                return $google->drive()->getClient()->getAccessToken()['access_token'];
+            });
+        } catch (RuntimeException $error) {
+            throw ValidationException::withMessages(['destination' => $error->getMessage()]);
+        }
+
+        return response()->json(['access_token' => $token])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function destination(Request $request, DriveSync $sync): RedirectResponse
+    {
+        $data = $request->validate(['folder_id' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z0-9_-]+$/D']]);
+        try {
+            $sync->selectDestination($data['folder_id']);
+        } catch (RuntimeException $error) {
+            throw ValidationException::withMessages(['folder_id' => $error->getMessage()]);
+        }
 
         return back();
     }

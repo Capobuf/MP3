@@ -22,6 +22,10 @@ class DriveServer
 
     public bool $badChecksum = false;
 
+    public bool $failMove = false;
+
+    public bool $loseMoveResponse = false;
+
     public string $account = 'account-1';
 
     private int $sequence = 0;
@@ -77,7 +81,22 @@ class DriveServer
 
             return $response($metadata);
         }
-        if ($method === 'GET' && preg_match('~/files/(file-\d+)$~', $path, $matches)) {
+        if ($method === 'PATCH' && preg_match('~/drive/v3/files/([^/]+)$~', $path, $matches)) {
+            if ($this->failMove) {
+                return $response(['error' => ['code' => 403, 'message' => 'move-secret-never-display']], 403);
+            }
+            parse_str($request->getUri()->getQuery(), $query);
+            $id = $matches[1];
+            $this->files[$id]['parents'] = [$query['addParents']];
+            if ($this->loseMoveResponse) {
+                $this->loseMoveResponse = false;
+
+                return $response(['error' => ['code' => 504, 'message' => 'Lost move response']], 504);
+            }
+
+            return $response(['id' => $id, 'parents' => $this->files[$id]['parents']]);
+        }
+        if ($method === 'GET' && preg_match('~/files/([^/]+)$~', $path, $matches)) {
             return isset($this->files[$matches[1]]) ? $response(array_diff_key($this->files[$matches[1]], ['content' => true])) : $response(['error' => ['code' => 404, 'message' => 'Missing']], 404);
         }
 

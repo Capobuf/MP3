@@ -621,7 +621,7 @@ conservate per un eventuale ricollegamento.
 
 ### Report di consultazione
 
-MP3 crea una cartella radice `MP3` e, alla prima sincronizzazione di ogni ambiente
+MP3 crea inizialmente una cartella `MP3` in Il mio Drive e, alla prima sincronizzazione di ogni ambiente
 abilitato, una cartella `Nome ambiente (ID)`. Gli anni derivano esclusivamente da
 spese, righe economiche e annualità Budget effettivamente presenti: non dipendono
 dall’anno selezionato nell’interfaccia. Un ambiente senza anni crea la propria
@@ -633,6 +633,25 @@ l’anagrafica completa dell’ambiente. I report riutilizzano `SectionSpreadshe
 `SectionWorkbook`, `ReportSheet` e le query economiche correnti, mantenendo la
 distinzione tra importi mancanti e zero. Non sono backup o modelli di import.
 Le modifiche su Drive non rientrano in MP3 e possono essere sovrascritte.
+
+Dopo il collegamento, **Cartella di destinazione → Scegli cartella** apre il
+selettore ufficiale Google. La scelta sposta l’intera cartella `MP3`, inclusi
+report e backup esistenti, nella cartella selezionata mantenendo gli ID. La
+scelta è conservata separatamente per account Google; ricollegare lo stesso
+account la mantiene. Le sincronizzazioni successive verificano la destinazione
+salvata e segnalano cartelle mancanti o senza permessi, senza usare altri percorsi.
+Google non consente lo spostamento di questa cartella da Il mio Drive a un Drive
+condiviso tramite API: in quel caso viene mostrato un errore.
+
+In **Configurazione selettore Google** inserire la Browser API key e il numero
+numerico del progetto Google Cloud, nello stesso progetto delle credenziali
+OAuth, e abilitare Google Picker API. Non si ricava il numero dal Client ID.
+La chiave è destinata all’uso nel browser: limitarla a Google Picker API e agli
+origin consentiti secondo la [guida Google Picker](https://developers.google.com/workspace/drive/picker/guides/web-picker).
+Il selettore riutilizza l’access token centrale con scope `drive.file`:
+non aggiunge un secondo login o permessi globali su Drive. Solo il super admin
+riceve temporaneamente l’access token, da una risposta privata non memorizzabile
+in cache; refresh token e Client Secret restano sul server.
 
 Gli ID Drive vengono registrati prima delle scritture remote. I caricamenti
 successivi aggiornano lo stesso ID, anche ripetendo un tentativo interrotto;

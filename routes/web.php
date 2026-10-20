@@ -39,6 +39,9 @@ Route::middleware('auth')->group(function () {
     Route::prefix('platform')->middleware(EnsureSuperAdmin::class)->name('platform.')->group(function () {
         Route::get('/', PlatformController::class)->name('index');
         Route::get('settings/sync', [DriveSyncController::class, 'index'])->name('sync.index');
+        Route::put('settings/sync/picker', [DriveSyncController::class, 'pickerSettings'])->name('sync.picker-settings');
+        Route::post('settings/sync/picker-token', [DriveSyncController::class, 'pickerToken'])->middleware('throttle:10,1')->name('sync.picker-token');
+        Route::put('settings/sync/destination', [DriveSyncController::class, 'destination'])->name('sync.destination');
         Route::put('settings/sync/credentials', [DriveSyncController::class, 'credentials'])->name('sync.credentials');
         Route::post('settings/sync/connect', [DriveSyncController::class, 'connect'])->name('sync.connect');
         Route::get('settings/sync/callback', [DriveSyncController::class, 'callback'])->name('sync.callback');

@@ -3,6 +3,7 @@ import { Check, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import PasswordInput from '@/components/password-input';
 import { useClipboard } from '@/hooks/use-clipboard';
+import { DriveDestination } from '@/components/management/drive-destination';
 import { TenantSettingsNav } from '@/components/management/tenant-settings-nav';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -152,6 +153,9 @@ export default function Sync({
     connectionError,
     redirectUri,
     rootFolderId,
+    destination,
+    pickerApiKey,
+    pickerAppId,
     tenants,
 }: {
     tenant: Tenant | null;
@@ -163,6 +167,9 @@ export default function Sync({
     connectionError: string | null;
     redirectUri: string | null;
     rootFolderId: string | null;
+    destination: { id: string | null; name: string } | null;
+    pickerApiKey: string | null;
+    pickerAppId: string | null;
     tenants: SyncTenant[];
 }) {
     const disconnect = useForm<{ sync?: string }>({});
@@ -374,6 +381,13 @@ export default function Sync({
                         </div>
                     </CardContent>
                 </Card>
+            )}
+            {!tenant && connected && (
+                <DriveDestination
+                    destination={destination}
+                    apiKey={pickerApiKey}
+                    appId={pickerAppId}
+                />
             )}
             <Card>
                 <CardHeader>

@@ -396,6 +396,110 @@ class DriveSyncTest extends TestCase
         $this->put($url, ['client_id' => 'foreign', 'client_secret' => 'foreign'])->assertForbidden();
     }
 
+    private function driveFolder(string $id, string $name): void
+    {
+        $this->server->files[$id] = ['id' => $id, 'name' => $name, 'mimeType' => 'application/vnd.google-apps.folder', 'parents' => ['my-drive'], 'trashed' => false, 'capabilities' => ['canAddChildren' => true]];
+    }
+
+    public function test_selected_destination_moves_existing_reports_and_backups_without_changing_ids(): void
+    {
+        $settings = $this->connected();
+        $settings->update(['backup_enabled' => true]);
+        $tenant = $this->tenant();
+        $tenant->expenses()->create(['title' => 'Report', 'year' => 2026]);
+        $sync = app(DriveSync::class);
+        $sync->enable($tenant, true);
+        $sync->sync($tenant);
+        Storage::disk('backups')->put('platform/test-archive.zip', 'valid-local-archive');
+        $sync->copyBackup('test-archive.zip');
+        $ids = DB::table('drive_objects')->orderBy('id')->pluck('file_id')->all();
+        $rootId = $sync->objectId('root');
+        $this->driveFolder('destination-one', 'Amministrazione');
+        $this->driveFolder('destination-two', 'Archivio');
+        $this->actingAs(User::factory()->create(['is_super_admin' => true]));
+        $this->put('/platform/settings/sync/destination', ['folder_id' => 'destination-one'])->assertSessionHasNoErrors();
+        $this->assertSame(['destination-one'], $this->server->files[$rootId]['parents']);
+        $this->assertSame(['id' => 'destination-one', 'name' => 'Amministrazione'], $sync->destination());
+        $sync->sync($tenant);
+        $sync->copyBackup('test-archive.zip');
+        $sync->selectDestination('destination-two');
+        $this->assertSame($ids, DB::table('drive_objects')->orderBy('id')->pluck('file_id')->all());
+        $this->assertCount(7, $this->server->files);
+        $this->assertSame(['destination-two'], $this->server->files[$rootId]['parents']);
+        $this->get('/platform/settings/sync')->assertInertia(fn (Assert $page) => $page->where('destination.name', 'Archivio'));
+        $settings->update(['account_id' => 'different-account']);
+        $this->assertNull($sync->destination());
+    }
+
+    public function test_destination_validation_and_move_failure_leave_the_previous_choice_and_retry_recovers_a_lost_response(): void
+    {
+        $this->connected();
+        $sync = app(DriveSync::class);
+        $sync->initialize();
+        $this->driveFolder('first-folder', 'Prima');
+        $this->driveFolder('next-folder', 'Seconda');
+        $sync->selectDestination('first-folder');
+        $original = $this->server->files['next-folder'];
+        foreach (['file', 'trashed', 'readonly', 'shared', 'move', 'missing', 'self'] as $failure) {
+            $this->server->files['next-folder'] = $original;
+            $this->server->failMove = $failure === 'move';
+            if ($failure === 'file') {
+                $this->server->files['next-folder']['mimeType'] = 'application/zip';
+            }
+            if ($failure === 'trashed') {
+                $this->server->files['next-folder']['trashed'] = true;
+            }
+            if ($failure === 'readonly') {
+                $this->server->files['next-folder']['capabilities']['canAddChildren'] = false;
+            }
+            if ($failure === 'shared') {
+                $this->server->files['next-folder']['driveId'] = 'shared-drive';
+            }
+            if ($failure === 'missing') {
+                unset($this->server->files['next-folder']);
+            }
+            if ($failure === 'self') {
+                $this->server->files[$sync->objectId('root')]['capabilities'] = ['canAddChildren' => true];
+            }
+            try {
+                $sync->selectDestination($failure === 'self' ? $sync->objectId('root') : 'next-folder');
+                $this->fail('Expected destination error: '.$failure);
+            } catch (RuntimeException $error) {
+                $this->assertSame('first-folder', $sync->destination()['id']);
+                $this->assertStringNotContainsString('move-secret-never-display', $error->getMessage());
+            }
+        }
+        $this->server->files['next-folder'] = $original;
+        $this->server->failMove = false;
+        $this->server->loseMoveResponse = true;
+        try {
+            $sync->selectDestination('next-folder');
+            $this->fail('A lost response must fail explicitly.');
+        } catch (RuntimeException) {
+            $this->assertSame('first-folder', $sync->destination()['id']);
+        }
+        $sync->selectDestination('next-folder');
+        $this->assertSame('next-folder', $sync->destination()['id']);
+        $this->assertDatabaseCount('drive_objects', 1);
+    }
+
+    public function test_google_picker_uses_only_the_central_access_token_and_platform_permissions(): void
+    {
+        $settings = $this->connected();
+        $this->actingAs(User::factory()->create(['is_super_admin' => true]));
+        $this->postJson('/platform/settings/sync/picker-token')->assertUnprocessable();
+        $this->put('/platform/settings/sync/picker', ['picker_api_key' => 'browser-api-key', 'picker_app_id' => '123456789'])->assertSessionHasNoErrors();
+        $this->assertNotNull($settings->refresh()->token);
+        $this->postJson('/platform/settings/sync/picker-token')->assertOk()->assertExactJson(['access_token' => 'access-secret'])->assertHeader('Cache-Control', 'no-store, private');
+        $this->put('/platform/settings/sync/picker', ['picker_api_key' => 'key', 'picker_app_id' => 'not-a-number'])->assertSessionHasErrors('picker_app_id');
+        app(GoogleDrive::class)->disconnect();
+        $this->postJson('/platform/settings/sync/picker-token')->assertUnprocessable();
+        $this->actingAs(User::factory()->create());
+        $this->postJson('/platform/settings/sync/picker-token')->assertForbidden();
+        $this->put('/platform/settings/sync/picker', ['picker_api_key' => 'key', 'picker_app_id' => '123'])->assertForbidden();
+        $this->put('/platform/settings/sync/destination', ['folder_id' => 'external'])->assertForbidden();
+    }
+
     public function test_backup_drive_option_defaults_to_off_and_is_only_available_to_platform_admin(): void
     {
         $this->connected();

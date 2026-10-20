@@ -52,6 +52,61 @@ class DriveSync
         $this->folder(app(GoogleDrive::class)->drive(), 'root', 'MP3');
     }
 
+    /** @return array{id: string|null, name: string}|null */
+    public function destination(): ?array
+    {
+        $root = DB::table('drive_objects')->where('account_id', PlatformDriveSetting::query()->find(1)?->account_id)->where('object_key', 'root')->first();
+
+        return $root ? ['id' => $root->parent_id, 'name' => $root->parent_name ?? 'Il mio Drive'] : null;
+    }
+
+    private function destinationFolder(Drive $drive, string $id): DriveFile
+    {
+        $folder = $drive->files->get($id, ['fields' => 'id,name,mimeType,trashed,driveId,capabilities(canAddChildren)']);
+        if ($folder->getMimeType() !== self::FOLDER || $folder->getTrashed() || ! $folder->getCapabilities()?->getCanAddChildren()) {
+            throw new RuntimeException('Scegli una cartella accessibile in cui puoi salvare file.');
+        }
+        if ($folder->getDriveId()) {
+            throw new RuntimeException('Scegli una cartella in Il mio Drive: Google non consente questo spostamento verso un Drive condiviso.');
+        }
+
+        return $folder;
+    }
+
+    public function selectDestination(string $id): void
+    {
+        $this->locked(function () use ($id): void {
+            try {
+                $drive = app(GoogleDrive::class)->drive();
+                $destination = $this->destinationFolder($drive, $id);
+                $object = $this->object($drive, 'root');
+                if ($id === $object->file_id) {
+                    throw new RuntimeException('Scegli la cartella che deve contenere MP3.');
+                }
+                if (! $object->created) {
+                    $this->folder($drive, 'root', 'MP3');
+                }
+                // Read the actual parents so a retry also recovers a move whose response was lost.
+                $root = $this->remote($drive, $object, self::FOLDER, null);
+                if ($root === null) {
+                    throw new RuntimeException('Cartella MP3 non disponibile. Ricollega Google e riprova.');
+                }
+                $parents = (array) $root->getParents();
+                if (! in_array($id, $parents, true)) {
+                    $moved = $drive->files->update($object->file_id, new DriveFile, [
+                        'addParents' => $id, 'removeParents' => implode(',', $parents), 'fields' => 'id,parents',
+                    ]);
+                    if ($moved->getId() !== $object->file_id || ! in_array($id, $moved->getParents() ?? [], true)) {
+                        throw new RuntimeException('Google non ha confermato lo spostamento della cartella MP3.');
+                    }
+                }
+                DB::table('drive_objects')->where('id', $object->id)->update(['parent_id' => $id, 'parent_name' => $destination->getName()]);
+            } catch (Throwable $error) {
+                throw new RuntimeException($this->error('scelta della cartella', $error), previous: $error);
+            }
+        });
+    }
+
     /** @return array<string, mixed> */
     public function state(Tenant $tenant): array
     {
@@ -167,6 +222,10 @@ class DriveSync
     private function folder(Drive $drive, string $key, string $name, ?string $parent = null): string
     {
         $object = $this->object($drive, $key);
+        $parent ??= $object->parent_id;
+        if ($key === 'root' && $parent !== null) {
+            $this->destinationFolder($drive, $parent);
+        }
         if ($this->remote($drive, $object, self::FOLDER, $parent) === null) {
             $file = $drive->files->create(new DriveFile([
                 'id' => $object->file_id, 'name' => $name, 'mimeType' => self::FOLDER,
