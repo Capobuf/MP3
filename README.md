@@ -704,3 +704,93 @@ php artisan test --filter='DriveSyncTest|SpreadsheetTransferTest|BackupTest' --s
 
 La prova con un account Google reale richiede credenziali OAuth e consenso
 interattivo; i test automatici non li sostituiscono.
+
+## Prototipo di stampa Budget (issue #29)
+
+Nel Budget, il menu **Importa, esporta e stampa** in alto a destra contiene
+**Importa Excel**, **Esporta Excel** e **Stampa report**. Quest’ultimo apre il
+configuratore con anteprima del documento.
+Usa tutte le righe risultanti dai filtri della tabella, anche nei gruppi chiusi,
+e l’ordinamento corrente; la selezione delle caselle di riga non limita il report.
+KPI, ripartizione e subtotali provengono dallo snapshot Budget esistente. I grafici
+usano esclusivamente le voci incluse nel Budget filtrato e gli importi già attribuiti,
+senza ricalcolare le spese sottostanti. Il Sankey mostra allocato, effettivo o entrambi;
+la tabella di riconciliazione è un blocco indipendente.
+
+Il configuratore permette di modificare titolo, nome azienda, sottotitolo e titoli
+dei blocchi; nascondere anno, logo, data, filtri/conteggi; riordinare e selezionare
+blocchi e colonne. Il formato iniziale è A4 verticale. Tutto è attivo inizialmente
+tranne la colonna Stato e la numerazione delle pagine. Titolo, reset e opzioni sono accanto al rispettivo blocco;
+disattivandolo si nascondono le sue opzioni. La data nel Footer è automatica, rilevata
+all’apertura del report, e può essere mostrata o nascosta. Il Footer contiene
+data a sinistra e logo MP3 centrato ed è ripetuto in fondo a ogni pagina, sia in stampa sia
+nel PDF scaricato; uno spazio riservato lo separa dal contenuto. L’anteprima
+continua lo mostra in fondo al documento. **Numeri di pagina** aggiunge i numeri
+in basso a destra. Disattivando **Includi la prima pagina**, il primo foglio resta
+senza numero e il secondo parte da 1. La stampa usa i contatori CSS nei margini
+di pagina (supportati da Chromium 131+); il PDF scaricato include direttamente
+i numeri, indipendentemente dal supporto di stampa del browser. La tabella
+può raggruppare per tipo con subtotali facoltativi, rispettando l’ordine delle voci
+all’interno dei gruppi. Ogni sezione del configuratore ha un reset indipendente.
+Le opzioni seguono l’ordine del documento e sono raccolte in pannelli
+richiudibili, inizialmente chiusi, anche per i singoli blocchi. I pulsanti con
+l’occhio mostrano o nascondono gli elementi e portano l’anteprima alla zona
+interessata, mantenendo il focus sul comando.
+Le impostazioni valgono per il report aperto. I grafici aggiuntivi sono Distribuzione Fornitore (barre di allocato/effettivo),
+confronto per progetti/contratti e scostamenti.
+Le classifiche mostrano le prime 10 voci più «Altri»; gli scostamenti mostrano
+i 5 maggiori sforamenti e i 5 maggiori risparmi, come nella panoramica.
+Non vengono caricati storico, stati dei progetti o scadenze dalla panoramica.
+
+## Stampa di contratti, progetti e spese
+
+**Stampa report** è disponibile nel menu di esportazione delle tre liste e delle
+schede di contratti e progetti; nella scheda di una spesa è un pulsante dedicato.
+Il report recupera tutte le righe filtrate nell’ordinamento corrente, oltre la
+pagina visibile. Dalla scheda recupera soltanto l’elemento aperto.
+
+Il configuratore, l’intestazione, il footer e il download PDF sono condivisi con
+il Budget. L’elenco, il riepilogo e, per contratti/progetti, **Spese collegate**
+sono inizialmente visibili. L’utente può nasconderli e attivare **Dettagli**,
+che aggiunge anche note e condizioni delle spese collegate visibili. Le colonne
+dell’elenco sono selezionabili e riordinabili. I totali riguardano le spese
+dell’esercizio selezionato; le condizioni di altri anni non vengono incluse.
+Gli elementi storici senza anno restano visibili come nelle liste e sono
+indicati come **Non classificato**.
+
+## Formato e verifiche dei report
+
+Il logo si carica in **Impostazioni ambiente → Identità azienda** (PNG/JPG,
+2 MB, massimo 4096 × 4096 pixel). È conservato sul disco privato esistente e
+accessibile soltanto agli utenti del tenant o ai super admin. Dopo averlo modificato,
+ricaricare il Budget prima di aprire un nuovo report.
+Il report usa lo stesso font di sistema dell’applicazione: la famiglia effettiva
+può variare tra sistemi operativi. La palette resta chiara anche con il tema dark.
+
+**Scarica PDF** genera e scarica direttamente un PDF composto da immagini tramite
+`html2pdf.js`, con A4 verticale/orizzontale e le opzioni del report corrente.
+Il testo del file non è selezionabile; la tabella non ripete l’intestazione su
+ogni pagina. L’override `html2canvas-pro` supporta i colori CSS usati da Tailwind 4.
+Il generatore viene caricato solo al clic. I report troppo lunghi per il canvas
+vengono bloccati con un messaggio: restringere i filtri oppure usare **Stampa**.
+
+**Stampa** apre la stampa del browser tramite `react-to-print`:
+in Chrome scegliere **Salva come PDF**, carta A4, scala 100% e controllare tutte
+le pagine. L’anteprima nell’app mostra il documento continuo; quella di Chrome
+mostra l’impaginazione effettiva. Le impostazioni del browser possono prevalere
+su formato e margini CSS.
+
+Controlli del prototipo, con database PHP separato `testing`:
+
+```bash
+npx vp test --bail=1
+npm run check
+npm run types:check
+npm run build
+php artisan test --filter='SectionReportTest|AnnualBudgetTest|TenantIdentityTest|SpreadsheetTransferTest|EconomicYearContextTest' --stop-on-error --stop-on-failure
+```
+
+Prima dell’approvazione verificare nell’app: filtri singoli e combinati, zero/una/
+molte righe, colonne nascoste e riordinate, descrizioni lunghe, due anni, logo sì/no,
+A4 verticale/orizzontale e tema light/dark. Confrontare i totali e controllare nel
+PDF grafico, intestazioni ripetute e righe complete su tutte le pagine.

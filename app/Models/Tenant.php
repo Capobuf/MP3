@@ -17,6 +17,11 @@ class Tenant extends Model
         return ['contract_reminders' => 'array'];
     }
 
+    public function logoUrl(): ?string
+    {
+        return $this->logo_path ? route('tenant.identity.logo', ['tenant' => $this->slug, 'v' => basename($this->logo_path)], false) : null;
+    }
+
     protected static function booted(): void
     {
         static::created(function (Tenant $tenant): void {

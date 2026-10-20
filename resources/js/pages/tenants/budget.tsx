@@ -7,7 +7,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ChartNoAxesCombined, Ellipsis, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { BudgetSankey } from '@/components/management/budget-sankey';
-import { BudgetTable } from '@/components/management/budget-table';
+import {
+    BudgetTable,
+    type BudgetTableHandle,
+} from '@/components/management/budget-table';
 import {
     BudgetEntrySheet,
     BudgetMissingSheet,
@@ -64,11 +67,13 @@ function BudgetHeader({
     busy,
     onNewYear,
     onCopy,
+    onPrintReport,
 }: {
     props: BudgetProps;
     busy: boolean;
     onNewYear: (year: number) => void;
     onCopy?: () => void;
+    onPrintReport?: () => void;
 }) {
     return (
         <DetailHero
@@ -117,6 +122,7 @@ function BudgetHeader({
                     )}
                     <SpreadsheetActions
                         slug={props.tenant.slug}
+                        onPrintReport={onPrintReport}
                         resource="budget"
                         label="Budget"
                         filters={{ year: props.selectedYear }}
@@ -158,6 +164,7 @@ function BudgetWorkspace({
     const [editing, setEditing] = useState<RecordData | null>(null);
     const [expenseFormBusy, setExpenseFormBusy] = useState(false);
     const expenseForm = useRef<EntityFormHandle>(null);
+    const budgetTable = useRef<BudgetTableHandle>(null);
     const lock = useRef(false);
     const base = `/t/${props.tenant.slug}/budget/years/${year.id}`;
     useEffect(() => {
@@ -260,6 +267,7 @@ function BudgetWorkspace({
                 props={props}
                 busy={busy || loading || pending}
                 onNewYear={onNewYear}
+                onPrintReport={() => budgetTable.current?.printReport()}
                 onCopy={() => setImporting(true)}
             />
             <section aria-label="Riepilogo budget">
@@ -307,6 +315,9 @@ function BudgetWorkspace({
                 </Alert>
             ))}
             <BudgetTable
+                ref={budgetTable}
+                tenantName={props.tenant.name}
+                logoUrl={props.logoUrl}
                 budgetYearId={year.id}
                 budget={budget}
                 slug={props.tenant.slug}
