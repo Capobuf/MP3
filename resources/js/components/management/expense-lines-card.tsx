@@ -125,7 +125,7 @@ export function ExpenseLinesCard({
 
     return (
         <>
-            <Card className="min-w-0 detail-enter gap-4">
+            <Card className="min-w-0 gap-4">
                 <CardHeader className="flex flex-col gap-3 px-5 sm:grid">
                     <CardTitle>
                         <h2>Righe economiche</h2>

@@ -159,9 +159,9 @@ export function VarianceChart({
                                 );
                             }}
                             isAnimationActive="auto"
-                            animationBegin={60}
+                            animationBegin={0}
                             animationDuration={650}
-                            animationEasing="cubic-bezier(0.22,1,0.36,1)"
+                            animationEasing="ease-out"
                         >
                             {data.map((row) => (
                                 <Cell

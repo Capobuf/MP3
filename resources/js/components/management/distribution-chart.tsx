@@ -6,7 +6,7 @@ import {
     ChartTooltip,
     ChartTooltipContent,
 } from '@/components/ui/chart';
-import type { PieProps, PieSectorDataItem } from 'recharts';
+import type { PieSectorDataItem } from 'recharts';
 import {
     cents,
     palette,
@@ -149,12 +149,9 @@ export function DistributionChart({
                                     select((row.payload as EconomicGroup).id)
                                 }
                                 isAnimationActive="auto"
-                                animationBegin={60}
-                                animationDuration={700}
-                                // Pie's 3.8 types omit cubic-bezier; its runtime uses the same parser as Bar.
-                                animationEasing={
-                                    'cubic-bezier(0.22,1,0.36,1)' as PieProps['animationEasing']
-                                }
+                                animationBegin={0}
+                                animationDuration={650}
+                                animationEasing="ease-out"
                             >
                                 {data.map((row) => (
                                     <Cell

@@ -89,7 +89,7 @@ export default function ContractSchedule({
     return (
         <>
             <Head title={`Scadenzario · ${tenant.name}`} />
-            <div className="page-shell">
+            <div className="page-shell detail-enter">
                 <DetailHero
                     icon={CalendarDays}
                     accent="contract"

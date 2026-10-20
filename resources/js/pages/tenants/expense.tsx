@@ -50,7 +50,7 @@ export default function ExpenseDetail({
     return (
         <>
             <Head title={`${expense.title} · ${tenant.name}`} />
-            <div className="@container/detail page-shell">
+            <div className="@container/detail page-shell detail-enter">
                 <DetailHero
                     icon={ReceiptText}
                     actions={
@@ -129,7 +129,7 @@ export default function ExpenseDetail({
                 />
                 <section
                     aria-labelledby="expense-info"
-                    className="min-w-0 detail-enter rounded-xl border bg-card px-5 py-5"
+                    className="min-w-0 rounded-xl border bg-card px-5 py-5"
                 >
                     <h2 id="expense-info" className="mb-4 font-semibold">
                         Informazioni

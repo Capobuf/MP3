@@ -43,6 +43,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useDelayedBusy } from '@/hooks/use-delayed-busy';
 import { Spinner } from '@/components/ui/spinner';
 import type { Tenant } from '@/types';
 import { commentExtensions } from './comment-content';
@@ -240,6 +241,7 @@ export function CommentsSection({
     });
     const [list, setList] = useState<CommentPage | null>(null);
     const [loading, setLoading] = useState(true);
+    const visibleLoading = useDelayedBusy(loading);
     const [loadError, setLoadError] = useState('');
     const [saveError, setSaveError] = useState('');
     const [editing, setEditing] = useState<Comment | null>(null);
@@ -403,6 +405,16 @@ export function CommentsSection({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <CardTitle className="flex items-center gap-2">
                         Commenti{' '}
+                        <span role="status" className="flex w-4 items-center">
+                            {visibleLoading && (
+                                <>
+                                    <Spinner aria-hidden="true" />
+                                    <span className="sr-only">
+                                        Caricamento commenti…
+                                    </span>
+                                </>
+                            )}
+                        </span>
                         {list && (
                             <Badge variant="secondary">
                                 {list.comments_count}
@@ -455,8 +467,22 @@ export function CommentsSection({
                     aria-busy={loading}
                     className="flex min-w-0 flex-col gap-5"
                 >
-                    {loading ? (
-                        <Skeleton className="h-16 w-full" />
+                    {loading && !list ? (
+                        <div
+                            className="flex min-h-16 gap-3"
+                            aria-label="Caricamento commenti"
+                        >
+                            {visibleLoading && (
+                                <>
+                                    <Skeleton className="size-8 shrink-0 rounded-full" />
+                                    <div className="flex flex-1 flex-col gap-2">
+                                        <Skeleton className="h-4 w-32" />
+                                        <Skeleton className="h-4 w-full" />
+                                        <Skeleton className="h-4 w-2/3" />
+                                    </div>
+                                </>
+                            )}
+                        </div>
                     ) : loadError ? (
                         <Alert variant="destructive">
                             <AlertTitle>Commenti non disponibili</AlertTitle>

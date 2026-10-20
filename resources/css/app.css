@@ -383,7 +383,7 @@
 }
 
 @utility dashboard-enter {
-    animation: dashboard-enter 350ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: dashboard-enter 240ms ease-out both;
 }
 
 @keyframes dashboard-enter {
@@ -398,7 +398,7 @@
 }
 
 @utility detail-enter {
-    animation: dashboard-enter 280ms ease-out both;
+    animation: dashboard-enter 240ms ease-out both;
 }
 
 @utility detail-collapse {

@@ -1,5 +1,4 @@
 import { usePageRefresh } from '@/hooks/use-page-refresh';
-import { AnalyticsLoadingContext } from '@/components/management/analytics-ui';
 import { Head } from '@inertiajs/react';
 import type {
     EntityFilter,
@@ -24,7 +23,15 @@ export default function TenantDashboard(
     const path = `/t/${tenant.slug}/dashboard`;
     const year = filters.year!;
     const refresh = usePageRefresh(path);
-    const chartKey = JSON.stringify([tenant.id, filters]);
+    // Reset chart selections only when the data scope changes, not its table order.
+    const chartKey = JSON.stringify([
+        tenant.id,
+        year,
+        filters.search?.trim() ?? '',
+        filters.vendor_id ?? '',
+        filters.contract_id ?? '',
+        filters.project_id ?? '',
+    ]);
     const recordHref = (field: EntityFilter, id: GroupId) => {
         if (typeof id !== 'number') return undefined;
         const catalog = {
@@ -49,14 +56,12 @@ export default function TenantDashboard(
                         <h1 className="mt-1 page-title">
                             Panoramica economica
                         </h1>
-                        {refresh.visible && (
-                            <p
-                                className="mt-2 text-sm text-muted-foreground"
-                                role="status"
-                            >
-                                Aggiornamento…
-                            </p>
-                        )}
+                        <p
+                            className="mt-2 min-h-5 text-sm text-muted-foreground"
+                            role="status"
+                        >
+                            {refresh.visible ? 'Aggiornamento…' : ''}
+                        </p>
                     </div>
                 </header>
                 <div className="flex flex-wrap items-center gap-2">
@@ -66,126 +71,115 @@ export default function TenantDashboard(
                         path={path}
                     />
                 </div>
-                <AnalyticsLoadingContext value={refresh.visible}>
-                    <DashboardSummary
-                        analytics={analytics}
-                        year={year}
-                        loading={
-                            refresh.visible && analytics.current.count === 0
-                        }
-                    />
-                    <section
-                        className="flex min-w-0 flex-col gap-4"
-                        aria-labelledby="economic-trend"
-                    >
-                        <h2
-                            id="economic-trend"
-                            className="text-lg font-semibold"
-                        >
-                            Andamento economico
-                        </h2>
-                        <div className="grid min-w-0 gap-4 xl:grid-cols-3">
-                            <div className="min-w-0 xl:col-span-2">
-                                <AnnualComparisonChart
-                                    key={`${chartKey}:annual`}
-                                    rows={analytics.annual}
-                                    year={year}
-                                />
-                            </div>
-                            <CompletenessChart
-                                key={`${chartKey}:completeness`}
-                                rows={analytics.current.completeness}
-                            />
-                        </div>
-                    </section>
-                    <section
-                        className="flex min-w-0 flex-col gap-4"
-                        aria-labelledby="vendors"
-                    >
-                        <h2 id="vendors" className="text-lg font-semibold">
-                            Fornitori e distribuzione
-                        </h2>
-                        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-                            <DistributionChart
-                                key={`${chartKey}:vendors-distribution`}
-                                title="Distribuzione percentuale per fornitore"
-                                rows={analytics.vendors}
-                                values={analytics.current}
-                                vendorConcentration
-                                getHref={(id) => recordHref('vendor_id', id)}
-                            />
-                            <EconomicChart
-                                key={`${chartKey}:vendors-ranking`}
-                                title="Classifica fornitori"
-                                rows={analytics.vendors}
-                                getHref={(id) => recordHref('vendor_id', id)}
-                            />
-                        </div>
-                    </section>
-                    <section
-                        className="flex min-w-0 flex-col gap-4"
-                        aria-label="Flussi economici"
-                    >
-                        <ExpenseSankey
-                            key={`${chartKey}:flows`}
-                            analytics={analytics}
-                            getHref={recordHref}
-                        />
-                    </section>
-                    <section
-                        className="flex min-w-0 flex-col gap-4"
-                        aria-labelledby="projects-contracts"
-                    >
-                        <h2
-                            id="projects-contracts"
-                            className="text-lg font-semibold"
-                        >
-                            Progetti e contratti
-                        </h2>
-                        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-                            <EconomicChart
-                                key={`${chartKey}:projects`}
-                                title="Allocato ed effettivo per progetto"
-                                rows={analytics.projects}
-                                getHref={(id) => recordHref('project_id', id)}
-                            />
-                            <DistributionChart
-                                key={`${chartKey}:project-statuses`}
-                                title="Distribuzione per stato del progetto"
-                                rows={analytics.projectStatuses}
-                                showReconciliation={false}
-                                values={analytics.current}
-                            />
-                        </div>
-                        <div className="grid min-w-0 gap-4 xl:grid-cols-2">
-                            <EconomicChart
-                                key={`${chartKey}:contracts`}
-                                title="Spese per contratto"
-                                rows={analytics.contracts}
-                                getHref={(id) => recordHref('contract_id', id)}
-                            />
-                            <ContractExpiryChart
-                                key={`${chartKey}:expiry`}
-                                expiry={analytics.expiry}
+                <DashboardSummary analytics={analytics} year={year} />
+                <section
+                    className="flex min-w-0 flex-col gap-4"
+                    aria-labelledby="economic-trend"
+                >
+                    <h2 id="economic-trend" className="text-lg font-semibold">
+                        Andamento economico
+                    </h2>
+                    <div className="grid min-w-0 gap-4 xl:grid-cols-3">
+                        <div className="min-w-0 xl:col-span-2">
+                            <AnnualComparisonChart
+                                key={`${chartKey}:annual`}
+                                rows={analytics.annual}
                                 year={year}
-                                slug={tenant.slug}
                             />
                         </div>
-                    </section>
-                    <section
-                        className="flex min-w-0 flex-col gap-4"
-                        aria-labelledby="critical"
+                        <CompletenessChart
+                            key={`${chartKey}:completeness`}
+                            rows={analytics.current.completeness}
+                        />
+                    </div>
+                </section>
+                <section
+                    className="flex min-w-0 flex-col gap-4"
+                    aria-labelledby="vendors"
+                >
+                    <h2 id="vendors" className="text-lg font-semibold">
+                        Fornitori e distribuzione
+                    </h2>
+                    <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                        <DistributionChart
+                            key={`${chartKey}:vendors-distribution`}
+                            title="Distribuzione percentuale per fornitore"
+                            rows={analytics.vendors}
+                            values={analytics.current}
+                            vendorConcentration
+                            getHref={(id) => recordHref('vendor_id', id)}
+                        />
+                        <EconomicChart
+                            key={`${chartKey}:vendors-ranking`}
+                            title="Classifica fornitori"
+                            rows={analytics.vendors}
+                            getHref={(id) => recordHref('vendor_id', id)}
+                        />
+                    </div>
+                </section>
+                <section
+                    className="flex min-w-0 flex-col gap-4"
+                    aria-label="Flussi economici"
+                >
+                    <ExpenseSankey
+                        key={`${chartKey}:flows`}
+                        analytics={analytics}
+                        getHref={recordHref}
+                    />
+                </section>
+                <section
+                    className="flex min-w-0 flex-col gap-4"
+                    aria-labelledby="projects-contracts"
+                >
+                    <h2
+                        id="projects-contracts"
+                        className="text-lg font-semibold"
                     >
-                        <h2 id="critical" className="text-lg font-semibold">
-                            Scostamenti e criticità
-                        </h2>
-                        <VarianceChart
-                            key={`${chartKey}:variances`}
-                            rows={analytics.variances}
+                        Progetti e contratti
+                    </h2>
+                    <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                        <EconomicChart
+                            key={`${chartKey}:projects`}
+                            title="Allocato ed effettivo per progetto"
+                            rows={analytics.projects}
+                            getHref={(id) => recordHref('project_id', id)}
+                        />
+                        <DistributionChart
+                            key={`${chartKey}:project-statuses`}
+                            title="Distribuzione per stato del progetto"
+                            rows={analytics.projectStatuses}
+                            showReconciliation={false}
+                            values={analytics.current}
+                        />
+                    </div>
+                    <div className="grid min-w-0 gap-4 xl:grid-cols-2">
+                        <EconomicChart
+                            key={`${chartKey}:contracts`}
+                            title="Spese per contratto"
+                            rows={analytics.contracts}
+                            getHref={(id) => recordHref('contract_id', id)}
+                        />
+                        <ContractExpiryChart
+                            key={`${chartKey}:expiry`}
+                            expiry={analytics.expiry}
+                            year={year}
                             slug={tenant.slug}
                         />
-                    </section>
-                </AnalyticsLoadingContext>
+                    </div>
+                </section>
+                <section
+                    className="flex min-w-0 flex-col gap-4"
+                    aria-labelledby="critical"
+                >
+                    <h2 id="critical" className="text-lg font-semibold">
+                        Scostamenti e criticità
+                    </h2>
+                    <VarianceChart
+                        key={`${chartKey}:variances`}
+                        rows={analytics.variances}
+                        slug={tenant.slug}
+                    />
+                </section>
             </div>
         </>
     );

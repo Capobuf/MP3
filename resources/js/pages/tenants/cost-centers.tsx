@@ -257,7 +257,7 @@ export default function CostCenters({
     return (
         <>
             <Head title={`Centri di Costo · ${tenant.name}`} />
-            <div className="page-shell">
+            <div className="page-shell detail-enter">
                 <DetailHero
                     icon={Tags}
                     accent="cost-center"

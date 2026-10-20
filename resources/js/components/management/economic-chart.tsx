@@ -194,9 +194,9 @@ export function EconomicChart({
                                     );
                                 }}
                                 isAnimationActive="auto"
-                                animationBegin={key === 'allocated' ? 60 : 140}
+                                animationBegin={0}
                                 animationDuration={650}
-                                animationEasing="cubic-bezier(0.22,1,0.36,1)"
+                                animationEasing="ease-out"
                             />
                         ))}
                     </BarChart>

@@ -15,7 +15,7 @@ export default function Expenses(
     return (
         <>
             <Head title={`Spese · ${props.tenant.name}`} />
-            <div className="page-shell">
+            <div className="page-shell detail-enter">
                 <DetailHero
                     icon={ReceiptText}
                     actions={
