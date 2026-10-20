@@ -115,13 +115,16 @@ class AnnualBudget
             $groups[$type] = $this->totals(array_values(array_filter($included, fn ($row) => $row['type'] === $type)));
         }
         $centers = [];
+        $vendors = [];
         foreach ($included as $row) {
             $centers[(string) ($row['cost_center_id'] ?? 'none')][] = $row;
+            $vendors[(string) ($row['vendor']?->id ?? 'none')][] = $row;
         }
 
         return [
             'entries' => $rows, 'totals' => $this->totals($included), 'groups' => $groups,
             'cost_center_groups' => array_map(fn ($group) => $this->totals($group), $centers),
+            'vendor_groups' => array_map(fn ($group) => $this->totals($group), $vendors),
             'owners' => $owners, 'warnings' => $warnings,
             'has_missing_entries' => $expenses->contains(fn (Expense $expense) => ! isset($owners[$expense->id])),
         ];

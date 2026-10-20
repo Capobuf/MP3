@@ -48,6 +48,7 @@ export type BudgetSnapshot = {
     totals: BudgetTotals;
     groups: Record<BudgetType, BudgetTotals>;
     cost_center_groups: Record<string, BudgetTotals>;
+    vendor_groups: Record<string, BudgetTotals>;
     owners: Record<string, number>;
     has_missing_entries: boolean;
     warnings: string[];
@@ -58,6 +59,7 @@ export type BudgetYear = {
     structure_copied?: boolean;
 };
 export type BudgetProps = {
+    logoUrl: string | null;
     tenant: Tenant;
     selectedYear: number;
     budgetYear: BudgetYear | null;

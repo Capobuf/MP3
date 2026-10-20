@@ -704,3 +704,57 @@ php artisan test --filter='DriveSyncTest|SpreadsheetTransferTest|BackupTest' --s
 
 La prova con un account Google reale richiede credenziali OAuth e consenso
 interattivo; i test automatici non li sostituiscono.
+
+## Prototipo di stampa Budget (issue #29)
+
+Nel Budget, il menu **Importa, esporta e stampa** in alto a destra contiene
+**Importa Excel**, **Esporta Excel** e **Stampa report**. Quest’ultimo apre il
+configuratore con anteprima del documento.
+Usa tutte le righe risultanti dai filtri della tabella, anche nei gruppi chiusi,
+e l’ordinamento corrente; la selezione delle caselle di riga non limita il report.
+KPI, ripartizione e subtotali provengono dallo snapshot Budget esistente. I grafici
+usano esclusivamente le voci incluse nel Budget filtrato e gli importi già attribuiti,
+senza ricalcolare le spese sottostanti. Il Sankey mostra allocato, effettivo o entrambi;
+la tabella di riconciliazione è un blocco indipendente.
+
+Il configuratore permette di modificare titolo, nome azienda, sottotitolo e titoli
+dei blocchi; nascondere anno, logo, data, filtri/conteggi; riordinare e selezionare
+blocchi e colonne. Il formato iniziale è A4 verticale. Tutto è attivo inizialmente
+tranne la colonna Stato. Titolo, reset e opzioni sono accanto al rispettivo blocco;
+disattivandolo si nascondono le sue opzioni. La data nel Footer è automatica, rilevata
+all’apertura del report, e può essere mostrata o nascosta. La tabella
+può raggruppare per tipo con subtotali facoltativi, rispettando l’ordine delle voci
+all’interno dei gruppi. Ogni sezione del configuratore ha un reset indipendente.
+Le impostazioni valgono per il report aperto. I grafici aggiuntivi sono Distribuzione Fornitore (barre di allocato/effettivo),
+confronto per progetti/contratti e scostamenti.
+Le classifiche mostrano le prime 10 voci più «Altri»; gli scostamenti mostrano
+i 5 maggiori sforamenti e i 5 maggiori risparmi, come nella panoramica.
+Non vengono caricati storico, stati dei progetti o scadenze dalla panoramica.
+
+Il logo si carica in **Impostazioni ambiente → Identità azienda** (PNG/JPG,
+2 MB, massimo 4096 × 4096 pixel). È conservato sul disco privato esistente e
+accessibile soltanto agli utenti del tenant o ai super admin. Dopo averlo modificato,
+ricaricare il Budget prima di aprire un nuovo report.
+Il report usa lo stesso font di sistema dell’applicazione: la famiglia effettiva
+può variare tra sistemi operativi. La palette resta chiara anche con il tema dark.
+
+**Stampa / Salva PDF** apre la stampa del browser tramite `react-to-print`:
+in Chrome scegliere **Salva come PDF**, carta A4, scala 100% e controllare tutte
+le pagine. L’anteprima nell’app mostra il documento continuo; quella di Chrome
+mostra l’impaginazione effettiva. Le impostazioni del browser possono prevalere
+su formato e margini CSS. Il POC riguarda esclusivamente il Budget.
+
+Controlli del prototipo, con database PHP separato `testing`:
+
+```bash
+npx vp test tests/frontend/budget-report.test.tsx --bail=1
+npm run check
+npm run types:check
+npm run build
+php artisan test --filter='AnnualBudgetTest|TenantIdentityTest|SpreadsheetTransferTest|EconomicYearContextTest' --stop-on-failure
+```
+
+Prima dell’approvazione verificare nell’app: filtri singoli e combinati, zero/una/
+molte righe, colonne nascoste e riordinate, descrizioni lunghe, due anni, logo sì/no,
+A4 verticale/orizzontale e tema light/dark. Confrontare i totali e controllare nel
+PDF grafico, intestazioni ripetute e righe complete su tutte le pagine.

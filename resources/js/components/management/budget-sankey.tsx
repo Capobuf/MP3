@@ -16,8 +16,19 @@ import type { BudgetSnapshot, BudgetType } from './budget-types';
 import { ChartReset } from './analytics-ui';
 import { economicConfig } from './analytics-helpers';
 
-export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
-    const [metric, setMetric] = useState<'allocated' | 'actual'>('allocated');
+export function BudgetSankey({
+    budget,
+    printWidth,
+    printMetric,
+}: {
+    budget: BudgetSnapshot;
+    printWidth?: number;
+    printMetric?: 'allocated' | 'actual';
+}) {
+    const [selectedMetric, setMetric] = useState<'allocated' | 'actual'>(
+        'allocated',
+    );
+    const metric = printMetric ?? selectedMetric;
     const color = economicConfig[metric].color;
     const [selected, setSelected] = useState<BudgetType | null>(null);
     const onSelect = (type: BudgetType) =>
@@ -44,23 +55,29 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
         if (!item) return <g />;
         return (
             <g
-                role={index > 0 ? 'button' : undefined}
-                tabIndex={index > 0 ? 0 : undefined}
-                aria-label={index > 0 ? `Filtra ${item.name}` : undefined}
+                role={index > 0 && !printWidth ? 'button' : undefined}
+                tabIndex={index > 0 && !printWidth ? 0 : undefined}
+                aria-label={
+                    index > 0 && !printWidth ? `Filtra ${item.name}` : undefined
+                }
                 aria-pressed={
-                    index > 0 ? selected === categories[index - 1] : undefined
+                    index > 0 && !printWidth
+                        ? selected === categories[index - 1]
+                        : undefined
                 }
                 className={
-                    index > 0
+                    index > 0 && !printWidth
                         ? 'cursor-pointer outline-none focus:opacity-70'
                         : ''
                 }
                 onClick={() => {
-                    if (index > 0) onSelect(categories[index - 1]);
+                    if (index > 0 && !printWidth)
+                        onSelect(categories[index - 1]);
                 }}
                 onKeyDown={(event) => {
                     if (
                         index > 0 &&
+                        !printWidth &&
                         (event.key === 'Enter' || event.key === ' ')
                     ) {
                         event.preventDefault();
@@ -106,6 +123,24 @@ export function BudgetSankey({ budget }: { budget: BudgetSnapshot }) {
             strokeWidth={linkWidth}
         />
     );
+    if (printWidth)
+        return data.links.length ? (
+            <Sankey
+                width={printWidth}
+                height={140}
+                data={data}
+                node={node}
+                link={link}
+                nodeWidth={12}
+                nodePadding={32}
+                margin={{ top: 12, bottom: 12, left: 8, right: 8 }}
+            />
+        ) : (
+            <p>
+                Nessun flusso positivo. Gli importi mancanti e le rettifiche non
+                generano flussi.
+            </p>
+        );
     return (
         <Card className="min-w-0 gap-3">
             <CardHeader className="flex flex-wrap items-start justify-between gap-3">
