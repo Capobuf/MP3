@@ -104,6 +104,6 @@ export default function Login({ status, canResetPassword }: Props) {
 }
 
 Login.layout = {
-    title: 'Accedi a MP3',
+    title: 'Accedi a Obake',
     description: 'Inserisci le tue credenziali per accedere al tuo ambiente.',
 };

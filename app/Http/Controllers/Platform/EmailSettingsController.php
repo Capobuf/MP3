@@ -73,7 +73,7 @@ class EmailSettingsController extends Controller
 
         try {
             $sent = Mail::send(['html' => 'mail.test', 'text' => 'mail.text.test'], [], function (Message $message) use ($data): void {
-                $message->to($data['recipient'])->subject('MP3 — Test configurazione email');
+                $message->to($data['recipient'])->subject('Obake — Test configurazione email');
             });
             if ($sent === null) {
                 throw new \RuntimeException('Message was not sent.');

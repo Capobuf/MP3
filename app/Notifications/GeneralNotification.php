@@ -32,7 +32,7 @@ class GeneralNotification extends Notification
 
     public function toMail(User|AnonymousNotifiable $notifiable): MailMessage
     {
-        $message = (new MailMessage)->subject('MP3 — '.$this->title);
+        $message = (new MailMessage)->subject('Obake — '.$this->title);
         if ($this->actionText !== null && $this->actionUrl !== null) {
             $message->action($this->actionText, $this->actionUrl);
         }

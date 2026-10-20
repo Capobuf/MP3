@@ -27,7 +27,7 @@ export default function AuthCardLayout({
                     className="flex items-center gap-2 self-center font-medium"
                 >
                     <AppLogoIcon className="size-16" />
-                    <span>MP3</span>
+                    <span>Obake</span>
                 </Link>
 
                 <div className="flex flex-col gap-6">

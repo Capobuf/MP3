@@ -1,4 +1,4 @@
-@extends('mail.layouts.mp3', ['preheader' => $title])
+@extends('mail.layouts.obake', ['preheader' => $title])
 
 @section('content')
 <p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:25px;font-weight:400;color:#62656b;margin:0 0 0px;">{{ $body }}</p>

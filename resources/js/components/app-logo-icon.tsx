@@ -10,12 +10,12 @@ export default function AppLogoIcon({
     return (
         <span
             role="img"
-            aria-label="Logo MP3"
+            aria-label="Logo Obake"
             className={cn('inline-flex shrink-0', className)}
         >
             {variant !== 'white' && (
                 <img
-                    src="/branding/mp3-logo-black.svg"
+                    src="/branding/obake-logo-black.svg"
                     alt=""
                     width={2000}
                     height={2000}
@@ -27,7 +27,7 @@ export default function AppLogoIcon({
             )}
             {variant !== 'black' && (
                 <img
-                    src="/branding/mp3-logo-white.svg"
+                    src="/branding/obake-logo-white.svg"
                     alt=""
                     width={2000}
                     height={2000}

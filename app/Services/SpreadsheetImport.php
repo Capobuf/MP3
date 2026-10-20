@@ -158,7 +158,7 @@ class SpreadsheetImport
             Validator::make($data, ['year' => ['required', 'integer', 'between:2000,2100'], 'type' => ['required', 'in:new-expense,contract,project,expense'], 'description' => ['nullable', 'string', 'max:255']])->validate();
             $year = $tenant->budgetYears()->where('year', $data['year'])->first();
             if (! $year) {
-                Values::invalid('year', 'Crea prima l’anno di Budget in MP3.');
+                Values::invalid('year', 'Crea prima l’anno di Budget in Obake.');
             }
             if ($data['type'] === 'new-expense') {
                 if ($data['source_id'] !== null || $data['description'] === null) {
@@ -174,7 +174,7 @@ class SpreadsheetImport
                 }
                 AnnualBudget::validateSource($tenant, $year, $tenant->{$data['type'].'s'}()->findOrFail($data['source_id']));
                 if (in_array($data['type'].':'.$data['source_id'], $year->dismissed_sources ?? [], true)) {
-                    Values::invalid('source_id', 'La sorgente è stata rimossa dal Budget. Ripristinala dall’interfaccia MP3.');
+                    Values::invalid('source_id', 'La sorgente è stata rimossa dal Budget. Ripristinala dall’interfaccia Obake.');
                 }
             }
 

@@ -125,7 +125,10 @@ class PlatformEmailSettingsTest extends TestCase
         $message = $transport->messages()->sole()->getOriginalMessage();
         $this->assertSame('tester@example.test', $message->getTo()[0]->getAddress());
         $this->assertSame('sender@example.test', $message->getFrom()[0]->getAddress());
-        $this->assertSame('MP3 test', $message->getFrom()[0]->getName());
+        $this->assertSame('Obake test', $message->getFrom()[0]->getName());
+        $this->assertSame('Obake — Test configurazione email', $message->getSubject());
+        $this->assertStringContainsString('Obake', $message->getHtmlBody());
+        $this->assertStringContainsString('Obake', $message->getTextBody());
         $this->assertStringContainsString('Email di Test Ricevuta', $message->getHtmlBody());
         $this->assertStringContainsString('Messaggio ricevuto', $message->getHtmlBody());
         $this->assertStringNotContainsString('<a ', $message->getHtmlBody());
@@ -229,7 +232,7 @@ class PlatformEmailSettingsTest extends TestCase
         return array_replace([
             'host' => 'smtp.example.test', 'port' => 465, 'scheme' => 'smtps',
             'username' => 'smtp-user', 'password' => 'smtp-secret',
-            'from_address' => 'sender@example.test', 'from_name' => 'MP3 test',
+            'from_address' => 'sender@example.test', 'from_name' => 'Obake test',
         ], $overrides);
     }
 }

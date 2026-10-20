@@ -20,7 +20,7 @@ class UserInvitation extends Notification
     public function toMail(User $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('MP3 — Imposta la tua password')
+            ->subject('Obake — Imposta la tua password')
             ->action('Imposta la password', route('password.reset', [
                 'token' => $this->token,
                 'email' => $notifiable->email,

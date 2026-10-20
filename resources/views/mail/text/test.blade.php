@@ -1,8 +1,8 @@
-MP3
+Obake
 
 Email di Test Ricevuta
 
-Questa email è stata inviata da MP3 per verificare la consegna dei messaggi tramite SMTP.
+Questa email è stata inviata da Obake per verificare la consegna dei messaggi tramite SMTP.
 
 Messaggio ricevuto
 

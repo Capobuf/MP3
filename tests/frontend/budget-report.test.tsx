@@ -139,7 +139,7 @@ describe('Budget report', () => {
                 />,
             );
             const footer = html.match(/<footer\b[^>]*>(.*?)<\/footer>/s)![1];
-            expect(footer.includes('/branding/mp3-logo-black.svg')).toBe(
+            expect(footer.includes('/branding/obake-logo-black.svg')).toBe(
                 showBranding,
             );
             expect(footer.includes('Elaborato il 20/10/2026')).toBe(showDate);

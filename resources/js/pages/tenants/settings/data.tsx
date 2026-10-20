@@ -57,7 +57,7 @@ export default function TenantData({
                             Un singolo CSV tecnico versionato per trasferire
                             fornitori, contratti, progetti, spese, righe
                             economiche, centri di costo e Budget tra
-                            installazioni MP3 compatibili.
+                            installazioni Obake compatibili.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>

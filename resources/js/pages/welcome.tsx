@@ -8,11 +8,11 @@ export default function Welcome() {
 
     return (
         <>
-            <Head title="MP3" />
+            <Head title="Obake" />
             <main className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 text-center text-foreground">
                 <AppLogoIcon className="size-32" />
                 <div className="space-y-2">
-                    <h1 className="text-4xl font-semibold">MP3</h1>
+                    <h1 className="text-4xl font-semibold">Obake</h1>
                     <p className="text-muted-foreground">
                         Gestione spese, progetti, contratti e fornitori.
                     </p>

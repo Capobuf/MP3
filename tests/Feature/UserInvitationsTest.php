@@ -74,7 +74,7 @@ class UserInvitationsTest extends TestCase
             $this->assertSame('Imposta la password', $message->actionText);
             $this->assertStringContainsString('/reset-password/'.$invitation->token, $message->actionUrl);
             $this->assertStringContainsString('email=new%40example.com', $message->actionUrl);
-            $this->assertStringContainsString('MP3', (string) $message->render());
+            $this->assertStringContainsString('Obake', (string) $message->render());
 
             return true;
         });
@@ -137,7 +137,7 @@ class UserInvitationsTest extends TestCase
         Notification::assertNotSentTo($existing, UserInvitation::class);
         Notification::assertSentTo($existing, TenantAccessGranted::class, function (TenantAccessGranted $notification) use ($existing, $own) {
             $this->assertSame(route('tenant.dashboard', $own), $notification->toMail($existing)->actionUrl);
-            $this->assertStringContainsString('MP3', (string) $notification->toMail($existing)->render());
+            $this->assertStringContainsString('Obake', (string) $notification->toMail($existing)->render());
 
             return true;
         });
@@ -282,7 +282,7 @@ class UserInvitationsTest extends TestCase
             ->post('/platform/users', ['email' => 'new@example.com'])->assertSessionHasNoErrors();
         $message = Mail::mailer()->getSymfonyTransport()->messages()->sole()->getOriginalMessage();
         $this->assertStringContainsString('Imposta la password', $message->getHtmlBody());
-        $this->assertStringContainsString('MP3', $message->getHtmlBody());
+        $this->assertStringContainsString('Obake', $message->getHtmlBody());
         $this->assertStringContainsString('/reset-password/', $message->getHtmlBody());
         $this->assertStringNotContainsString('cdn.', $message->getHtmlBody());
     }

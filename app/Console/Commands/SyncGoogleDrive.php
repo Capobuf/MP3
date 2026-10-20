@@ -10,7 +10,9 @@ use Throwable;
 
 class SyncGoogleDrive extends Command
 {
-    protected $signature = 'mp3:drive-sync';
+    protected $signature = 'obake:drive-sync';
+
+    protected $aliases = ['mp3:drive-sync'];
 
     protected $description = 'Sincronizza i report Excel di tutti gli anni degli ambienti abilitati verso Google Drive';
 

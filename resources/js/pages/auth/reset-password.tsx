@@ -101,6 +101,6 @@ export default function ResetPassword({
 ResetPassword.layout = (props: Props) => ({
     title: props.invitation ? 'Imposta password' : 'Reimposta password',
     description: props.invitation
-        ? 'Benvenuto in MP3. Scegli la password per accedere.'
+        ? 'Benvenuto in Obake. Scegli la password per accedere.'
         : 'Inserisci la nuova password.',
 });
