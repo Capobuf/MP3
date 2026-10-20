@@ -589,9 +589,15 @@ altre impostazioni ambiente. Non sono presenti OAuth o override per tenant.
 
 1. In Google Cloud abilitare Google Drive API, configurare la schermata di
    consenso e creare credenziali OAuth di tipo **Applicazione web**.
-2. Configurare sul server `GOOGLE_DRIVE_CLIENT_ID` e
-   `GOOGLE_DRIVE_CLIENT_SECRET`. Conservare il secret fuori dal repository.
-3. Autorizzare esattamente l’URI mostrato nella pagina Sync. Il valore predefinito
+2. Inserire **Client ID** e **Client Secret** nella pagina Sync e salvare. Il
+   secret è cifrato nel database e non viene restituito alla UI. Un campo vuoto
+   mantiene il secret salvato; un nuovo Client ID richiede il suo secret. Le
+   variabili server `GOOGLE_DRIVE_CLIENT_ID` e `GOOGLE_DRIVE_CLIENT_SECRET`
+   restano disponibili come configurazione iniziale, finché non si salva dalla UI.
+   Cambiare credenziali scollega Google e richiede un nuovo consenso; i file
+   remoti e le associazioni degli ID restano conservati.
+3. Copiare con il pulsante accanto a **URL di callback** e autorizzare
+   esattamente quell’URI in Google Cloud. Il valore predefinito
    è `APP_URL/platform/settings/sync/callback`; `GOOGLE_DRIVE_REDIRECT_URI`
    consente di specificare l’URL effettivo dietro un proxy. La pagina e il
    callback devono condividere la sessione autenticata del super admin.

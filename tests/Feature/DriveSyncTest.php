@@ -368,6 +368,34 @@ class DriveSyncTest extends TestCase
         }
     }
 
+    public function test_platform_can_save_encrypted_oauth_credentials_without_exposing_the_secret(): void
+    {
+        $settings = $this->connected();
+        $this->actingAs(User::factory()->create(['is_super_admin' => true]));
+        $url = '/platform/settings/sync/credentials';
+        $this->put($url, ['client_id' => 'ui-client', 'client_secret' => 'ui-secret'])->assertRedirect();
+        $settings->refresh();
+        $this->assertSame('ui-secret', $settings->client_secret);
+        $this->assertStringNotContainsString('ui-secret', $settings->getRawOriginal('client_secret'));
+        $this->assertArrayNotHasKey('client_secret', $settings->toArray());
+        $this->assertNull($settings->token);
+        $this->assertSame('ui-client', app(GoogleDrive::class)->clientId());
+        $this->assertSame('ui-secret', app(GoogleDrive::class)->clientSecret());
+        $this->get('/platform/settings/sync')->assertInertia(fn (Assert $page) => $page
+            ->where('clientId', 'ui-client')->where('hasClientSecret', true)->missing('client_secret'));
+        parse_str(parse_url(app(GoogleDrive::class)->authorizationUrl('state'), PHP_URL_QUERY), $query);
+        $this->assertSame('ui-client', $query['client_id']);
+        $settings->update(['token' => ['access_token' => 'keep-token']]);
+        $this->put($url, ['client_id' => 'ui-client', 'client_secret' => ''])->assertSessionHasNoErrors();
+        $this->assertSame('ui-secret', $settings->refresh()->client_secret);
+        $this->assertSame('keep-token', $settings->token['access_token']);
+        $this->put($url, ['client_id' => 'different', 'client_secret' => ''])->assertSessionHasErrors('client_secret');
+        $this->assertSame('ui-client', $settings->refresh()->client_id);
+        $this->put($url, ['client_id' => '', 'client_secret' => 'never-flash-secret'])->assertSessionHasErrors('client_id')->assertSessionMissing('_old_input.client_secret');
+        $this->actingAs(User::factory()->create());
+        $this->put($url, ['client_id' => 'foreign', 'client_secret' => 'foreign'])->assertForbidden();
+    }
+
     public function test_backup_drive_option_defaults_to_off_and_is_only_available_to_platform_admin(): void
     {
         $this->connected();

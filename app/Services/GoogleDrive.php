@@ -12,9 +12,19 @@ use Throwable;
 
 class GoogleDrive
 {
+    public function clientId(): ?string
+    {
+        return PlatformDriveSetting::query()->find(1)->client_id ?? config('services.google_drive.client_id');
+    }
+
+    public function clientSecret(): ?string
+    {
+        return PlatformDriveSetting::query()->find(1)->client_secret ?? config('services.google_drive.client_secret');
+    }
+
     public function configured(): bool
     {
-        return filled(config('services.google_drive.client_id')) && filled(config('services.google_drive.client_secret'));
+        return filled($this->clientId()) && filled($this->clientSecret());
     }
 
     public function redirectUri(): string
@@ -25,11 +35,11 @@ class GoogleDrive
     private function client(): Client
     {
         if (! $this->configured()) {
-            throw new RuntimeException('Configura GOOGLE_DRIVE_CLIENT_ID e GOOGLE_DRIVE_CLIENT_SECRET sul server.');
+            throw new RuntimeException('Salva Client ID e Client Secret nella pagina Sync.');
         }
         $client = app(Client::class);
-        $client->setClientId(config('services.google_drive.client_id'));
-        $client->setClientSecret(config('services.google_drive.client_secret'));
+        $client->setClientId($this->clientId());
+        $client->setClientSecret($this->clientSecret());
         $client->setRedirectUri($this->redirectUri());
         $client->setScopes([Drive::DRIVE_FILE]);
         $client->setAccessType('offline');

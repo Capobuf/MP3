@@ -9,21 +9,31 @@ export function useClipboard(): UseClipboardReturn {
     const [copiedText, setCopiedText] = useState<CopiedValue>(null);
 
     const copy: CopyFn = async (text) => {
-        if (!navigator?.clipboard) {
-            console.warn('Clipboard not supported');
-
-            return false;
-        }
-
+        setCopiedText(null);
         try {
-            await navigator.clipboard.writeText(text);
+            if (navigator.clipboard) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // The LAN installation uses HTTP, where the Clipboard API is unavailable.
+                const input = document.createElement('textarea');
+                const focused = document.activeElement;
+                input.value = text;
+                input.style.position = 'fixed';
+                input.style.opacity = '0';
+                document.body.appendChild(input);
+                try {
+                    input.select();
+                    if (!document.execCommand('copy')) return false;
+                } finally {
+                    input.remove();
+                    if (focused instanceof HTMLElement) focused.focus();
+                }
+            }
             setCopiedText(text);
-
             return true;
         } catch (error) {
             console.warn('Copy failed', error);
             setCopiedText(null);
-
             return false;
         }
     };

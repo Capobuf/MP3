@@ -24,6 +24,8 @@ class DriveSyncController extends Controller
             'tenant' => $tenant?->only('id', 'name', 'slug'),
             'connected' => $settings?->getRawOriginal('token') !== null,
             'configured' => $google->configured(),
+            'clientId' => $tenant === null ? $google->clientId() : null,
+            'hasClientSecret' => $tenant === null && filled($google->clientSecret()),
             'account' => $tenant === null ? $settings?->account_email : null,
             'connectionError' => $tenant === null ? $settings?->last_error : null,
             'redirectUri' => $tenant === null ? $google->redirectUri() : null,
@@ -32,6 +34,35 @@ class DriveSyncController extends Controller
                 ...$item->only('id', 'name', 'slug'), ...$sync->state($item),
             ]),
         ]);
+    }
+
+    public function credentials(Request $request, DriveSync $sync, GoogleDrive $google): RedirectResponse
+    {
+        $data = $request->validate([
+            'client_id' => ['required', 'string', 'max:255', 'not_regex:/[\r\n]/'],
+            'client_secret' => ['nullable', 'string', 'max:4096', 'not_regex:/[\r\n]/'],
+        ]);
+        try {
+            $sync->locked(function () use ($data, $google): void {
+                $secret = $data['client_secret'] ?? null;
+                if (! filled($secret)) {
+                    if ($data['client_id'] !== $google->clientId() || ! filled($google->clientSecret())) {
+                        throw ValidationException::withMessages(['client_secret' => 'Inserisci il Client Secret associato a questo Client ID.']);
+                    }
+                    $secret = $google->clientSecret();
+                }
+                $changed = $data['client_id'] !== $google->clientId() || $secret !== $google->clientSecret();
+                PlatformDriveSetting::query()->updateOrCreate(['id' => 1], [
+                    'client_id' => $data['client_id'], 'client_secret' => $secret,
+                    ...($changed ? ['token' => null, 'last_error' => null] : []),
+                ]);
+            });
+        } catch (RuntimeException $error) {
+            throw ValidationException::withMessages(['client_id' => $error->getMessage()]);
+        }
+        $request->session()->forget('google_drive_oauth');
+
+        return back();
     }
 
     public function connect(Request $request, DriveSync $sync, GoogleDrive $google): \Symfony\Component\HttpFoundation\Response
