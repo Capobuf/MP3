@@ -112,7 +112,6 @@ import {
     EmptyTitle,
     EmptyDescription,
 } from '@/components/ui/empty';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { clearLocalUndo, recordLocalUndo } from '@/lib/undo-state';
 import { BudgetCenterSelect } from './budget-entry-sheet';
@@ -1955,13 +1954,7 @@ export function BudgetTable({
                             ))}
                         </TableHeader>
                         <TableBody>
-                            {loading && !budget.entries.length ? (
-                                <TableRow>
-                                    <TableCell colSpan={visibleColumns.length}>
-                                        <Skeleton className="h-24" />
-                                    </TableCell>
-                                </TableRow>
-                            ) : !table.getRowModel().rows.length ? (
+                            {!table.getRowModel().rows.length ? (
                                 <TableRow>
                                     <TableCell colSpan={visibleColumns.length}>
                                         <Empty>

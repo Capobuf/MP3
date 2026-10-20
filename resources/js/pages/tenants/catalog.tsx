@@ -160,7 +160,7 @@ export default function CatalogPage({
     return (
         <>
             <Head title={`${labels[catalog]} · ${tenant.name}`} />
-            <div className="page-shell">
+            <div className="page-shell detail-enter">
                 <DetailHero
                     icon={catalogHeroes[catalog].icon}
                     accent={catalogHeroes[catalog].accent}

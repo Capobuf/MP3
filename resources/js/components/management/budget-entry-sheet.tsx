@@ -35,6 +35,8 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
+import { useDelayedBusy } from '@/hooks/use-delayed-busy';
 import {
     Empty,
     EmptyHeader,
@@ -107,6 +109,7 @@ export function SourcePicker({
     const [results, setResults] = useState<Option[]>([]);
     const [last, setLast] = useState(1);
     const [loading, setLoading] = useState(false);
+    const visibleLoading = useDelayedBusy(loading);
     const [error, setError] = useState('');
     useEffect(() => {
         if (!open) return;
@@ -170,7 +173,9 @@ export function SourcePicker({
                         }}
                     />
                     <CommandList aria-busy={loading}>
-                        {loading && <Skeleton className="m-3 h-10" />}
+                        {visibleLoading && !results.length && (
+                            <Skeleton className="m-3 h-10" />
+                        )}
                         {error && (
                             <p role="alert" className="p-3 text-destructive">
                                 {error}
@@ -343,6 +348,7 @@ export function BudgetEntrySheet({
                                 })();
                             }}
                         >
+                            {busy && <Spinner />}
                             {busy
                                 ? 'Salvataggio…'
                                 : existing
@@ -369,9 +375,10 @@ export function BudgetMissingSheet({
     busy: boolean;
     mutate: BudgetMutate;
 }) {
-    const [rows, setRows] = useState<BudgetSuggestion[]>([]);
+    const [rows, setRows] = useState<BudgetSuggestion[] | null>(null);
     const [selected, setSelected] = useState<string[]>([]);
     const [loading, setLoading] = useState(false);
+    const visibleLoading = useDelayedBusy(loading);
     const [error, setError] = useState('');
     useEffect(() => {
         if (!open) return;
@@ -399,7 +406,7 @@ export function BudgetMissingSheet({
         };
     }, [path, open]);
     async function confirm() {
-        const items = rows.filter((row) => selected.includes(row.key));
+        const items = (rows ?? []).filter((row) => selected.includes(row.key));
         const ok = await mutate('entries/assist', 'POST', {
             entries: items.map((row) => ({
                 type: row.type,
@@ -427,16 +434,20 @@ export function BudgetMissingSheet({
                     </SheetDescription>
                 </SheetHeader>
                 <div className="flex flex-col gap-5 px-4" aria-busy={loading}>
-                    {loading ? (
-                        <>
-                            <Skeleton className="h-20" />
-                            <Skeleton className="h-20" />
-                        </>
+                    {loading && rows === null ? (
+                        <div className="flex min-h-44 flex-col gap-4">
+                            {visibleLoading && (
+                                <>
+                                    <Skeleton className="h-20" />
+                                    <Skeleton className="h-20" />
+                                </>
+                            )}
+                        </div>
                     ) : error ? (
                         <p role="alert" className="text-destructive">
                             {error}
                         </p>
-                    ) : !rows.length ? (
+                    ) : !rows?.length ? (
                         <Empty>
                             <EmptyHeader>
                                 <EmptyTitle>Nessuna spesa mancante</EmptyTitle>
@@ -521,7 +532,9 @@ export function BudgetMissingSheet({
                                                         checked={selected.includes(
                                                             row.key,
                                                         )}
-                                                        disabled={busy}
+                                                        disabled={
+                                                            busy || loading
+                                                        }
                                                         onCheckedChange={(
                                                             checked,
                                                         ) =>
@@ -592,6 +605,7 @@ export function BudgetMissingSheet({
                             );
                         }}
                     >
+                        {busy && <Spinner />}
                         {busy
                             ? 'Salvataggio…'
                             : `Conferma selezione (${selected.length})`}

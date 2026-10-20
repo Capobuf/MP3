@@ -393,7 +393,7 @@ export default function CatalogDetail({
             <Head
                 title={`${record.display_name ?? record.name} · ${tenant.name}`}
             />
-            <div className="@container/detail page-shell">
+            <div className="@container/detail page-shell detail-enter">
                 {hasHero ? (
                     <DetailHero
                         icon={catalog === 'contracts' ? FileText : FolderKanban}
@@ -405,7 +405,7 @@ export default function CatalogDetail({
                         {headerContent}
                     </DetailHero>
                 ) : (
-                    <header className="flex detail-enter flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0 flex-1">{headerContent}</div>
                         <div className="flex shrink-0 flex-wrap items-center gap-2">
                             {headerActions}

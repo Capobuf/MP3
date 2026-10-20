@@ -75,7 +75,7 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                                     />
                                 }
                             />
-                            {displayed.map((row, index) => (
+                            {displayed.map((row) => (
                                 <Bar
                                     key={row.id}
                                     dataKey={row.id}
@@ -102,9 +102,9 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
                                         />
                                     )}
                                     isAnimationActive="auto"
-                                    animationBegin={60 + index * 60}
+                                    animationBegin={0}
                                     animationDuration={650}
-                                    animationEasing="cubic-bezier(0.22,1,0.36,1)"
+                                    animationEasing="ease-out"
                                 />
                             ))}
                         </BarChart>

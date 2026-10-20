@@ -1,4 +1,5 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
     Card,
@@ -17,6 +18,26 @@ const signedNumber = new Intl.NumberFormat('it-IT', {
     maximumFractionDigits: 1,
     signDisplay: 'exceptZero',
 });
+
+export function SummaryValue({ value }: { value: string }) {
+    const element = useRef<HTMLSpanElement>(null);
+    const previous = useRef(value);
+    useEffect(() => {
+        const changed = previous.current !== value;
+        previous.current = value;
+        if (
+            !changed ||
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        )
+            return;
+        const animation = element.current?.animate(
+            [{ opacity: 0.65 }, { opacity: 1 }],
+            { duration: 180, easing: 'ease-out' },
+        );
+        return () => animation?.cancel();
+    }, [value]);
+    return <span ref={element}>{value}</span>;
+}
 
 function ComparisonBadge({
     difference,
@@ -127,10 +148,13 @@ export function DashboardSummary({
                                     >
                                         {loading ? (
                                             <Skeleton className="skeleton-shimmer h-8 w-3/4" />
-                                        ) : current[metric] === null ? (
-                                            '—'
                                         ) : (
-                                            money(current[metric])
+                                            <SummaryValue
+                                                value={money(
+                                                    current[metric],
+                                                    '—',
+                                                )}
+                                            />
                                         )}
                                     </CardTitle>
                                     {!loading && comparable && (
@@ -157,7 +181,9 @@ export function DashboardSummary({
                             {loading ? (
                                 <Skeleton className="skeleton-shimmer h-8 w-24" />
                             ) : (
-                                percent(current.complete_percentage)
+                                <SummaryValue
+                                    value={percent(current.complete_percentage)}
+                                />
                             )}
                         </CardTitle>
                         {!loading && previous && points !== null && (

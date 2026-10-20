@@ -58,7 +58,8 @@ import {
     EmptyContent,
 } from '@/components/ui/empty';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
+import { useDelayedBusy } from '@/hooks/use-delayed-busy';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
 import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 
@@ -75,12 +76,23 @@ function BudgetHeader({
     onCopy?: () => void;
     onPrintReport?: () => void;
 }) {
+    const visibleBusy = useDelayedBusy(busy);
     return (
         <DetailHero
             icon={ChartNoAxesCombined}
             accent="budget"
             actions={
                 <>
+                    <span role="status" className="flex w-5 items-center">
+                        {visibleBusy && (
+                            <>
+                                <Spinner aria-hidden="true" />
+                                <span className="sr-only">
+                                    Aggiornamento Budget…
+                                </span>
+                            </>
+                        )}
+                    </span>
                     <Button
                         variant="outline"
                         onClick={() =>
@@ -324,7 +336,7 @@ function BudgetWorkspace({
                 year={year.year}
                 centers={props.options.cost_centers}
                 busy={busy || loading || pending}
-                loading={loading}
+                loading={loading || pending}
                 mutate={mutate}
                 typeFilter={typeFilter}
                 setTypeFilter={setTypeFilter}
@@ -448,7 +460,10 @@ export default function Budget(props: BudgetProps) {
             <Head
                 title={`Budget ${props.selectedYear} · ${props.tenant.name}`}
             />
-            <div className="page-shell">
+            <div
+                className="page-shell detail-enter"
+                aria-busy={refresh.pending}
+            >
                 {(!props.budgetYear || !props.budget) && (
                     <BudgetHeader
                         props={props}
@@ -456,17 +471,7 @@ export default function Budget(props: BudgetProps) {
                         onNewYear={createDialog}
                     />
                 )}
-                {refresh.visible && !props.budget ? (
-                    <div
-                        className="flex flex-col gap-4"
-                        role="status"
-                        aria-label="Caricamento Budget"
-                    >
-                        <Skeleton className="h-32" />
-                        <Skeleton className="h-56" />
-                        <Skeleton className="h-72" />
-                    </div>
-                ) : props.budgetYear && props.budget ? (
+                {props.budgetYear && props.budget ? (
                     <BudgetWorkspace
                         key={`${props.tenant.id}:${props.budgetYear.id}`}
                         props={props}

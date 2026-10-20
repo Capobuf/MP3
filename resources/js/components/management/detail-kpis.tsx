@@ -6,6 +6,7 @@ import {
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { money, varianceTextClass } from './helpers';
+import { SummaryValue } from './dashboard-summary';
 
 export function DetailKpis({
     allocated,
@@ -54,7 +55,7 @@ export function DetailKpis({
                                     index === 2 && varianceTextClass(variance),
                                 )}
                             >
-                                {card.value}
+                                <SummaryValue value={card.value} />
                             </CardTitle>
                         </CardHeader>
                     </Card>

@@ -40,6 +40,7 @@ import {
     EmptyTitle,
 } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useDelayedBusy } from '@/hooks/use-delayed-busy';
 import {
     Collapsible,
     CollapsibleContent,
@@ -85,6 +86,7 @@ export function AttachmentsSection({
     const [expanded, setExpanded] = useState(false);
     const [limits, setLimits] = useState<AttachmentLimits | null>(null);
     const [loading, setLoading] = useState(true);
+    const visibleLoading = useDelayedBusy(loading);
     const [loadError, setLoadError] = useState('');
     const [reload, setReload] = useState(0);
     const [errors, setErrors] = useState<string[]>([]);
@@ -469,13 +471,17 @@ export function AttachmentsSection({
                         {loading ? (
                             <div
                                 className={cn(
-                                    'flex flex-col gap-3',
+                                    'flex min-h-32 flex-col gap-3',
                                     !compact && 'min-h-48',
                                 )}
                                 aria-label="Caricamento allegati"
                             >
-                                <Skeleton className="h-14 w-full" />
-                                <Skeleton className="h-14 w-full" />
+                                {visibleLoading && (
+                                    <>
+                                        <Skeleton className="h-14 w-full" />
+                                        <Skeleton className="h-14 w-full" />
+                                    </>
+                                )}
                             </div>
                         ) : (
                             !loadError &&

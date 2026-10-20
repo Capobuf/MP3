@@ -1,5 +1,5 @@
 import { InlineEdit, saveInlineRecord } from './inline-edit';
-import { Skeleton } from '@/components/ui/skeleton';
+import { useDelayedBusy } from '@/hooks/use-delayed-busy';
 import { Link, router, usePage } from '@inertiajs/react';
 import { ArrowUpRight, Ellipsis } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -87,6 +87,7 @@ export function ExpenseTable({
     const [deleting, setDeleting] = useState<number[]>([]);
     const [unlinking, setUnlinking] = useState<number[]>([]);
     const [busy, setBusy] = useState(false);
+    const visibleLoading = useDelayedBusy(loading);
     const [error, setError] = useState('');
     const lock = useRef(false);
     const refreshing = useRef(false);
@@ -399,13 +400,13 @@ export function ExpenseTable({
                     )}
                 </div>
             )}
-            {(busy || loading) && (
-                <p role="status" className="text-sm text-muted-foreground">
-                    {busy
-                        ? 'Operazione in corso…'
-                        : 'Aggiornamento delle spese…'}
-                </p>
-            )}
+            <p role="status" className="min-h-5 text-sm text-muted-foreground">
+                {busy
+                    ? 'Operazione in corso…'
+                    : visibleLoading
+                      ? 'Aggiornamento delle spese…'
+                      : ''}
+            </p>
             {error && (
                 <p role="alert" className="text-sm text-destructive">
                     {error}
@@ -424,11 +425,8 @@ export function ExpenseTable({
                                     }
                                     className="py-10 text-center whitespace-normal text-muted-foreground"
                                 >
-                                    {loading ? (
-                                        <Skeleton className="mx-auto h-10 w-3/4" />
-                                    ) : (
-                                        'Nessuna spesa in questo perimetro. Aggiungi una spesa oppure modifica i filtri.'
-                                    )}
+                                    Nessuna spesa in questo perimetro. Aggiungi
+                                    una spesa oppure modifica i filtri.
                                 </TableCell>
                             </TableRow>
                         )}

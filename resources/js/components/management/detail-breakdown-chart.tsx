@@ -160,7 +160,7 @@ export function DetailBreakdownChart({
         />
     );
     return (
-        <Card className="@container/breakdown w-full min-w-0 detail-enter gap-4 self-start">
+        <Card className="@container/breakdown w-full min-w-0 gap-4 self-start">
             <CardHeader className="gap-3 px-5">
                 <CardTitle>Ripartizione economica</CardTitle>
                 <div className="flex items-center gap-2">
@@ -207,10 +207,7 @@ export function DetailBreakdownChart({
                     </p>
                 </div>
                 {showFlows && items.length > 0 && (
-                    <div
-                        key={metric}
-                        className="hidden detail-enter @sm/breakdown:block"
-                    >
+                    <div key={metric} className="hidden @sm/breakdown:block">
                         <ChartContainer
                             className="aspect-auto w-full"
                             style={{ height: Math.max(190, items.length * 35) }}

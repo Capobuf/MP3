@@ -58,7 +58,7 @@ export function ExpenseWorkspace({
                         />
                     ) : undefined
                 }
-                loading={refresh.visible}
+                loading={refresh.pending}
                 rows={expenses.data}
                 slug={tenant.slug}
                 options={options}
