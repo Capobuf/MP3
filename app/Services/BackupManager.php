@@ -35,7 +35,7 @@ class BackupManager
 
     public function create(?Tenant $tenant = null): string
     {
-        return BackupLock::run(function () use ($tenant): string {
+        $name = BackupLock::run(function () use ($tenant): string {
             $scope = $this->scope($tenant);
             $this->status($scope, 'running', 'Backup in corso.', true);
             $name = now()->format('Y-m-d-H-i-s').'-'.Str::uuid().'.zip';
@@ -71,6 +71,15 @@ class BackupManager
                 umask($mask);
             }
         });
+        if ($tenant === null) {
+            try {
+                app(DriveSync::class)->copyBackup($name);
+            } catch (RuntimeException) {
+                // The remote outcome is recorded separately; a verified local archive stays successful.
+            }
+        }
+
+        return $name;
     }
 
     public function restoreTenant(Tenant $tenant, string $path): void

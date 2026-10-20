@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PlatformDriveSetting;
 use App\Models\Tenant;
 use App\Services\BackupManager;
+use App\Services\DriveSync;
 use App\Services\TenantBackup;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -25,6 +27,8 @@ class BackupController extends Controller
             'archives' => $backups->archives($tenant),
             'empty' => $tenant !== null && app(TenantBackup::class)->isEmpty($tenant),
             'maxFileKb' => config('platform-backups.upload_max_kb'),
+            'drive' => $tenant === null ? PlatformDriveSetting::query()->find(1)?->only('backup_enabled', 'backup_last_name', 'backup_last_status', 'backup_last_message', 'backup_last_attempted_at') : null,
+            'driveCopies' => $tenant === null ? DB::table('drive_objects')->where('account_id', PlatformDriveSetting::query()->find(1)?->account_id)->where('object_key', 'like', 'backup-%')->get(['object_key', 'last_status', 'last_message', 'last_synced_at']) : [],
         ]);
     }
 
@@ -45,8 +49,34 @@ class BackupController extends Controller
             'frequency' => ['required', 'in:disabled,daily,weekly'],
             'time' => ['required', 'date_format:H:i'],
             'weekday' => ['required', 'integer', 'between:0,6'],
+            'drive_enabled' => ['sometimes', 'boolean'],
         ]);
-        DB::table('backup_settings')->updateOrInsert(['scope' => 'platform'], $data);
+        try {
+            app(DriveSync::class)->locked(function () use ($data): void {
+                if (array_key_exists('drive_enabled', $data)) {
+                    PlatformDriveSetting::query()->updateOrCreate(['id' => 1], ['backup_enabled' => $data['drive_enabled']]);
+                }
+                unset($data['drive_enabled']);
+                DB::table('backup_settings')->updateOrInsert(['scope' => 'platform'], $data);
+            });
+        } catch (RuntimeException $error) {
+            throw ValidationException::withMessages(['drive_enabled' => $error->getMessage()]);
+        }
+
+        return back();
+    }
+
+    public function copyToDrive(Request $request, DriveSync $sync): RedirectResponse
+    {
+        $data = $request->validate(['archive' => ['required', 'string', 'max:240', 'regex:/^[a-zA-Z0-9-]+\.zip$/D']]);
+        if (! PlatformDriveSetting::query()->find(1)?->backup_enabled) {
+            throw ValidationException::withMessages(['drive' => 'Abilita prima la copia dei backup su Drive.']);
+        }
+        try {
+            $sync->copyBackup($data['archive']);
+        } catch (RuntimeException $error) {
+            throw ValidationException::withMessages(['drive' => $error->getMessage()]);
+        }
 
         return back();
     }

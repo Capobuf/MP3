@@ -576,3 +576,131 @@ php artisan test --filter=BackupTest --stop-on-error --stop-on-failure
 
 Per l’intera suite usare il database separato `testing`, mai quello operativo:
 `php artisan test --stop-on-error --stop-on-failure`.
+
+## Google Drive: report annuali e copia dei backup
+
+**Impostazioni Piattaforma → Sync** collega un solo account Google tramite
+`google/apiclient` con lo scope `drive.file`. Solo i super admin collegano o
+scollegano l’account e abilitano gli ambienti. I membri di ogni ambiente possono
+consultarne lo stato e avviare **Sincronizza ora**, con gli stessi permessi delle
+altre impostazioni ambiente. Non sono presenti OAuth o override per tenant.
+
+### Configurazione OAuth
+
+1. In Google Cloud abilitare Google Drive API, configurare la schermata di
+   consenso e creare credenziali OAuth di tipo **Applicazione web**.
+2. Inserire **Client ID** e **Client Secret** nella pagina Sync e salvare. Il
+   secret è cifrato nel database e non viene restituito alla UI. Un campo vuoto
+   mantiene il secret salvato; un nuovo Client ID richiede il suo secret. Le
+   variabili server `GOOGLE_DRIVE_CLIENT_ID` e `GOOGLE_DRIVE_CLIENT_SECRET`
+   restano disponibili come configurazione iniziale, finché non si salva dalla UI.
+   Cambiare credenziali scollega Google e richiede un nuovo consenso; i file
+   remoti e le associazioni degli ID restano conservati.
+3. Copiare con il pulsante accanto a **URL di callback** e autorizzare
+   esattamente quell’URI in Google Cloud. Il valore predefinito
+   è `APP_URL/platform/settings/sync/callback`; `GOOGLE_DRIVE_REDIRECT_URI`
+   consente di specificare l’URL effettivo dietro un proxy. La pagina e il
+   callback devono condividere la sessione autenticata del super admin.
+4. Pubblicare l’applicazione su un hostname HTTPS per collegare Google:
+   `http://10.0.0.30:8000` non è un redirect OAuth valido. Google ammette HTTP
+   soltanto per localhost/loopback, con le eccezioni descritte nelle
+   [regole ufficiali per gli URI OAuth](https://developers.google.com/identity/protocols/oauth2/web-server#uri-validation).
+5. Invalidare la cache Laravel, aprire **Sync → Collega Google** e concedere
+   l’accesso offline all’account centrale. Un’app OAuth esterna lasciata in
+   modalità Testing può avere refresh token con scadenza di sette giorni;
+   verificare lo stato di pubblicazione secondo la
+   [documentazione Google sui token](https://developers.google.com/identity/protocols/oauth2#expiration).
+
+Access token e refresh token sono cifrati nel database con il cast Laravel,
+non restituiti al frontend. Conservare `APP_KEY` per decifrarli. Lo state OAuth
+è monouso e scade dopo dieci minuti. Disconnettere elimina le credenziali locali,
+senza revocare o cancellare file remoti. Ricollegare lo stesso account conserva
+le associazioni; un account diverso riceve cartelle proprie e azzera gli esiti
+precedenti mostrati per gli ambienti. Le associazioni del vecchio account sono
+conservate per un eventuale ricollegamento.
+
+### Report di consultazione
+
+MP3 crea inizialmente una cartella `MP3` in Il mio Drive e, alla prima sincronizzazione di ogni ambiente
+abilitato, una cartella `Nome ambiente (ID)`. Gli anni derivano esclusivamente da
+spese, righe economiche e annualità Budget effettivamente presenti: non dipendono
+dall’anno selezionato nell’interfaccia. Un ambiente senza anni crea la propria
+cartella senza inventare un file annuale.
+
+Ogni `AAAA.xlsx` contiene **Spese, Righe economiche, Contratti, Progetti, Budget**.
+Spese, righe e Budget sono limitati all’anno; contratti e progetti comprendono
+l’anagrafica completa dell’ambiente. I report riutilizzano `SectionSpreadsheet`,
+`SectionWorkbook`, `ReportSheet` e le query economiche correnti, mantenendo la
+distinzione tra importi mancanti e zero. Non sono backup o modelli di import.
+Le modifiche su Drive non rientrano in MP3 e possono essere sovrascritte.
+
+Dopo il collegamento, **Cartella di destinazione → Scegli cartella** apre il
+selettore ufficiale Google. La scelta sposta l’intera cartella `MP3`, inclusi
+report e backup esistenti, nella cartella selezionata mantenendo gli ID. La
+scelta è conservata separatamente per account Google; ricollegare lo stesso
+account la mantiene. Le sincronizzazioni successive verificano la destinazione
+salvata e segnalano cartelle mancanti o senza permessi, senza usare altri percorsi.
+Google non consente lo spostamento di questa cartella da Il mio Drive a un Drive
+condiviso tramite API: in quel caso viene mostrato un errore.
+
+In **Configurazione selettore Google** inserire la Browser API key e il numero
+numerico del progetto Google Cloud, nello stesso progetto delle credenziali
+OAuth, e abilitare Google Picker API. Non si ricava il numero dal Client ID.
+La chiave è destinata all’uso nel browser: limitarla a Google Picker API e agli
+origin consentiti secondo la [guida Google Picker](https://developers.google.com/workspace/drive/picker/guides/web-picker).
+Il selettore riutilizza l’access token centrale con scope `drive.file`:
+non aggiunge un secondo login o permessi globali su Drive. Solo il super admin
+riceve temporaneamente l’access token, da una risposta privata non memorizzabile
+in cache; refresh token e Client Secret restano sul server.
+
+Gli ID Drive vengono registrati prima delle scritture remote. I caricamenti
+successivi aggiornano lo stesso ID, anche ripetendo un tentativo interrotto;
+una cartella/file già creato e poi eliminato, spostato o cestinato produce un
+errore esplicito, senza creare copie sostitutive. Ripristinare l’oggetto nella
+cartella assegnata e riprovare. Nessuna sincronizzazione cancella file remoti,
+anche quando un anno non è più presente nei dati locali.
+
+Il comando `php artisan mp3:drive-sync` sincronizza tutti gli ambienti abilitati,
+continua sugli altri se uno fallisce e restituisce errore se almeno uno non è
+completato. Laravel Scheduler lo avvia ogni giorno alle **03:00 Europe/Rome**.
+Il server deve eseguire il consueto `php artisan schedule:run` ogni minuto;
+nell’ambiente attuale `/etc/cron.d/mp3-scheduler` esegue già il comando in
+`mp3-app`, senza Compose o nuovi processi. Le operazioni sono sincrone e usano
+un lock locale condiviso tra CLI e web, compatibile con il lock dei backup.
+Non sono supportate installazioni su host multipli con filesystem separati.
+
+Stato, ultimo tentativo, ultimo successo ed errore sono consultabili da Sync.
+Gli errori SDK vengono ridotti a fase e codice HTTP per non esporre token o
+corpi delle richieste. Una terminazione forzata può lasciare lo stato “in corso”:
+ripetere manualmente l’operazione riutilizza gli ID salvati. Gli upload usano
+il protocollo resumable e verificano il checksum del file completato.
+
+### Copia facoltativa degli archivi globali
+
+In **Impostazioni Piattaforma → Backup**, abilitare **Copia i nuovi backup globali
+su Google Drive** e salvare. La copia parte dopo creazione, verifica e rotazione
+locale dell’archivio, nella sottocartella `MP3/Backup globali`. Gli archivi già
+presenti possono essere copiati o ritentati con **Copia su Drive**, senza
+rigenerarli. Il caricamento legge il file a blocchi e non mantiene l’intero ZIP
+in memoria.
+
+L’esito locale e quello remoto restano separati nella pagina e nel comando di
+backup. Un upload fallito conserva l’archivio locale valido e registra l’errore
+remoto. Disabilitare la copia o scollegare Google non impedisce i backup locali.
+La rotazione locale non elimina le copie remote. Gli ZIP globali contengono
+anche configurazione e chiavi segrete: l’account centrale deve essere adatto a
+custodirli. Non viene aggiunto alcun ripristino o politica di retention remota.
+Gli identificativi Drive restano configurazione dell’installazione e non
+vengono trasferiti con il backup di un singolo tenant.
+
+I test di `DriveSyncTest` simulano le risposte HTTP Google usando il client
+ufficiale; coprono annualità, isolamento, null/zero, permessi, OAuth, token,
+aggiornamento per ID, interruzioni, cartelle mancanti e backup locale/remoto.
+Per eseguirli usare il database separato `testing`:
+
+```sh
+php artisan test --filter='DriveSyncTest|SpreadsheetTransferTest|BackupTest' --stop-on-error --stop-on-failure
+```
+
+La prova con un account Google reale richiede credenziali OAuth e consenso
+interattivo; i test automatici non li sostituiscono.
