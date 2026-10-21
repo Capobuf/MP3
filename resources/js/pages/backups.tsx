@@ -141,8 +141,11 @@ export default function Backups({
                     }
                 >
                     <AlertTitle>
-                        Ultima operazione
-                        {settings.last_started_at
+                        {settings.last_status === 'deferred'
+                            ? 'Backup pianificato rinviato'
+                            : 'Ultima operazione'}
+                        {settings.last_status !== 'deferred' &&
+                        settings.last_started_at
                             ? ` · ${settings.last_started_at} UTC`
                             : ''}
                     </AlertTitle>

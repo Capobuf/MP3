@@ -8,14 +8,19 @@ use App\Services\BackupManager;
 use App\Services\PlatformBackup;
 use App\Services\TenantBackup;
 use App\Support\Backups\BackupArchive;
+use App\Support\Backups\BackupBusy;
 use App\Support\Backups\BackupLock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Spatie\Backup\Events\BackupZipWasCreated;
+use Spatie\Backup\Tasks\Backup\DbDumperFactory;
+use Spatie\DbDumper\Databases\MySql;
 use Tests\TestCase;
 
 class BackupTest extends TestCase
@@ -27,6 +32,59 @@ class BackupTest extends TestCase
         parent::setUp();
         Storage::fake('backups');
         Storage::fake('attachments');
+    }
+
+    protected function tearDown(): void
+    {
+        DbDumperFactory::extend('mysql', fn () => new MySql);
+        parent::tearDown();
+    }
+
+    private function platformDump(int $times = 1, ?\Closure $duringDump = null): void
+    {
+        // Keep the real ZIP pipeline and verifier, with a small source set and a simulated SQL dump.
+        config([
+            'filesystems.disks.attachments.root' => storage_path('app/private/attachments'),
+            'backup.backup.source.files.include' => array_map(base_path(...), ['.env', 'artisan', 'composer.json', 'composer.lock', 'package-lock.json', 'bootstrap/app.php', 'routes/web.php']),
+        ]);
+        Storage::forgetDisk('attachments');
+        $dumper = \Mockery::mock(MySql::class)->makePartial();
+        $dumper->shouldReceive('dumpToFile')->times($times)->andReturnUsing(function (string $path) use ($duringDump): void {
+            $duringDump?->__invoke();
+            file_put_contents($path, '-- Simulated SQL dump for archive verification.');
+        });
+        DbDumperFactory::extend('mysql', fn () => $dumper);
+    }
+
+    private function schedule(string $time = '03:15', string $frequency = 'daily'): void
+    {
+        DB::table('backup_settings')->insert([
+            'scope' => 'platform', 'frequency' => $frequency, 'time' => $time, 'weekday' => 2,
+            'last_status' => 'success', 'last_message' => 'Backup verificato.',
+            'last_scheduled_slot' => '2026-10-19 '.$time,
+            'last_started_at' => '2026-10-19 01:15:00', 'last_finished_at' => '2026-10-19 01:16:00',
+        ]);
+    }
+
+    private function assertVerifiedPlatformArchive(): string
+    {
+        $backups = app(BackupManager::class);
+        $archives = $backups->archives();
+        $this->assertCount(1, $archives);
+        $name = $archives[0]['name'];
+        $path = $backups->path(null, $name);
+        $zip = BackupArchive::open($path);
+        try {
+            $manifest = BackupArchive::verify($zip, 'platform');
+            $this->assertSame('mysql', $manifest['database_driver']);
+            $this->assertArrayHasKey('.env', $manifest['files']);
+        } finally {
+            $zip->close();
+        }
+        app(PlatformBackup::class)->restore($path, true);
+        $this->assertSame('success', $backups->settings()['last_status']);
+
+        return $name;
     }
 
     public static function deletedSourceTypes(): array
@@ -371,13 +429,14 @@ class BackupTest extends TestCase
     #[DataProvider('commandPrefixes')]
     public function test_backup_and_restore_commands_keep_the_same_arguments_and_options(string $prefix): void
     {
-        $this->partialMock(BackupManager::class, function ($mock): void {
-            $mock->shouldReceive('create')->once()->andReturn('verified.zip');
-        });
+        $this->platformDump();
+        $this->artisan($prefix.':backup')->assertSuccessful();
+        $name = $this->assertVerifiedPlatformArchive();
+        $this->actingAs(User::factory()->create(['is_super_admin' => true]))
+            ->get('/platform/settings/backups/'.$name)->assertOk()->assertDownload($name);
         $this->mock(PlatformBackup::class, function ($mock): void {
             $mock->shouldReceive('restore')->once()->with('/private/legacy.zip', true);
         });
-        $this->artisan($prefix.':backup')->expectsOutput('Backup verificato: verified.zip')->assertSuccessful();
         $this->artisan($prefix.':restore /private/legacy.zip --verify')->expectsOutput('Archivio integro e compatibile.')->assertSuccessful();
         $this->artisan($prefix.':restore /private/legacy.zip')->expectsOutput('Usa --verify per controllare l’archivio; --force conferma il ripristino su destinazione vuota.')->assertFailed();
     }
@@ -386,13 +445,277 @@ class BackupTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-20 01:15:00', 'UTC'));
         DB::table('backup_settings')->insert(['scope' => 'platform', 'frequency' => 'daily', 'time' => '03:15', 'weekday' => 2]);
-        $this->partialMock(BackupManager::class, function ($mock): void {
-            $mock->shouldReceive('create')->once()->andReturn('verified.zip');
-        });
+        $this->platformDump();
         $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->assertVerifiedPlatformArchive();
         $this->artisan('mp3:backup --scheduled')->assertSuccessful();
         DB::table('backup_settings')->where('scope', 'platform')->update(['frequency' => 'disabled', 'last_scheduled_slot' => null]);
         $this->artisan('mp3:backup --scheduled')->assertSuccessful();
+    }
+
+    public static function retryMinutes(): array
+    {
+        return [[0], [1]];
+    }
+
+    #[DataProvider('retryMinutes')]
+    public function test_busy_scheduled_backup_does_not_consume_the_slot_or_change_dates(int $minutes): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-20 03:15:00', 'Europe/Rome'));
+        $this->schedule();
+        $this->platformDump();
+        $backups = app(BackupManager::class);
+        $before = $backups->settings();
+        BackupLock::run(fn () => $this->artisan('obake:backup --scheduled')->assertFailed()->run(), false);
+        $after = $backups->settings();
+        $this->assertSame($before['last_scheduled_slot'], $after['last_scheduled_slot']);
+        $this->assertSame($before['last_started_at'], $after['last_started_at']);
+        $this->assertSame($before['last_finished_at'], $after['last_finished_at']);
+        $this->assertSame('deferred', $after['last_status']);
+        $this->assertStringContainsString('rinviato', $after['last_message']);
+        $this->assertSame([], $backups->archives());
+        $this->actingAs(User::factory()->create(['is_super_admin' => true]))
+            ->get('/platform/settings/backups')->assertInertia(fn (Assert $page) => $page
+            ->component('backups')->where('settings.last_status', 'deferred')
+            ->where('settings.last_started_at', $before['last_started_at'])->has('archives', 0));
+        $this->travelTo(now()->addMinutes($minutes));
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->artisan('mp3:backup --scheduled')->assertSuccessful();
+        $this->travelTo(now()->addMinute());
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->assertSame('2026-10-20 03:15', $backups->settings()['last_scheduled_slot']);
+        $this->assertVerifiedPlatformArchive();
+    }
+
+    public function test_deferred_slot_survives_midnight_and_only_the_latest_slot_is_recovered(): void
+    {
+        $this->schedule('23:59');
+        $this->platformDump(2);
+        $this->travelTo(Carbon::parse('2026-10-20 23:59', 'Europe/Rome'));
+        BackupLock::run(function (): void {
+            $this->artisan('obake:backup --scheduled')->assertFailed();
+            $this->artisan('mp3:backup --scheduled')->assertFailed();
+        }, false);
+        $this->travelTo(now()->addMinute());
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->assertVerifiedPlatformArchive();
+        $this->assertDatabaseHas('backup_settings', ['last_scheduled_slot' => '2026-10-20 23:59']);
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->travelTo(Carbon::parse('2026-10-26 01:00', 'Europe/Rome'));
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->assertDatabaseHas('backup_settings', ['last_scheduled_slot' => '2026-10-25 23:59']);
+        $this->assertCount(2, app(BackupManager::class)->archives());
+    }
+
+    public function test_weekly_schedule_recovers_once_and_does_not_create_daily_backups(): void
+    {
+        $this->schedule('03:15', 'weekly');
+        $this->platformDump(2);
+        $this->travelTo(Carbon::parse('2026-10-21 12:00', 'Europe/Rome'));
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->assertVerifiedPlatformArchive();
+        $this->assertDatabaseHas('backup_settings', ['last_scheduled_slot' => '2026-10-20 03:15']);
+        foreach (range(1, 5) as $day) {
+            $this->travelTo(now()->addDay());
+            $this->artisan('obake:backup --scheduled')->assertSuccessful();
+            $this->assertCount(1, app(BackupManager::class)->archives());
+        }
+        $this->travelTo(now()->addDay());
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->assertCount(2, app(BackupManager::class)->archives());
+        $this->assertDatabaseHas('backup_settings', ['last_scheduled_slot' => '2026-10-27 03:15']);
+    }
+
+    public static function scheduleRaces(): array
+    {
+        return [['claimed'], ['disabled'], ['rescheduled']];
+    }
+
+    #[DataProvider('scheduleRaces')]
+    public function test_schedule_is_rechecked_under_the_exclusive_lock(string $race): void
+    {
+        $this->schedule();
+        $this->travelTo(Carbon::parse('2026-10-20 03:15', 'Europe/Rome'));
+        $this->platformDump($race === 'disabled' ? 0 : 1);
+        $backups = new BackupManager;
+        $reads = 0;
+        $this->partialMock(BackupManager::class, function ($mock) use ($backups, $race, &$reads): void {
+            $mock->shouldReceive('settings')->twice()->andReturnUsing(function () use ($backups, $race, &$reads): array {
+                $settings = $backups->settings();
+                if (++$reads === 1) {
+                    // Another invocation or a schedule edit completes after the first read, before locking.
+                    if ($race === 'claimed') {
+                        $this->assertNotNull($backups->createScheduled());
+                    } else {
+                        DB::table('backup_settings')->where('scope', 'platform')->update(
+                            $race === 'disabled' ? ['frequency' => 'disabled'] : ['time' => '02:00']
+                        );
+                    }
+                } else {
+                    try {
+                        BackupLock::run(fn () => $this->fail('Settings were rechecked outside the exclusive lock.'), false);
+                    } catch (BackupBusy) {
+                        $this->assertTrue(true);
+                    }
+                }
+
+                return $settings;
+            });
+        });
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->app->instance(BackupManager::class, $backups);
+        $this->assertSame(2, $reads);
+        if ($race === 'disabled') {
+            $this->assertSame([], $backups->archives());
+            $this->assertDatabaseHas('backup_settings', ['last_scheduled_slot' => '2026-10-19 03:15']);
+        } else {
+            $this->assertVerifiedPlatformArchive();
+            $this->assertDatabaseHas('backup_settings', ['last_scheduled_slot' => '2026-10-20 '.($race === 'rescheduled' ? '02:00' : '03:15')]);
+        }
+    }
+
+    #[DataProvider('scheduleRaces')]
+    public function test_deferred_status_does_not_overwrite_a_concurrent_schedule_edit(string $race): void
+    {
+        $this->schedule();
+        $this->travelTo(Carbon::parse('2026-10-20 03:15', 'Europe/Rome'));
+        $before = app(BackupManager::class)->settings();
+        $changed = false;
+        DB::connection()->beforeExecuting(function (string $query, array $bindings) use ($race, &$changed): void {
+            if (! $changed && in_array('deferred', $bindings, true) && str_starts_with($query, 'update')) {
+                $changed = true;
+                DB::table('backup_settings')->where('scope', 'platform')->update(match ($race) {
+                    'claimed' => ['last_scheduled_slot' => '2026-10-20 03:15'],
+                    'disabled' => ['frequency' => 'disabled'],
+                    'rescheduled' => ['time' => '04:00', 'weekday' => 3],
+                });
+            }
+        });
+        BackupLock::run(fn () => $this->artisan('obake:backup --scheduled')->assertFailed()->run(), false);
+        $after = app(BackupManager::class)->settings();
+        $this->assertTrue($changed);
+        foreach (['last_status', 'last_message', 'last_started_at', 'last_finished_at'] as $key) {
+            $this->assertSame($before[$key], $after[$key]);
+        }
+    }
+
+    public function test_concurrent_scheduled_attempt_preserves_running_backup_and_tenant_writes_resume(): void
+    {
+        $this->schedule();
+        $this->travelTo(Carbon::parse('2026-10-20 03:15', 'Europe/Rome'));
+        $tenant = $this->tenant('lock-test');
+        $user = User::factory()->create();
+        $tenant->users()->attach($user);
+        $this->actingAs($user);
+        $url = '/t/lock-test/vendors';
+        $this->postJson($url, ['name' => 'Before'])->assertSuccessful();
+        $this->platformDump(1, function () use ($url, $tenant): void {
+            $before = app(BackupManager::class)->settings();
+            $this->assertSame('running', $before['last_status']);
+            $this->artisan('obake:backup --scheduled')
+                ->expectsOutput('Backup pianificato rinviato: backup o salvataggio in corso. La scadenza verrà riprovata al prossimo ciclo.')
+                ->assertFailed();
+            $this->assertSame($before, app(BackupManager::class)->settings());
+            $this->postJson($url, ['name' => 'During'])->assertStatus(503);
+            $this->assertSame(['Before'], $tenant->vendors()->pluck('name')->all());
+        });
+        app(BackupManager::class)->create();
+        $this->assertVerifiedPlatformArchive();
+        $this->postJson($url, ['name' => 'After'])->assertSuccessful();
+        $this->assertSame(['Before', 'After'], $tenant->vendors()->orderBy('id')->pluck('name')->all());
+    }
+
+    public function test_failed_dump_consumes_the_slot_without_automatic_retries(): void
+    {
+        $this->schedule();
+        $this->travelTo(Carbon::parse('2026-10-20 03:15', 'Europe/Rome'));
+        $this->platformDump(1, fn () => throw new \RuntimeException('Dump error'));
+        $this->artisan('obake:backup --scheduled')->assertFailed();
+        $failed = app(BackupManager::class)->settings();
+        $this->assertSame('failed', $failed['last_status']);
+        $this->assertSame('2026-10-20 03:15', $failed['last_scheduled_slot']);
+        $this->assertStringContainsString('dump MySQL', $failed['last_message']);
+        $this->assertNotNull($failed['last_started_at']);
+        $this->assertNotNull($failed['last_finished_at']);
+        $this->travelTo(now()->addMinute());
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+        $this->assertSame($failed, app(BackupManager::class)->settings());
+        $this->assertSame([], app(BackupManager::class)->archives());
+        $this->assertSame([], Storage::disk('backups')->allFiles('.pending'));
+    }
+
+    public function test_invalid_archive_is_failed_and_is_not_retried(): void
+    {
+        $this->schedule();
+        $this->travelTo(Carbon::parse('2026-10-20 03:15', 'Europe/Rome'));
+        $this->platformDump();
+        Event::listen(BackupZipWasCreated::class, function ($event): void {
+            $zip = BackupArchive::open($event->pathToZip);
+            $zip->deleteName('artisan');
+            $zip->close();
+        });
+        $this->artisan('obake:backup --scheduled')->assertFailed();
+        $this->assertDatabaseHas('backup_settings', ['last_status' => 'failed', 'last_scheduled_slot' => '2026-10-20 03:15']);
+        $this->assertSame([], app(BackupManager::class)->archives());
+        $this->assertSame([], Storage::disk('backups')->allFiles('.pending'));
+        $this->artisan('obake:backup --scheduled')->assertSuccessful();
+    }
+
+    public function test_lock_open_failure_is_not_reported_as_a_deferral(): void
+    {
+        $this->schedule();
+        $this->travelTo(Carbon::parse('2026-10-20 03:15', 'Europe/Rome'));
+        $before = app(BackupManager::class)->settings();
+        $storage = storage_path();
+        $broken = Storage::disk('backups')->path('broken-storage');
+        mkdir($broken.'/framework/backup.lock', 0700, true);
+        $this->app->useStoragePath($broken);
+        try {
+            $this->artisan('obake:backup --scheduled')->assertFailed();
+            $this->assertSame($before, app(BackupManager::class)->settings());
+        } finally {
+            $this->app->useStoragePath($storage);
+        }
+    }
+
+    public function test_database_failure_during_deferral_is_reported_as_an_error(): void
+    {
+        $this->schedule();
+        $this->travelTo(Carbon::parse('2026-10-20 03:15', 'Europe/Rome'));
+        $before = app(BackupManager::class)->settings();
+        DB::connection()->beforeExecuting(function (string $query, array $bindings): void {
+            if (str_starts_with($query, 'update') && in_array('deferred', $bindings, true)) {
+                throw new \LogicException('Database unavailable');
+            }
+        });
+        BackupLock::run(function (): void {
+            $this->artisan('obake:backup --scheduled')
+                ->expectsOutput('Backup fallito. Verifica storage e configurazione database.')->assertFailed();
+        }, false);
+        $this->assertSame($before, app(BackupManager::class)->settings());
+    }
+
+    public static function maturedSlots(): array
+    {
+        return [
+            ['daily', '2026-10-20 01:14:00+00:00', '03:15', 2, '2026-10-19 03:15'],
+            ['weekly', '2026-10-20 01:14:00+00:00', '03:15', 2, '2026-10-13 03:15'],
+            ['weekly', '2026-10-25 04:00:00+01:00', '03:15', 0, '2026-10-25 03:15'],
+            ['daily', '2026-10-25 02:45:00+02:00', '02:30', 2, '2026-10-25 02:30'],
+            ['daily', '2026-10-25 02:45:00+01:00', '02:30', 2, '2026-10-25 02:30'],
+            ['daily', '2026-03-29 04:00:00+02:00', '02:30', 2, '2026-03-29 02:30'],
+            ['daily', '2026-03-30 01:00:00+02:00', '02:30', 2, '2026-03-29 02:30'],
+        ];
+    }
+
+    #[DataProvider('maturedSlots')]
+    public function test_latest_slot_uses_rome_calendar_and_remains_stable_across_dst(string $frequency, string $time, string $scheduledTime, int $weekday, string $slot): void
+    {
+        $settings = ['frequency' => $frequency, 'time' => $scheduledTime, 'weekday' => $weekday];
+        $now = Carbon::parse($time);
+        $this->assertSame($slot, app(BackupManager::class)->dueSlot($settings, $now));
+        $this->assertNull(app(BackupManager::class)->dueSlot([...$settings, 'last_scheduled_slot' => $slot], $now));
     }
 
     public function test_schedule_timezone_deduplication_rotation_and_write_lock(): void
@@ -400,10 +723,10 @@ class BackupTest extends TestCase
         $backups = app(BackupManager::class);
         $settings = ['frequency' => 'weekly', 'time' => '03:15', 'weekday' => 2];
         $now = Carbon::parse('2026-10-20 01:15:00', 'UTC');
-        $this->assertTrue($backups->due($settings, $now));
-        $this->assertFalse($backups->due([...$settings, 'frequency' => 'disabled'], $now));
-        $this->assertFalse($backups->due([...$settings, 'last_scheduled_slot' => '2026-10-20 03:15'], $now));
-        $this->assertFalse($backups->due($settings, $now->copy()->addDay()));
+        $this->assertSame('2026-10-20 03:15', $backups->dueSlot($settings, $now));
+        $this->assertNull($backups->dueSlot([...$settings, 'frequency' => 'disabled'], $now));
+        $this->assertNull($backups->dueSlot([...$settings, 'last_scheduled_slot' => '2026-10-20 03:15'], $now));
+        $this->assertSame('2026-10-20 03:15', $backups->dueSlot($settings, $now->copy()->addDay()));
         Storage::disk('backups')->put('platform/old.zip', 'old');
         touch(Storage::disk('backups')->path('platform/old.zip'), now()->subYears(10)->timestamp);
         Storage::disk('backups')->put('platform/new.zip', 'new');
