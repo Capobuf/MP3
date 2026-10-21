@@ -29,6 +29,11 @@ class BackupTest extends TestCase
         Storage::fake('attachments');
     }
 
+    public static function deletedSourceTypes(): array
+    {
+        return [[null], ['expense'], ['contract'], ['project']];
+    }
+
     private function tenant(string $slug): Tenant
     {
         return Tenant::create(['name' => $slug, 'slug' => $slug]);
@@ -64,7 +69,8 @@ class BackupTest extends TestCase
         return [$tenant, $user];
     }
 
-    public function test_tenant_round_trip_preserves_relations_settings_files_and_other_tenants(): void
+    #[DataProvider('deletedSourceTypes')]
+    public function test_tenant_round_trip_preserves_relations_settings_files_and_other_tenants(?string $type): void
     {
         [$source, $user] = $this->fixture();
         $other = $this->tenant('other');
@@ -72,6 +78,16 @@ class BackupTest extends TestCase
         $other->vendors()->create(['name' => 'Intatto']);
         $before = $user->fresh()->getRawOriginal();
         $backups = app(BackupManager::class);
+        if ($type !== null) {
+            $this->actingAs(User::factory()->create(['is_super_admin' => true]));
+            $removed = $source->{$type.'s'}()->create([$type === 'expense' ? 'title' : 'name' => 'Da eliminare', 'year' => 2026]);
+            $budgetYear = $source->budgetYears()->sole();
+            $url = '/t/source/budget/years/'.$budgetYear->id.'/entries';
+            $this->postJson($url, ['entries' => [['type' => $type, 'source_id' => $removed->id]]])->assertOk();
+            $entry = $budgetYear->entries()->where($type.'_id', $removed->id)->sole();
+            $this->patchJson($url, ['action' => 'remove', 'ids' => [$entry->id]])->assertOk();
+            $this->deleteJson('/t/source/'.$type.'s/'.$removed->id)->assertOk();
+        }
         $name = $backups->create($source);
         $path = $backups->path($source, $name);
         $zip = BackupArchive::open($path);
@@ -83,6 +99,9 @@ class BackupTest extends TestCase
         $zip->close();
         $target = $this->tenant('destination');
         $backups->restoreTenant($target, $path);
+        foreach (['expenses', 'contracts', 'projects', 'budgetYears', 'budgetEntries', 'attachments'] as $relation) {
+            $this->assertSame($source->{$relation}()->count(), $target->{$relation}()->count());
+        }
         $this->assertSame('destination', $target->fresh()->name);
         $this->assertSame($source->fresh()->contract_reminders, $target->fresh()->contract_reminders);
         $this->assertSame([$user->id], $target->users()->pluck('users.id')->all());

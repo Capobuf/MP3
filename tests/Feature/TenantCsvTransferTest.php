@@ -16,6 +16,11 @@ class TenantCsvTransferTest extends TestCase
 {
     use RefreshDatabase;
 
+    public static function deletedSourceTypes(): array
+    {
+        return [[null], ['expense'], ['contract'], ['project']];
+    }
+
     private function setupTenants(): array
     {
         $this->actingAs(User::factory()->create(['is_super_admin' => true]));
@@ -111,7 +116,8 @@ class TenantCsvTransferTest extends TestCase
         }
     }
 
-    public function test_round_trip_preserves_values_relationships_budget_and_timestamps_with_new_ids(): void
+    #[DataProvider('deletedSourceTypes')]
+    public function test_round_trip_preserves_values_relationships_budget_and_timestamps_with_new_ids(?string $type): void
     {
         [$source, $target] = $this->setupTenants();
         $vendor = $source->vendors()->create(['name' => '=Alfa', 'vat_number' => '001234', 'notes' => "Note, con virgole\nseconda riga", 'email' => 'a@example.com']);
@@ -139,6 +145,16 @@ class TenantCsvTransferTest extends TestCase
         $attachment = $expense->attachments()->make(['original_name' => 'a.pdf', 'path' => 'private/test.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'disk' => 'local']);
         $attachment->tenant_id = $source->id;
         $attachment->save();
+        if ($type !== null) {
+            $this->actingAs(User::factory()->create(['is_super_admin' => true]));
+            $removed = $source->{$type.'s'}()->create([$type === 'expense' ? 'title' : 'name' => 'Da eliminare', 'year' => 2026]);
+            $budgetYear = $source->budgetYears()->sole();
+            $url = '/t/origine/budget/years/'.$budgetYear->id.'/entries';
+            $this->postJson($url, ['entries' => [['type' => $type, 'source_id' => $removed->id]]])->assertOk();
+            $entry = $budgetYear->entries()->where($type.'_id', $removed->id)->sole();
+            $this->patchJson($url, ['action' => 'remove', 'ids' => [$entry->id]])->assertOk();
+            $this->deleteJson('/t/origine/'.$type.'s/'.$removed->id)->assertOk();
+        }
         $download = $this->get('/t/origine/settings/data/export.csv')->assertOk();
         $csv = $download->streamedContent();
         $this->assertStringNotContainsString('original_name', $csv);
@@ -168,6 +184,9 @@ class TenantCsvTransferTest extends TestCase
         $this->assertNull($newLegacy->allocated_amount);
         $this->assertSame('0.00', $newLegacy->actual_amount);
         $newYear = $target->budgetYears()->firstOrFail();
+        foreach (['expenses', 'contracts', 'projects', 'budgetYears', 'budgetEntries'] as $relation) {
+            $this->assertSame($source->{$relation}()->count(), $target->{$relation}()->count());
+        }
         $this->assertSame(['expense:'.$newLegacy->id], $newYear->dismissed_sources);
         $this->assertFalse($newYear->entries()->where('type', 'expense')->firstOrFail()->included);
         $this->assertSame($new->contract_id, $newYear->entries()->where('type', 'contract')->firstOrFail()->contract_id);

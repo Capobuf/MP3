@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class AnnualBudgetTest extends TestCase
@@ -60,6 +61,66 @@ class AnnualBudgetTest extends TestCase
     private function state(): array
     {
         return app(AnnualBudget::class)->snapshot($this->tenant, $this->year);
+    }
+
+    public static function sourceTypes(): array
+    {
+        return [['expense'], ['contract'], ['project']];
+    }
+
+    #[DataProvider('sourceTypes')]
+    public function test_deleting_a_removed_source_cleans_all_years_and_preserves_other_sources(string $type): void
+    {
+        $attributes = [$type === 'expense' ? 'title' : 'name' => 'Sorgente', 'year' => 2026];
+        $source = $this->tenant->{$type.'s'}()->create($attributes);
+        $kept = $this->tenant->{$type.'s'}()->create($attributes);
+        $other = Tenant::create(['name' => 'Altro', 'slug' => 'altro']);
+        $foreign = $other->{$type.'s'}()->create($attributes);
+        $foreignYear = $other->budgetYears()->create(['year' => 2026, 'dismissed_sources' => [$type.':'.$foreign->id]]);
+        $past = $this->tenant->budgetYears()->create(['year' => 2025, 'dismissed_sources' => [$type.':'.$source->id, $type.':'.$kept->id]]);
+        $state = $this->add($type, $source->id);
+        $entry = $state['entries'][0]['id'];
+        $this->patchJson($this->url(), ['action' => 'exclude', 'ids' => [$entry]])->assertOk();
+        $this->deleteJson('/t/budget/'.$type.'s/'.$source->id)->assertUnprocessable();
+        $this->assertSame([$type.':'.$source->id, $type.':'.$kept->id], $past->fresh()->dismissed_sources);
+        $this->patchJson($this->url(), ['action' => 'remove', 'ids' => [$entry]])->assertOk();
+        $this->assertSame([$type.':'.$source->id], $this->year->fresh()->dismissed_sources);
+        $this->deleteJson('/t/budget/'.$type.'s/'.$source->id)->assertOk();
+        $this->assertDatabaseMissing($type.'s', ['id' => $source->id]);
+        $this->assertSame([], $this->year->fresh()->dismissed_sources);
+        $this->assertSame([$type.':'.$kept->id], $past->fresh()->dismissed_sources);
+        $this->assertSame([$type.':'.$foreign->id], $foreignYear->fresh()->dismissed_sources);
+    }
+
+    public function test_orphan_cleanup_is_idempotent_and_preserves_valid_references_and_economic_data(): void
+    {
+        $other = Tenant::create(['name' => 'Altro', 'slug' => 'altro']);
+        $valid = $foreign = $orphaned = [];
+        foreach (['expense', 'contract', 'project'] as $type) {
+            $attributes = [$type === 'expense' ? 'title' : 'name' => 'Conserva', 'year' => 2026];
+            $record = $this->tenant->{$type.'s'}()->create($attributes);
+            $valid[] = $type.':'.$record->id;
+            $foreign[] = $type.':'.$other->{$type.'s'}()->create($attributes)->id;
+            $deleted = $this->tenant->{$type.'s'}()->create($attributes);
+            $orphaned[] = $type.':'.$deleted->id;
+            $deleted->delete();
+        }
+        $state = $this->addExpense(['title' => 'Economia intatta', 'allocated_amount' => '-12.34', 'actual_amount' => '0.00']);
+        $this->year->update(['dismissed_sources' => [...$orphaned, ...$valid, ...$foreign]]);
+        $past = $this->tenant->budgetYears()->create(['year' => 2025, 'dismissed_sources' => $orphaned]);
+        $empty = $this->tenant->budgetYears()->create(['year' => 2027]);
+        $foreignYear = $other->budgetYears()->create(['year' => 2026, 'dismissed_sources' => $foreign]);
+        $migration = require database_path('migrations/2026_10_21_000000_remove_orphaned_dismissed_budget_sources.php');
+        $migration->up();
+        $this->assertSame($valid, $this->year->fresh()->dismissed_sources);
+        $this->assertSame([], $past->fresh()->dismissed_sources);
+        $this->assertNull($empty->fresh()->dismissed_sources);
+        $this->assertSame($foreign, $foreignYear->fresh()->dismissed_sources);
+        $this->assertSame($state['totals'], $this->state()['totals']);
+        $this->assertSame($state['entries'], $this->state()['entries']);
+        $before = DB::table('budget_years')->orderBy('id')->get()->toJson();
+        $migration->up();
+        $this->assertSame($before, DB::table('budget_years')->orderBy('id')->get()->toJson());
     }
 
     public function test_moving_a_line_year_moves_budget_totals_without_changing_historical_dates(): void
