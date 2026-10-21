@@ -520,6 +520,71 @@ class AnnualBudgetTest extends TestCase
         $this->deleteJson('/t/budget/expenses/'.$expense->id)->assertOk();
     }
 
+    public function test_unnamed_contracts_can_be_selected_and_added_once_without_changing_source_data(): void
+    {
+        $contract = $this->tenant->contracts()->create(['name' => null, 'year' => 2026]);
+        $expense = $this->tenant->expenses()->create(['title' => 'Canone', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '120.25', 'actual_amount' => '100.01']);
+        $before = $expense->fresh()->getAttributes();
+        $url = '/t/budget/budget/options?type=contract&year=2026';
+        foreach (['', '&search=', '&search=%20%20'] as $search) {
+            $this->getJson($url.$search)->assertOk()->assertExactJson([
+                'records' => [['id' => $contract->id, 'name' => 'Contratto senza nome']],
+                'page' => 1, 'last_page' => 1, 'total' => 1,
+            ]);
+        }
+        $this->getJson($url.'&id='.$contract->id)->assertOk()
+            ->assertJsonPath('record.name', null)->assertJsonPath('record.display_name', 'Contratto senza nome');
+
+        $first = $this->add('contract', $contract->id);
+        $this->assertSame($first, $this->add('contract', $contract->id));
+        $this->getJson($this->url(''))->assertOk()->assertJsonCount(1, 'budget.entries')
+            ->assertJsonPath('budget.entries.0.source_id', $contract->id)
+            ->assertJsonPath('budget.entries.0.description', 'Contratto senza nome')
+            ->assertJsonPath('budget.totals.allocated', '120.25')->assertJsonPath('budget.totals.actual', '100.01');
+        $this->assertSame(1, $this->year->entries()->where('contract_id', $contract->id)->count());
+        $this->assertNull($contract->fresh()->name);
+        $this->assertSame($before, $expense->fresh()->getAttributes());
+    }
+
+    #[DataProvider('sourceTypes')]
+    public function test_source_options_preserve_search_pagination_and_source_boundaries(string $type): void
+    {
+        $field = $type === 'expense' ? 'title' : 'name';
+        $relation = $this->tenant->{$type.'s'}();
+        $ids = [];
+        for ($i = 0; $i < 51; $i++) {
+            $ids[] = $relation->create([$field => 'Sorgente', 'year' => 2026])->id;
+        }
+        $zero = $relation->create([$field => '0', 'year' => 2026]);
+        $past = $relation->create([$field => 'Sorgente', 'year' => 2025]);
+        $other = Tenant::create(['name' => 'Altro', 'slug' => 'altro']);
+        $foreign = $other->{$type.'s'}()->create([$field => 'Sorgente', 'year' => 2026]);
+        $invalid = [$past->id, $foreign->id];
+        if ($type === 'expense') {
+            foreach (['contract', 'project'] as $container) {
+                $source = $this->tenant->{$container.'s'}()->create(['name' => 'Contenitore', 'year' => 2026]);
+                $invalid[] = $relation->create(['title' => 'Sorgente', 'year' => 2026, $container.'_id' => $source->id])->id;
+            }
+        }
+        $url = '/t/budget/budget/options?year=2026&type='.$type;
+        $first = $this->getJson($url)->assertOk()->assertJsonPath('total', 52)
+            ->assertJsonPath('last_page', 2)->assertJsonCount(50, 'records')->json('records');
+        $second = $this->getJson($url.'&page=2')->assertOk()->assertJsonPath('page', 2)
+            ->assertJsonCount(2, 'records')->json('records');
+        $this->assertSame([$zero->id, ...$ids], array_column([...$first, ...$second], 'id'));
+        $this->getJson($url.'&search=Sorgente&page=2')->assertOk()->assertJsonPath('total', 51)
+            ->assertJsonPath('records.0', ['id' => $ids[50], 'name' => 'Sorgente'])->assertJsonCount(1, 'records');
+        $this->getJson($url.'&search=0')->assertOk()->assertJsonCount(1, 'records')
+            ->assertJsonPath('records.0', ['id' => $zero->id, 'name' => '0']);
+        $this->getJson($url.'&search=Assente')->assertOk()->assertJsonCount(0, 'records');
+        $this->getJson($url.'&id='.$ids[0])->assertOk()->assertJsonPath('record.id', $ids[0]);
+        foreach ($invalid as $id) {
+            $this->getJson($url.'&id='.$id)->assertNotFound();
+            $this->postJson($this->url(), ['entries' => [['type' => $type, 'source_id' => $id]]])->assertUnprocessable();
+        }
+        $this->assertSame(0, $this->year->entries()->count());
+    }
+
     public function test_search_is_not_limited_to_initial_options_and_reordering_is_persistent(): void
     {
         for ($i = 0; $i < 110; $i++) {

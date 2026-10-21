@@ -80,9 +80,9 @@ class BudgetController extends Controller
             return response()->json(['record' => $record]);
         }
         $field = $data['type'] === 'expense' ? 'title' : 'name';
-        $records = $relation->where($field, 'like', '%'.($data['search'] ?? '').'%')->orderBy($field)->orderBy('id')->paginate(50);
+        $records = $relation->when($request->filled('search'), fn ($query) => $query->where($field, 'like', '%'.$data['search'].'%'))->orderBy($field)->orderBy('id')->paginate(50);
 
-        return response()->json(['records' => $records->getCollection()->map(fn ($record) => ['id' => $record->id, 'name' => $record->getAttribute($field)]), 'page' => $records->currentPage(), 'last_page' => $records->lastPage(), 'total' => $records->total()]);
+        return response()->json(['records' => $records->getCollection()->map(fn ($record) => ['id' => $record->id, 'name' => $record->getAttribute($data['type'] === 'contract' ? 'display_name' : $field)]), 'page' => $records->currentPage(), 'last_page' => $records->lastPage(), 'total' => $records->total()]);
     }
 
     public function store(BudgetEntriesRequest $request, Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
