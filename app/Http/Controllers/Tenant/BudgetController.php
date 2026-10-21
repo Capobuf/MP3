@@ -195,12 +195,6 @@ class BudgetController extends Controller
                         }
                         $entry->delete();
                         $files->delete($expense);
-                        foreach ($tenant->budgetYears()->orderBy('id')->lockForUpdate()->get() as $linkedYear) {
-                            $dismissed = array_values(array_diff($linkedYear->dismissed_sources ?? [], ['expense:'.$expense->id]));
-                            if ($dismissed !== ($linkedYear->dismissed_sources ?? [])) {
-                                $linkedYear->update(['dismissed_sources' => $dismissed]);
-                            }
-                        }
                         break;
                     case 'update':
                         $entry->update($data['changes'] ?? []);

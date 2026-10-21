@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class UndoTest extends TestCase
@@ -42,6 +43,94 @@ class UndoTest extends TestCase
     private function redo(int $id): void
     {
         $this->postJson('/t/alfa/undo/restore', ['action_id' => $id])->assertOk();
+    }
+
+    public static function deletionPaths(): array
+    {
+        return [['expense', 'ordinary'], ['contract', 'ordinary'], ['project', 'ordinary'], ['expense', 'batch'], ['expense', 'budget']];
+    }
+
+    #[DataProvider('deletionPaths')]
+    public function test_source_deletion_undo_and_redo_restore_dismissals_and_attachment_bytes(string $type, string $path): void
+    {
+        $source = $this->tenant->{$type.'s'}()->create([$type === 'expense' ? 'title' : 'name' => 'Da eliminare', 'year' => 2026]);
+        $key = $type.':'.$source->id;
+        $year = $this->tenant->budgetYears()->create(['year' => 2026]);
+        $past = $this->tenant->budgetYears()->create(['year' => 2025, 'dismissed_sources' => [$key]]);
+        $entry = $year->entries()->create(['tenant_id' => $this->tenant->id, 'type' => $type, $type.'_id' => $source->id]);
+        $url = '/t/alfa/budget/years/'.$year->id.'/entries';
+        if ($path !== 'budget') {
+            $this->patchJson($url, ['action' => 'remove', 'ids' => [$entry->id]])->assertOk();
+        }
+        $disk = Storage::disk('attachments');
+        $disk->put('original.txt', 'Originale');
+        $file = $source->attachments()->forceCreate(['tenant_id' => $this->tenant->id, 'disk' => 'attachments', 'path' => 'original.txt',
+            'original_name' => 'file.txt', 'mime_type' => 'text/plain', 'size_bytes' => 9, 'uploaded_by' => $this->user->id]);
+        if ($path === 'budget') {
+            $this->patchJson($url, ['action' => 'delete_expense', 'ids' => [$entry->id]])->assertOk();
+        } elseif ($path === 'batch') {
+            $second = $this->tenant->expenses()->create(['title' => 'Seconda', 'year' => 2026]);
+            $year->update(['dismissed_sources' => [$key, 'expense:'.$second->id]]);
+            $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$source->id, $second->id]])->assertOk();
+        } else {
+            $this->deleteJson('/t/alfa/'.$type.'s/'.$source->id)->assertOk();
+        }
+        $this->assertDatabaseMissing($type.'s', ['id' => $source->id]);
+        $this->assertSame([], $past->fresh()->dismissed_sources);
+        $this->assertSame($path === 'budget' ? null : [], $year->fresh()->dismissed_sources);
+        $disk->assertMissing($file->path);
+        $id = $this->undo();
+        $this->assertDatabaseHas($type.'s', ['id' => $source->id]);
+        $this->assertSame([$key], $past->fresh()->dismissed_sources);
+        $expected = $path === 'batch' ? [$key, 'expense:'.$second->id] : [$key];
+        $this->assertSame($path === 'budget' ? null : $expected, $year->fresh()->dismissed_sources);
+        $this->assertSame($path === 'budget', $year->entries()->whereKey($entry->id)->exists());
+        $this->assertDatabaseHas('attachments', ['id' => $file->id]);
+        $this->assertSame('Originale', $disk->get($file->path));
+        $this->redo($id);
+        $this->assertDatabaseMissing($type.'s', ['id' => $source->id]);
+        $this->assertSame([], $past->fresh()->dismissed_sources);
+        $this->assertSame($path === 'budget' ? null : [], $year->fresh()->dismissed_sources);
+        $this->assertDatabaseMissing('attachments', ['id' => $file->id]);
+        $disk->assertMissing($file->path);
+    }
+
+    public function test_failed_batch_deletion_rolls_back_dismissals_records_and_files(): void
+    {
+        $first = $this->tenant->expenses()->create(['title' => 'Prima', 'year' => 2026]);
+        $second = $this->tenant->expenses()->create(['title' => 'Bloccata', 'year' => 2026]);
+        $keys = ['expense:'.$first->id, 'expense:'.$second->id];
+        $year = $this->tenant->budgetYears()->create(['year' => 2026, 'dismissed_sources' => $keys]);
+        $other = $this->tenant->budgetYears()->create(['year' => 2025]);
+        $entry = $other->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $second->id, 'included' => false]);
+        $disk = Storage::disk('attachments');
+        $disk->put('original.txt', 'Originale');
+        $file = $first->attachments()->forceCreate(['tenant_id' => $this->tenant->id, 'disk' => 'attachments', 'path' => 'original.txt',
+            'original_name' => 'file.txt', 'mime_type' => 'text/plain', 'size_bytes' => 9, 'uploaded_by' => $this->user->id]);
+        $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$first->id, $second->id]])->assertUnprocessable();
+        $this->assertDatabaseHas('expenses', ['id' => $first->id]);
+        $this->assertDatabaseHas('expenses', ['id' => $second->id]);
+        $this->assertDatabaseHas('budget_entries', ['id' => $entry->id]);
+        $this->assertSame($keys, $year->fresh()->dismissed_sources);
+        $this->assertDatabaseHas('attachments', ['id' => $file->id]);
+        $this->assertSame('Originale', $disk->get($file->path));
+        $this->assertSame(['original.txt'], $disk->allFiles());
+        $this->assertDatabaseCount('undo_actions', 0);
+    }
+
+    public function test_orphan_cleanup_does_not_rewrite_history_fingerprints(): void
+    {
+        $year = $this->tenant->budgetYears()->create(['year' => 2026, 'dismissed_sources' => ['expense:999999']]);
+        $this->postJson('/t/alfa/vendors', ['name' => 'Prima della correzione'])->assertCreated();
+        $action = UndoAction::sole();
+        $before = $action->getRawOriginal();
+        $migration = require database_path('migrations/2026_10_21_000000_remove_orphaned_dismissed_budget_sources.php');
+        $migration->up();
+        $this->assertSame([], $year->fresh()->dismissed_sources);
+        $this->assertSame($before, $action->fresh()->getRawOriginal());
+        $this->postJson('/t/alfa/undo')->assertConflict();
+        $this->assertDatabaseHas('vendors', ['name' => 'Prima della correzione']);
+        $this->assertNull($action->fresh()->undone_at);
     }
 
     public function test_saved_changes_can_be_undone_in_order_and_restored_with_original_ids(): void
