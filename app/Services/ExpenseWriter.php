@@ -23,13 +23,10 @@ class ExpenseWriter
         });
     }
 
-    /**
-     * @param  array<string, mixed>  $data
-     * @param  array<int, Expense>  $pending
-     */
-    public function persist(Expense $expense, array $data, array $pending = [], bool $write = true): void
+    /** @param array<string, mixed> $data */
+    public function persist(Expense $expense, array $data, bool $write = true): void
     {
-        if ($expense->exists && $expense->source_expense_id !== null && isset($data['year']) && (int) $data['year'] !== $expense->year) {
+        if ($expense->exists && $expense->source_expense_id !== null && isset($data['year']) && (int) $data['year'] !== $expense->getOriginal('year')) {
             throw ValidationException::withMessages(['year' => 'L’anno di una spesa importata non può essere cambiato. Importala nel Budget dell’anno successivo.']);
         }
         $hasLines = $expense->exists && $expense->lines()->exists();

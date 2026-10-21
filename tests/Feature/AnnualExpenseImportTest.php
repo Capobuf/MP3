@@ -4,10 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Expense;
 use App\Models\Tenant;
+use App\Models\UndoAction;
 use App\Models\User;
 use App\Services\ExpenseWriter;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class AnnualExpenseImportTest extends TestCase
@@ -28,6 +30,51 @@ class AnnualExpenseImportTest extends TestCase
         $row = collect($this->getJson($path)->assertOk()->json('expenses'))->firstWhere('id', $id);
 
         return ['id' => $id, 'token' => $row['token']];
+    }
+
+    public function test_imported_year_is_immutable_in_single_and_batch_updates(): void
+    {
+        [$tenant, $year, $path] = $this->context();
+        $source = app(ExpenseWriter::class)->create($tenant, ['title' => 'Originale', 'year' => 2026, 'lines' => [
+            ['description' => 'Canone', 'type' => 'allocated', 'unit_price' => '100', 'quantity' => '2'],
+        ]]);
+        $this->postJson($path, ['expenses' => [$this->selection($path, $source->id)]])->assertOk();
+        $copy = $tenant->expenses()->where('source_expense_id', $source->id)->sole();
+        $before = $copy->load('lines', 'costCenters')->toArray();
+        $entry = $year->entries()->sole()->toArray();
+        $undoCount = UndoAction::count();
+
+        foreach (['single', 'batch'] as $mode) {
+            $response = $mode === 'single'
+                ? $this->patchJson('/t/annual/expenses/'.$copy->id, ['year' => 2028])
+                : $this->patchJson('/t/annual/expenses/batch', ['updates' => [['id' => $copy->id, 'year' => 2028]]]);
+            $this->assertSame($before, $copy->fresh()->load('lines', 'costCenters')->toArray(), $mode.' returned HTTP '.$response->status());
+            $response->assertUnprocessable()->assertJsonValidationErrors($mode === 'single' ? 'year' : 'updates.0.year');
+            $this->assertSame($entry, $year->entries()->sole()->toArray());
+            $this->assertSame($undoCount, UndoAction::count());
+        }
+
+        foreach ([['year' => 2027, 'title' => 'Stesso anno'], ['notes' => 'Anno omesso']] as $update) {
+            $this->patchJson('/t/annual/expenses/'.$copy->id, $update)->assertOk();
+            $this->patchJson('/t/annual/expenses/batch', ['updates' => [['id' => $copy->id, ...$update]]])->assertOk();
+            $this->assertSame(2027, $copy->refresh()->year);
+            $this->assertSame($source->id, $copy->source_expense_id);
+            $this->assertSame($before['lines'], $copy->lines->toArray());
+            $this->assertSame($entry, $year->entries()->sole()->toArray());
+        }
+        $this->assertSame('Stesso anno', $copy->title);
+        $this->assertSame('Anno omesso', $copy->notes);
+        $this->assertSame(2026, $source->refresh()->year);
+        $this->assertSame('Originale', $source->title);
+
+        $copy->fill(['year' => 2028]);
+        try {
+            app(ExpenseWriter::class)->persist($copy, ['year' => 2028]);
+            $this->fail('A prefilled model must not bypass the imported year validation.');
+        } catch (ValidationException $error) {
+            $this->assertArrayHasKey('year', $error->errors());
+        }
+        $this->assertSame(2027, $copy->fresh()->year);
     }
 
     public function test_preview_uses_economic_year_and_excludes_every_linked_expense_without_populating_budget(): void

@@ -74,7 +74,7 @@ class SpreadsheetImport
                 if ($status === 'new' && $resource === 'expenses') {
                     $expense = $tenant->expenses()->make();
                     $expense->setAttribute('id', -$row['row']);
-                    app(ExpenseWriter::class)->persist($expense, $data, $pending, false);
+                    app(ExpenseWriter::class)->persist($expense, $data, write: false);
                     if ($warning = ExpensePeriods::overlapWarning($expense, $pending)) {
                         $plan['warnings'][] = $warning;
                     }

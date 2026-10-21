@@ -323,15 +323,33 @@ class SpreadsheetTransferTest extends TestCase
 
     public function test_overlapping_expenses_import_with_warnings(): void
     {
-        $this->tenant()->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
+        $tenant = $this->tenant();
+        $contract = $tenant->contracts()->create(['year' => 2026, 'name' => 'Contratto']);
         $file = $this->file('expenses', [
             ['Canone', 2026, null, 'Contratto', null, null, '2026-01-01', '2026-12-31', 1000, null, null],
             ['Formazione', 2026, null, 'Contratto', null, null, '2026-06-01', '2026-12-31', 500, null, null],
         ]);
         $preview = $this->postJson('/t/ambiente/expenses/import/preview', ['file' => $file])->assertOk()
-            ->assertJsonPath('error_count', 0)->assertJsonCount(1, 'warnings');
+            ->assertJsonPath('error_count', 0)->assertJsonPath('new', 2)->assertJsonCount(1, 'warnings');
+        $this->assertDatabaseCount('expenses', 0);
+        $this->assertDatabaseCount('expense_lines', 0);
+        $this->assertDatabaseCount('undo_actions', 0);
         $this->postJson('/t/ambiente/expenses/import/commit', ['file' => $file, 'token' => $preview->json('token')])
             ->assertOk()->assertJsonCount(1, 'warnings')->assertJsonPath('created', 2);
+        foreach (['Canone' => ['1000.00', '2026-01-01'], 'Formazione' => ['500.00', '2026-06-01']] as $title => [$amount, $start]) {
+            $expense = $tenant->expenses()->where('title', $title)->sole();
+            $this->assertSame($contract->id, $expense->contract_id);
+            $this->assertSame(2026, $expense->year);
+            $this->assertSame($amount, $expense->allocated_amount);
+            $this->assertNull($expense->actual_amount);
+            $this->assertSame($start, $expense->period_starts_on->toDateString());
+            $this->assertSame('2026-12-31', $expense->period_ends_on->toDateString());
+            $line = $expense->lines()->sole();
+            $this->assertSame($amount, $line->total);
+            $this->assertSame(2026, $line->year);
+            $this->assertSame($start, $line->period_starts_on->toDateString());
+            $this->assertSame('2026-12-31', $line->period_ends_on->toDateString());
+        }
     }
 
     public function test_invalid_references_block_the_file_while_overlaps_only_warn(): void
