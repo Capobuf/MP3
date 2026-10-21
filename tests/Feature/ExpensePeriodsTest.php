@@ -350,6 +350,84 @@ class ExpensePeriodsTest extends TestCase
         $this->assertSame($destination->id, $second->refresh()->contract_id);
     }
 
+    public function test_invalid_line_periods_reject_single_and_batch_updates_without_saving_changes(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $expenses = [];
+        foreach (['Prima', 'Seconda'] as $title) {
+            $response = $this->postJson('/t/periodi/expenses', [
+                'title' => $title, 'year' => 2026, 'vendor_id' => $vendor->id,
+                'cost_center_ids' => [$center->id],
+                'lines' => [$this->line('allocated', '100'), $this->line('actual', '80')],
+            ])->assertCreated();
+            $expenses[] = Expense::findOrFail($response->json('record.id'));
+        }
+        $before = array_map(fn ($expense) => $expense->load(['lines', 'costCenters'])->toArray(), $expenses);
+        $valid = [...$this->line('allocated', '200'), 'year' => 2026,
+            'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31'];
+        foreach ([
+            [['period_starts_on' => '2026-12-31', 'period_ends_on' => '2026-01-01'], 'period_ends_on'],
+            [['period_starts_on' => '2026-01-01', 'period_ends_on' => null], 'period_ends_on'],
+            [['period_starts_on' => null, 'period_ends_on' => '2026-12-31'], 'period_starts_on'],
+            [['period_starts_on' => '2026-01-01'], 'period_ends_on'],
+            [['period_ends_on' => '2026-12-31'], 'period_starts_on'],
+        ] as [$period, $field]) {
+            $invalid = [...$this->line('actual', '90'), 'year' => 2026, ...$period];
+            $changes = ['title' => 'Non salvare', 'vendor_id' => null, 'cost_center_ids' => [], 'lines' => [$invalid, $valid]];
+            $this->patchJson('/t/periodi/expenses/'.$expenses[1]->id, $changes)
+                ->assertUnprocessable()->assertJsonValidationErrors('lines.0.'.$field);
+            $this->patchJson('/t/periodi/expenses/batch', ['updates' => [
+                ['id' => $expenses[0]->id, 'title' => 'Non salvare', 'vendor_id' => null,
+                    'cost_center_ids' => [], 'lines' => [$valid, $valid]],
+                ['id' => $expenses[1]->id, ...$changes],
+            ]])->assertUnprocessable()->assertJsonValidationErrors('updates.1.lines.0.'.$field);
+            foreach ($expenses as $index => $expense) {
+                $this->assertSame($before[$index], $expense->refresh()->load(['lines', 'costCenters'])->toArray());
+            }
+        }
+    }
+
+    public function test_batch_line_periods_are_paired_with_their_own_row_and_preserve_economic_data(): void
+    {
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $updates = [];
+        foreach ([['2027-06-01', '2027-06-30'], ['2026-01-01', '2026-01-01']] as [$start, $end]) {
+            $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026,
+                'contract_id' => $this->contract->id]);
+            $expense->costCenters()->attach($center);
+            $updates[] = ['id' => $expense->id, 'lines' => [
+                [...$this->line('allocated', '100'), 'year' => 2026, 'period_starts_on' => $start, 'period_ends_on' => $end],
+                [...$this->line('actual', '80'), 'year' => 2027, 'period_starts_on' => '2025-01-01', 'period_ends_on' => '2025-01-01'],
+                [...$this->line('allocated', '20'), 'year' => 2026, 'period_starts_on' => null, 'period_ends_on' => null],
+                [...$this->line('actual', '10'), 'year' => 2027],
+            ]];
+        }
+        $this->patchJson('/t/periodi/expenses/batch', ['updates' => $updates])->assertOk();
+        foreach ($updates as $update) {
+            $expense = Expense::findOrFail($update['id']);
+            $this->assertSame('120.00', $expense->allocated_amount);
+            $this->assertSame('90.00', $expense->actual_amount);
+            $this->assertSame(2026, $expense->year);
+            $this->assertSame($this->contract->id, $expense->contract_id);
+            $this->assertSame([$center->id], $expense->costCenters->modelKeys());
+            foreach ($update['lines'] as $position => $line) {
+                $this->assertDatabaseHas('expense_lines', [
+                    'expense_id' => $expense->id, 'position' => $position, 'year' => $line['year'],
+                    'period_starts_on' => $line['period_starts_on'] ?? null,
+                    'period_ends_on' => $line['period_ends_on'] ?? null,
+                ]);
+            }
+            $before = $expense->load(['lines', 'costCenters'])->toArray();
+            $this->patchJson('/t/periodi/expenses/'.$expense->id, ['lines' => $update['lines']])->assertOk();
+            $this->assertSame($before, $expense->refresh()->load(['lines', 'costCenters'])->toArray());
+        }
+        $this->get('/t/periodi/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '240.00')->where('totals.actual', '0.00'));
+        $this->get('/t/periodi/dashboard?year=2027')->assertInertia(fn (Assert $page) => $page
+            ->where('totals.allocated', '0.00')->where('totals.actual', '180.00'));
+    }
+
     public function test_detailed_lines_and_relations_survive_period_edits(): void
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore']);

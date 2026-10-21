@@ -150,7 +150,7 @@ class ExpenseController extends Controller
         $rules = ['tenant_id' => 'prohibited', 'updates' => ['required', 'array', 'min:1', 'max:500'], 'updates.*' => ['required', 'array:'.implode(',', ['id', ...$fields])]];
         $rules['updates.*.id'] = ['required', 'integer', 'distinct', Rule::exists('expenses', 'id')->where('tenant_id', $tenant->id)];
         foreach (ExpenseRequest::forTenant($tenant, true) as $field => $rule) {
-            $rules['updates.*.'.$field] = $rule;
+            $rules['updates.*.'.$field] = array_map(fn ($part) => is_string($part) ? str_replace(':lines.', ':updates.*.lines.', $part) : $part, $rule);
         }
         $data = Validator::make($request->all(), $rules, [
             '*.exists' => 'Una riga o un collegamento non appartiene a questo ambiente. Nessuna modifica salvata.',
