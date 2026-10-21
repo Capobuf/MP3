@@ -161,17 +161,12 @@ class ExpenseController extends Controller
         $warnings = DB::transaction(function () use ($tenant, $data): array {
             $records = $tenant->expenses()->whereIn('id', array_column($data['updates'], 'id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             ExpensePeriods::lockContracts($tenant, [...$records->pluck('contract_id')->all(), ...array_column($data['updates'], 'contract_id')]);
-            foreach ($data['updates'] as $update) {
-                $record = $records->get($update['id']);
-                abort_unless($record !== null, 404);
-                $record->fill(array_diff_key($update, array_flip(['id', 'lines', 'cost_center_ids', 'contract_entry'])));
-            }
             foreach ($data['updates'] as $index => $update) {
                 $record = $records->get($update['id']);
                 abort_unless($record !== null, 404);
                 unset($update['id']);
                 try {
-                    app(ExpenseWriter::class)->persist($record, $update, $records->all());
+                    app(ExpenseWriter::class)->persist($record, $update);
                 } catch (ValidationException $error) {
                     $errors = [];
                     foreach ($error->errors() as $field => $messages) {

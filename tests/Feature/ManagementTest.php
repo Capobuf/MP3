@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Expense;
 use App\Models\Tenant;
+use App\Models\UndoAction;
 use App\Models\User;
+use App\Services\ExpenseWriter;
 use App\Support\Money;
 use Database\Seeders\ManagementDemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -458,6 +460,70 @@ class ManagementTest extends TestCase
         }
         $this->assertSame('Foreign', $foreign->refresh()->title);
         $this->assertNull($own->refresh()->vendor_id);
+    }
+
+    public function test_batch_preserves_imported_year_and_rolls_back_lines_relations_and_undo_history(): void
+    {
+        $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore']);
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'year' => 2027]);
+        $source = app(ExpenseWriter::class)->create($this->tenant, [
+            'title' => 'Originale', 'year' => 2026, 'vendor_id' => $vendor->id, 'cost_center_ids' => [$center->id],
+            'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-12-31',
+            'lines' => [['description' => 'Canone', 'type' => 'allocated', 'unit_price' => '100', 'quantity' => '2']],
+        ]);
+        $year = $this->tenant->budgetYears()->create(['year' => 2027]);
+        $path = '/t/alfa/budget/years/'.$year->id.'/expense-import';
+        $row = collect($this->getJson($path)->assertOk()->json('expenses'))->firstWhere('id', $source->id);
+        $this->postJson($path, ['expenses' => [['id' => $source->id, 'token' => $row['token']]]])->assertOk();
+        $copy = $this->tenant->expenses()->where('source_expense_id', $source->id)->sole();
+        $sourceBefore = $source->fresh()->load('lines', 'costCenters')->toArray();
+        $copyBefore = $copy->load('lines', 'costCenters')->toArray();
+        $entryBefore = $year->entries()->sole()->toArray();
+        $undoBefore = UndoAction::all()->toArray();
+        $update = ['id' => $source->id, 'year' => 2027, 'period_ends_on' => '2027-12-31',
+            'title' => 'Aggiornata', 'vendor_id' => null, 'project_id' => $project->id, 'cost_center_ids' => []];
+
+        foreach ([$update, [...$update, 'lines' => [
+            ['description' => 'Nuova riga', 'type' => 'allocated', 'unit_price' => '30', 'quantity' => '3'],
+        ]]] as $firstUpdate) {
+            $this->patchJson('/t/alfa/expenses/batch', ['updates' => [
+                $firstUpdate, ['id' => $copy->id, 'year' => 2028],
+            ]])->assertUnprocessable()->assertJsonValidationErrors('updates.1.year');
+            $this->assertSame($sourceBefore, $source->fresh()->load('lines', 'costCenters')->toArray());
+            $this->assertSame($copyBefore, $copy->fresh()->load('lines', 'costCenters')->toArray());
+            $this->assertSame($entryBefore, $year->entries()->sole()->toArray());
+            $this->assertSame($undoBefore, UndoAction::all()->toArray());
+        }
+
+        $this->patchJson('/t/alfa/expenses/batch', ['updates' => [
+            $update, ['id' => $copy->id, 'year' => 2027, 'notes' => 'Modifica consentita'],
+        ]])->assertOk()->assertJsonCount(0, 'warnings');
+        $this->assertSame(2027, $source->refresh()->year);
+        $this->assertSame('Aggiornata', $source->title);
+        $this->assertSame($project->id, $source->project_id);
+        $this->assertNull($source->vendor_id);
+        $this->assertSame(0, $source->costCenters()->count());
+        $this->assertSame('200.00', $source->allocated_amount);
+        $this->assertSame('2027-12-31', $source->lines()->sole()->period_ends_on->toDateString());
+        $this->assertNull($source->lines()->sole()->year);
+        $this->assertSame($sourceBefore['lines'][0]['id'], $source->lines()->sole()->id);
+        $this->assertSame(2027, $copy->refresh()->year);
+        $this->assertSame('Modifica consentita', $copy->notes);
+        $this->assertSame($source->id, $copy->source_expense_id);
+        $this->assertSame($copyBefore['lines'], $copy->lines->toArray());
+        $this->assertSame($entryBefore, $year->entries()->sole()->toArray());
+        $this->assertSame(count($undoBefore) + 1, UndoAction::count());
+        $sourceAfter = $source->fresh()->load('lines', 'costCenters')->toArray();
+        $copyAfter = $copy->fresh()->load('lines', 'costCenters')->toArray();
+
+        $action = $this->postJson('/t/alfa/undo')->assertOk()->json('action_id');
+        $this->assertSame($sourceBefore, $source->fresh()->load('lines', 'costCenters')->toArray());
+        $this->assertSame($copyBefore, $copy->fresh()->load('lines', 'costCenters')->toArray());
+        $this->postJson('/t/alfa/undo/restore', ['action_id' => $action])->assertOk();
+        $this->assertSame($sourceAfter, $source->fresh()->load('lines', 'costCenters')->toArray());
+        $this->assertSame($copyAfter, $copy->fresh()->load('lines', 'costCenters')->toArray());
+        $this->assertSame($entryBefore, $year->entries()->sole()->toArray());
     }
 
     public function test_bulk_delete_validates_the_entire_selection_and_tenant(): void

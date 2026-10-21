@@ -339,7 +339,11 @@ class ExpensePeriodsTest extends TestCase
         $this->patchJson('/t/periodi/expenses/batch', ['updates' => [
             ['id' => $first->id, 'period_starts_on' => '2026-09-01', 'period_ends_on' => '2026-12-31'],
             ['id' => $second->id, 'period_starts_on' => '2026-01-01', 'period_ends_on' => '2026-06-30'],
-        ]])->assertOk();
+        ]])->assertOk()->assertJsonCount(0, 'warnings');
+        $this->assertSame('2026-09-01', $first->refresh()->period_starts_on->toDateString());
+        $this->assertSame('2026-12-31', $first->period_ends_on->toDateString());
+        $this->assertSame('2026-01-01', $second->refresh()->period_starts_on->toDateString());
+        $this->assertSame('2026-06-30', $second->period_ends_on->toDateString());
         $destination = $this->tenant->contracts()->create(['name' => 'Altro']);
         $this->tenant->expenses()->create([...$this->data(), 'contract_id' => $destination->id]);
         $this->patchJson('/t/periodi/expenses/batch', ['updates' => [['id' => $second->id, 'contract_id' => $destination->id]]])->assertOk()->assertJsonCount(1, 'warnings');
