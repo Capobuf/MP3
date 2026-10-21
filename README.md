@@ -8,7 +8,7 @@ Base applicativa Laravel 13 creata con lo starter kit React ufficiale. Include R
 
 - Docker Desktop con Docker Compose per l'ambiente di sviluppo consigliato
 - Composer 2 per installare inizialmente le dipendenze
-- In alternativa: PHP 8.4 o superiore, MySQL/MariaDB, Node.js e npm
+- In alternativa: PHP 8.4.27+ oppure 8.5.12+, MySQL/MariaDB, Node.js e npm
 
 ## Sviluppo con Docker
 
@@ -38,6 +38,43 @@ docker compose stop
 ```
 
 Il comando `app:create-superuser` richiede interattivamente nome, email e password. Non promuove account già esistenti e non salva credenziali nel repository.
+
+### Aggiornamento di sicurezza PHP2Shell
+
+Le vulnerabilità [CVE-2026-109618 e CVE-2026-109619](https://www.php.net/archive/2026.php#2026-10-21-5)
+richiedono un runtime PHP corretto: per il ramo 8.4 usato da Sail serve **8.4.27
+o successivo**; per il ramo 8.5 serve **8.5.12 o successivo**. Composer rifiuta
+le versioni precedenti. Le sole impostazioni PHP o un aggiornamento Laravel
+non risolvono le vulnerabilità.
+
+Per un ambiente gestito dal Compose del repository, ricostruire senza cache
+per scaricare i pacchetti PHP aggiornati, poi ricreare il servizio applicativo:
+
+```sh
+docker compose build --pull --no-cache laravel.test
+docker compose run --rm --no-deps laravel.test php -v
+docker compose run --rm --no-deps laravel.test composer check-platform-reqs --lock
+docker compose up -d --no-deps laravel.test
+docker compose exec laravel.test composer install --no-interaction
+docker compose exec laravel.test npm ci
+docker compose exec laravel.test npm run build
+docker compose exec laravel.test php artisan optimize:clear
+docker compose exec laravel.test php -v
+docker compose exec laravel.test composer check-platform-reqs
+docker compose ps
+```
+
+Verificare la versione corretta prima di sostituire il servizio e la risposta
+HTTP dopo il riavvio. Non sono necessarie migration; conservare database,
+volumi e allegati. Su hosting tradizionale aggiornare anche il runtime del
+web server e riavviare tutti i worker PHP: aggiornare soltanto la CLI non basta.
+
+Nell'ambiente esistente `10.0.0.30:8000`, `mp3-app` è un container autonomo
+con bind mount di `/root/MP3`: aggiornare i suoi pacchetti PHP e riavviarlo,
+poi usare `docker exec mp3-app` per installazione, build e verifiche.
+Non avviare un secondo progetto Compose sugli stessi dati. Il repository APT
+e la chiave da usare sono quelli del Dockerfile Sail 8.4 installato in
+`vendor/laravel/sail/runtimes/8.4/Dockerfile`.
 
 ## Prima configurazione
 
