@@ -72,6 +72,8 @@ jobs:
             test -e "dist/obake/$path"
           done
 
+          # The archive must never carry a real site URL or deployment credentials.
+          grep -Fxq 'APP_URL=https://example.com' dist/obake/.env.example
           test ! -e dist/obake/.env
           test ! -d dist/obake/node_modules
           test ! -d dist/obake/tests
