@@ -25,12 +25,33 @@ Questa procedura usa lo **ZIP di produzione** generato da GitHub Actions. Contie
 
 ### 3. Caricare l'applicazione
 
-1. Aprire il **File Manager** del sito CloudPanel.
-2. Entrare nella directory `htdocs/NOME_DOMINIO` (la cartella **sopra `public`**, non dentro `public`).
-3. Caricare lo ZIP scaricato da GitHub ed **estrarlo in questa directory**. Se il nuovo sito contiene file di esempio di CloudPanel, rimuovere soltanto i file di esempio o sovrascriverli con quelli del pacchetto; **non** eseguire questa operazione su un sito gia utilizzato.
-4. Aprire `public/` e controllare `index.php`: il file di Obake contiene il riferimento a `../vendor/autoload.php`. Se e presente un `index.html` predefinito di CloudPanel con la scritta **Hello World :-)**, eliminare **solo** quel file per evitare che venga mostrata la pagina iniziale del pannello anziche Obake.
+**Attenzione alla cartella di estrazione:** lo ZIP contiene gia una directory `public/`. CloudPanel puo mostrare nel File Manager la directory pubblica del sito: **se il percorso corrente termina in `/public`, salire di un livello prima di caricare o estrarre lo ZIP**. Altrimenti si ottiene `public/public/` e il sito puo continuare a mostrare **Hello World :-)**.
 
-Dopo l'estrazione, nella stessa cartella devono comparire `artisan`, `app/`, `bootstrap/`, `config/`, `database/`, `public/`, `resources/`, `routes/`, `storage/`, `vendor/` e `.env.example`. In particolare, `public/build/manifest.json` deve esistere. Se compare ancora **Hello World :-)**, ricontrollare la Root Directory in CloudPanel e verificare che non punti alla cartella superiore o a un'altra installazione.
+1. Aprire il **File Manager** del sito CloudPanel e verificare il percorso corrente.
+2. Posizionarsi **esattamente in** `/home/UTENTE_SITO/htdocs/NOME_DOMINIO/`, ossia la cartella che deve contenere sia `artisan` sia `public/`. **Non estrarre in** `/home/UTENTE_SITO/htdocs/NOME_DOMINIO/public/`.
+3. Caricare lo ZIP scaricato da GitHub ed estrarlo nella cartella corretta. Non caricare o estrarre uno ZIP di nuova installazione sopra un sito gia in uso.
+4. Verificare la struttura risultante:
+
+```text
+/home/UTENTE_SITO/htdocs/NOME_DOMINIO/
+├── .env.example
+├── artisan
+├── app/
+├── bootstrap/
+├── config/
+├── database/
+├── public/
+│   ├── index.php
+│   └── build/
+├── resources/
+├── routes/
+├── storage/
+└── vendor/
+```
+
+**Percorso errato:** `.../htdocs/NOME_DOMINIO/public/public/index.php`. Se compare, il contenuto dello ZIP e stato estratto nella directory pubblica invece che nella root dell'applicazione. Correggere **l'intera posizione dell'installazione**, non spostare solo `index.php` o la seconda cartella `public`; ripristinare la struttura illustrata sopra, inclusi i file nascosti.
+
+Infine, verificare che `public/index.php` contenga il riferimento a `../vendor/autoload.php` e che `public/build/manifest.json` esista. Se e rimasto un `public/index.html` predefinito con **Hello World :-)**, rimuovere **solo quel file di esempio**. La **Root Directory** configurata in CloudPanel deve puntare a `.../htdocs/NOME_DOMINIO/public` (un solo `public`).
 
 ### 4. Configurare database e indirizzo del sito
 
@@ -86,7 +107,7 @@ Sostituire `UTENTE_SITO` e `NOME_DOMINIO` con i valori reali, e il binario PHP s
 3. In CloudPanel verificare i limiti PHP di upload: gli allegati richiedono almeno `upload_max_filesize=20M` e `post_max_size` superiore (es. `25M`). Per ripristinare backup dalla pagina web servono limiti piu elevati, adeguati allo ZIP caricato.
 4. Per i backup globali verificare da SSH la disponibilita di `mysqldump`, `mysql` e `zip` per il Site User, oltre allo spazio libero e ai permessi di `storage/` e `bootstrap/cache/`. Provare almeno un backup reale.
 
-**In caso di errore:** verificare prima la Root Directory `public`, i valori in `.env`, la versione PHP CLI/FPM e `storage/logs/laravel.log`. Non impostare permessi `777`.
+**In caso di errore:** se compare **Hello World :-)**, controllare **prima** che lo ZIP non sia stato estratto in `public/`, creando il percorso errato `public/public/`. Poi verificare la Root Directory CloudPanel, l'eventuale `public/index.html` di esempio, i valori in `.env`, la versione PHP CLI/FPM e `storage/logs/laravel.log`. Non impostare permessi `777`.
 
 **Aggiornamenti futuri:** non seguire nuovamente la procedura di installazione da zero; conservare `.env` (soprattutto `APP_KEY`), database e `storage/`, e non sovrascriverli con una nuova estrazione. Lo ZIP contiene solo il modello `.env.example`, non un `.env` da sovrascrivere.
 
