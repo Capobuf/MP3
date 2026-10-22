@@ -105,5 +105,5 @@ export default function Login({ status, canResetPassword }: Props) {
 
 Login.layout = {
     title: 'Accedi a Obake',
-    description: 'Inserisci le tue credenziali per accedere al tuo ambiente.',
+    logoOnly: true,
 };

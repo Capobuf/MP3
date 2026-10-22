@@ -1,6 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import AppLogoIcon from '@/components/app-logo-icon';
+import { cn } from '@/lib/utils';
 import { home } from '@/routes';
 import type { AuthLayoutProps } from '@/types';
 
@@ -18,6 +19,7 @@ export default function AuthSplitLayout({
     children,
     title,
     description,
+    logoOnly = false,
 }: AuthLayoutProps) {
     const { name } = usePage().props;
     const [background] = useState(
@@ -44,18 +46,28 @@ export default function AuthSplitLayout({
                 <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
                     <Link
                         href={home()}
-                        className="mx-auto flex flex-col items-center gap-2 rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring lg:hidden"
+                        className={cn(
+                            'mx-auto flex flex-col items-center gap-2 rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring',
+                            !logoOnly && 'lg:hidden',
+                        )}
                     >
                         <AppLogoIcon className="size-16" />
-                        {name}
+                        {!logoOnly && name}
                     </Link>
-                    <div className="flex flex-col items-center gap-2 text-center">
+                    <div
+                        className={cn(
+                            'flex flex-col items-center gap-2 text-center',
+                            logoOnly && 'sr-only',
+                        )}
+                    >
                         <h1 className="text-2xl font-semibold tracking-tight">
                             {title}
                         </h1>
-                        <p className="text-sm text-balance text-muted-foreground">
-                            {description}
-                        </p>
+                        {description && (
+                            <p className="text-sm text-balance text-muted-foreground">
+                                {description}
+                            </p>
+                        )}
                     </div>
                     {children}
                 </div>
