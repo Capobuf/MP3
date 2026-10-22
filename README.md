@@ -109,9 +109,58 @@ Sostituire `UTENTE_SITO` e `NOME_DOMINIO` con i valori reali, e il binario PHP s
 
 **In caso di errore:** se compare **Hello World :-)**, controllare **prima** che lo ZIP non sia stato estratto in `public/`, creando il percorso errato `public/public/`. Poi verificare la Root Directory CloudPanel, l'eventuale `public/index.html` di esempio, i valori in `.env`, la versione PHP CLI/FPM e `storage/logs/laravel.log`. Non impostare permessi `777`.
 
-**Aggiornamenti futuri:** non seguire nuovamente la procedura di installazione da zero; conservare `.env` (soprattutto `APP_KEY`), database e `storage/`, e non sovrascriverli con una nuova estrazione. Lo ZIP contiene solo il modello `.env.example`, non un `.env` da sovrascrivere.
+### Aggiornare un sito esistente con GitHub Actions
 
-**Privacy del futuro deploy CI:** non inserire il dominio, l'URL reale o il percorso assoluto CloudPanel nei workflow, nei loro input pubblici o nella documentazione. In fase di implementazione del deploy (#82), configurarli soltanto come **GitHub Actions Environment Secrets** di produzione, disponibili al solo job di deploy autorizzato. Non registrarli in log, annotazioni, riepiloghi o artifact; il workflow che crea lo ZIP non deve accedere ai secrets di produzione.
+La **CI** su `main` esegue i controlli e, soltanto dopo il loro successo, richiama **Production ZIP** per pubblicare `obake-production-<numero run CI>`. Lo ZIP contiene il commit in `.release-commit` e `public/build/release.txt`. Il workflow **Deploy** richiede un avvio manuale e riutilizza esattamente quell'artifact: verifica run, branch, commit e digest SHA-256. Non compila sul server e non usa automaticamente l'ultimo ZIP disponibile. Gli ZIP prodotti separatamente dal workflow Production ZIP non sono accettati dal deploy.
+
+#### Prima configurazione
+
+Usare il **Site User**, una chiave SSH dedicata e una chiave host verificata. Nell'Environment **`Cloudpanel`**, limitato al branch `main` e protetto da approvazione manuale, configurare questi **Environment Secrets**:
+
+| Secret               | Valore                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `DEPLOY_HOST`        | Host SSH                                                                            |
+| `DEPLOY_USER`        | Site User, mai root                                                                 |
+| `DEPLOY_ROOT`        | Percorso assoluto della cartella base che contiene `releases`, `current` e `shared` |
+| `DEPLOY_URL`         | URL pubblico HTTPS dell'applicazione                                                |
+| `DEPLOY_DOMAIN`      | Hostname pubblico senza schema, coerente con l'URL                                  |
+| `DEPLOY_PHP`         | Percorso assoluto del binario PHP CLI 8.5                                           |
+| `DEPLOY_SSH_KEY`     | Chiave privata Ed25519 dedicata, senza passphrase                                   |
+| `DEPLOY_KNOWN_HOSTS` | Voce `known_hosts` del server                                                       |
+| `DEPLOY_SSH_PORT`    | Solo se diversa da 22                                                               |
+
+Non inserire valori reali in GitHub Variables, input dei workflow, file versionati, log o artifact. CI e packaging non accedono all'Environment di produzione. Se si accetta la chiave host al primo accesso senza confronto del fingerprint da una fonte indipendente, la chiave resta fissata per le connessioni successive, ma l'identità iniziale del server non è verificata.
+
+Il server deve avere Python 3.11 o successivo e il Site User deve poter eseguire esclusivamente il reload necessario: `sudo -n /usr/bin/systemctl reload php8.5-fpm.service`.
+
+Prima del primo deploy predisporre la struttura seguente senza spostare o sovrascrivere dati attivi:
+
+```text
+<DEPLOY_ROOT>/
+  current -> .                 # inizialmente serve l'installazione esistente
+  releases/                    # nuove release, ciascuna in una cartella distinta
+  storage/                     # dati attivi dell'installazione iniziale
+  shared/storage -> ../storage
+  public/                      # document root precedente
+```
+
+Conservare in `~/.dploy/overlays/.env` una copia identica del `.env` attivo, con permessi `600`. Se `shared/storage` contiene già una copia separata, conservarla prima di creare il collegamento ai dati realmente in uso; non sostituire lo storage attivo con quella copia. Solo dopo aver verificato `current`, cambiare la Root Directory in CloudPanel a `<DEPLOY_ROOT>/current/public` e verificare HTTPS e `/up`.
+
+Il deploy riutilizza la struttura e l'overlay predisposti per dploy, ma non esegue `dploy deploy`: quel comando clona un branch o tag Git e non installa lo ZIP verificato. Non alternare i due metodi sullo stesso sito. Il workflow **SSH check** consente di verificare accesso, root Laravel e PHP senza effettuare il rilascio.
+
+Dopo il passaggio, eseguire i comandi Artisan da `<DEPLOY_ROOT>/current`. Anche un eventuale cron dello scheduler deve usare `<DEPLOY_ROOT>/current/artisan`; il codice conservato nella cartella iniziale serve come ripristino del primo rilascio e non viene aggiornato.
+
+#### Avviare un aggiornamento
+
+1. Attendere che la CI dell'attuale commit `main` sia conclusa con successo, incluso il job **Production package**.
+2. Aprire **Actions → Deploy → Run workflow**, selezionare `main` e inserire in `ci_run_id` il numero nell'URL della run CI (`actions/runs/<numero>`), non il numero nel nome dell'artifact.
+3. Lasciare `allow_migrations` disattivato salvo autorizzazione delle nuove migration incluse nel rilascio. Il deploy si ferma se trova nuove migration senza questo consenso; rifiuta modifiche o rimozioni di migration già presenti.
+4. Approvare il job dell'Environment `Cloudpanel`. Se nel frattempo `main` è cambiato rispetto alla run selezionata, usare una CI del nuovo commit.
+5. Verificare `ARTIFACT=OK`, `SSH=OK`, `TARGET=OK`, `DEPLOY=OK` e `HTTP=OK`. Il controllo HTTP verifica sia `/up` sia il commit pubblicato in `build/release.txt`.
+
+Lo ZIP viene estratto in una nuova release. `.env`, `storage` e `public/storage` vengono collegati ai dati già presenti; le cache Laravel vengono generate sul server. Il collegamento `current` cambia solo dopo i controlli, poi viene ricaricato PHP-FPM. Le eventuali migration autorizzate vengono eseguite in manutenzione, ripristinando l'accesso anche in caso di errore.
+
+Se il controllo successivo al cambio di release fallisce e non sono state eseguite migration, viene ripristinato il collegamento precedente. **Non viene mai effettuato un rollback automatico del database.** Dopo un errore di migration o un fallimento successivo a una modifica dello schema, verificare lo stato e usare i backup esistenti per un eventuale ripristino manuale. Le release precedenti e quelle fallite vengono conservate: controllare lo spazio disponibile e rimuoverle soltanto dopo una verifica, senza toccare `shared`, lo storage attivo o la release corrente.
 
 Riferimenti CloudPanel: [Laravel](https://www.cloudpanel.io/docs/v2/php/applications/laravel/), [File Manager](https://www.cloudpanel.io/docs/v2/frontend-area/file-manager/), [Databases](https://www.cloudpanel.io/docs/v2/frontend-area/databases/), [Cron Jobs](https://www.cloudpanel.io/docs/v2/frontend-area/cron-jobs/).
 

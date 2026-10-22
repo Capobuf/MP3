@@ -9,7 +9,7 @@ jobs:
   verify:
     name: Verify connection
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 3
     environment: Cloudpanel
     steps:
@@ -57,7 +57,7 @@ jobs:
               remote = '''set -eu
           [ "$(id -un)" = "$1" ] && [ "$(id -u)" -ne 0 ] || exit 1
           printf 'SSH=OK\n'
-          cd -- "$2"
+          if [ -L "$2/current" ]; then cd -- "$2/current"; else cd -- "$2"; fi
           [ -r artisan ] && [ -d app ] && [ -r public/index.php ] || exit 1
           [ -r vendor/autoload.php ] && [ -r .env ] && [ ! -e public/public ] || exit 1
           printf 'TARGET=OK\n'

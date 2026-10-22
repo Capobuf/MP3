@@ -15,6 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  package:
+    name: Production package
+    needs: checks
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/production-zip.yml
+
   checks:
     name: Verify application
     runs-on: ubuntu-26.04
@@ -60,6 +66,9 @@ jobs:
           extensions: mbstring, pdo_mysql, zip, xml, dom, xmlreader, xmlwriter, gd
           tools: composer:v2
           coverage: none
+
+      - name: Verify deployment safeguards
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -f
 
       - name: Cache Composer downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
