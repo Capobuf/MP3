@@ -701,7 +701,10 @@ function EntryDetail({
     );
 }
 
-export type BudgetTableHandle = { printReport: () => void };
+export type BudgetTableHandle = {
+    printReport: () => void;
+    exportFilters: () => { year: number; entry_ids: string };
+};
 
 export function BudgetTable({
     ref,
@@ -1591,6 +1594,7 @@ export function BudgetTable({
         </TableColumnSettings>
     );
     useImperativeHandle(ref, () => ({
+        exportFilters: () => ({ year, entry_ids: entryIds }),
         printReport() {
             if (busy || loading || !summary) {
                 toast.error(

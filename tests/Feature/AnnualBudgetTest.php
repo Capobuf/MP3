@@ -302,11 +302,10 @@ class AnnualBudgetTest extends TestCase
         $otherYear = $other->budgetYears()->create(['year' => 2026]);
         $otherExpense = $other->expenses()->create(['title' => 'Privata', 'year' => 2026]);
         $foreign = $otherYear->entries()->create(['tenant_id' => $other->id, 'type' => 'expense', 'expense_id' => $otherExpense->id]);
-        foreach (['', (string) $foreign->id] as $selection) {
-            $this->getJson($this->url('').'?entry_ids='.$selection)->assertOk()
-                ->assertJsonCount(0, 'budget.entries')->assertJsonPath('budget.totals.count', 0)
-                ->assertJsonPath('budget.totals.allocated', null)->assertJsonCount(0, 'budget.vendor_groups');
-        }
+        $this->getJson($this->url('').'?entry_ids=')->assertOk()
+            ->assertJsonCount(0, 'budget.entries')->assertJsonPath('budget.totals.count', 0)
+            ->assertJsonPath('budget.totals.allocated', null)->assertJsonCount(0, 'budget.vendor_groups');
+        $this->getJson($this->url('').'?entry_ids='.$foreign->id)->assertUnprocessable()->assertJsonValidationErrors('entry_ids');
         $this->getJson($this->url('', $otherYear).'?entry_ids='.$foreign->id)->assertNotFound();
     }
 

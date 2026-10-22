@@ -69,6 +69,8 @@ class DriveSyncTest extends TestCase
         $expense->lines()->create(['description' => 'Legacy', 'type' => 'allocated', 'unit_price' => '0.00', 'quantity' => '1.0000', 'total' => '0.00', 'position' => 2]);
         $budget = $tenant->budgetYears()->create(['year' => 2025]);
         $budget->entries()->create(['tenant_id' => $tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
+        $excluded = $tenant->expenses()->create(['title' => 'Voce esclusa', 'year' => 2025, 'allocated_amount' => '999']);
+        $budget->entries()->create(['tenant_id' => $tenant->id, 'type' => 'expense', 'expense_id' => $excluded->id, 'included' => false]);
         $tenant->budgetYears()->create(['year' => 2028]);
         $other = $this->tenant('other');
         $other->expenses()->create(['title' => 'Esterno', 'year' => 2040, 'allocated_amount' => 99]);
@@ -88,8 +90,10 @@ class DriveSyncTest extends TestCase
             $this->assertSame($allocated, $book->getSheetByName('Spese')->getCell('I2')->getValue());
             $this->assertSame($actual, $book->getSheetByName('Spese')->getCell('J2')->getValue());
             $this->assertSame($lineCount + 1, $book->getSheetByName('Righe economiche')->getHighestDataRow());
-            $this->assertSame($year === 2025 ? 2 : 1, $book->getSheetByName('Budget')->getHighestDataRow());
+            $this->assertSame($year === 2025 ? 3 : 1, $book->getSheetByName('Budget')->getHighestDataRow());
             if ($year === 2025) {
+                $this->assertSame('Voce esclusa', $book->getSheetByName('Budget')->getCell('C3')->getValue());
+                $this->assertSame('No', $book->getSheetByName('Budget')->getCell('D3')->getValue());
                 $this->assertSame(-12.34, $book->getSheetByName('Budget')->getCell('G2')->getValue());
                 $this->assertNull($book->getSheetByName('Budget')->getCell('F2')->getValue());
             }
