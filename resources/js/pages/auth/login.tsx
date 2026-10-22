@@ -47,18 +47,7 @@ export default function Login({ status, canResetPassword }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <div className="flex items-center">
-                                    <Label htmlFor="password">Password</Label>
-                                    {canResetPassword && (
-                                        <TextLink
-                                            href={request()}
-                                            className="ml-auto text-sm"
-                                            tabIndex={5}
-                                        >
-                                            Password dimenticata?
-                                        </TextLink>
-                                    )}
-                                </div>
+                                <Label htmlFor="password">Password</Label>
                                 <PasswordInput
                                     id="password"
                                     name="password"
@@ -89,6 +78,15 @@ export default function Login({ status, canResetPassword }: Props) {
                                 {processing && <Spinner />}
                                 Accedi
                             </Button>
+                            {canResetPassword && (
+                                <TextLink
+                                    href={request()}
+                                    className="justify-self-center text-sm"
+                                    tabIndex={5}
+                                >
+                                    Password dimenticata?
+                                </TextLink>
+                            )}
                         </div>
                     </>
                 )}
