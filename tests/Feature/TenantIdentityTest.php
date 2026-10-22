@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Services\BackupManager;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -43,6 +44,45 @@ class TenantIdentityTest extends TestCase
         $this->assertNull($tenant->fresh()->logo_path);
         Storage::disk('attachments')->assertMissing($second);
         $this->get($path.'/logo')->assertNotFound();
+    }
+
+    public function test_restored_logo_is_visible_private_replaceable_and_removable(): void
+    {
+        Storage::fake('attachments');
+        Storage::fake('backups');
+        $source = Tenant::create(['name' => 'Source', 'slug' => 'source']);
+        $target = Tenant::create(['name' => 'Target', 'slug' => 'target']);
+        $user = User::factory()->create();
+        $source->users()->attach($user);
+        $this->actingAs($user);
+        $logo = UploadedFile::fake()->image('logo.jpg');
+        $this->post('/t/source/settings/identity', ['logo' => $logo])->assertSessionHasNoErrors();
+        $original = $source->fresh()->logo_path;
+        $expense = $source->expenses()->create(['title' => 'Expense', 'year' => 2026]);
+        Storage::disk('attachments')->put($source->id.'/document', 'document');
+        $source->attachments()->forceCreate(['expense_id' => $expense->id, 'original_name' => 'document.txt', 'disk' => 'attachments', 'path' => $source->id.'/document', 'size_bytes' => 8, 'mime_type' => 'text/plain', 'uploaded_by' => $user->id]);
+        $backups = app(BackupManager::class);
+        $archive = $backups->path($source, $backups->create($source));
+        $backups->restoreTenant($target, $archive);
+        $restored = $target->fresh()->logo_path;
+        $url = $target->fresh()->logoUrl();
+        $this->get($url)->assertOk()->assertStreamedContent(file_get_contents($logo->getPathname()))
+            ->assertHeader('Cache-Control', 'max-age=0, no-store, private');
+        foreach (['/t/target/settings/identity', '/t/target/budget?year=2026'] as $page) {
+            $this->get($page)->assertOk()->assertInertia(fn (Assert $view) => $view->where('logoUrl', $url));
+        }
+        $this->actingAs(User::factory()->create())->get($url)->assertForbidden();
+        $this->actingAs($user)->post('/t/target/settings/identity', ['logo' => UploadedFile::fake()->image('new.png')])->assertSessionHasNoErrors();
+        Storage::disk('attachments')->assertMissing($restored);
+        $replacement = $target->fresh()->logo_path;
+        $this->assertNotSame($restored, $replacement);
+        $this->delete('/t/target/settings/identity')->assertSessionHasNoErrors();
+        $this->assertNull($target->fresh()->logo_path);
+        Storage::disk('attachments')->assertMissing($replacement);
+        $this->get($url)->assertNotFound();
+        $this->assertSame(file_get_contents($logo->getPathname()), Storage::disk('attachments')->get($original));
+        $this->assertSame('document', Storage::disk('attachments')->get($source->id.'/document'));
+        $this->assertSame('document', Storage::disk('attachments')->get($target->attachments()->sole()->path));
     }
 
     public function test_invalid_or_failed_upload_preserves_previous_logo(): void

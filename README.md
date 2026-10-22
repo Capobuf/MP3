@@ -566,6 +566,15 @@ esistente e il controllo di ambiente vuoto di `TenantCsvTransfer`; non usa il
 CSV tecnico come backup e non ricalcola importi o riapplica le validazioni
 per nuovi record. La cronologia temporanea Undo rimane nel backup globale.
 
+Il backup tenant include anche il logo aziendale: `tenant.logo_path` in
+`data.json` dichiara il riferimento originale oppure `null`; quando presente,
+la sola entry `logo` è obbligatoria e verificata dall’inventario del manifest.
+Negli archivi precedenti l’assenza del metadato significa assenza del logo.
+Un logo dichiarato ma mancante, alterato o non valido blocca il ripristino.
+Si applicano gli stessi limiti del caricamento: PNG/JPEG, 2 MB, 4096×4096 pixel.
+Il ripristino genera un percorso privato nuovo nel tenant di destinazione;
+un logo già presente nella destinazione impedisce la sovrascrittura.
+
 Il ripristino web richiede uno ZIP compatibile e una conferma esplicita. Il
 tenant di destinazione deve essere privo di dati, cronologia Undo/promemoria e
 impostazioni personalizzate; gli stati iniziali predefiniti sono ammessi.
