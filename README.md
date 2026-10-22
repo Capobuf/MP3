@@ -28,8 +28,9 @@ Questa procedura usa lo **ZIP di produzione** generato da GitHub Actions. Contie
 1. Aprire il **File Manager** del sito CloudPanel.
 2. Entrare nella directory `htdocs/NOME_DOMINIO` (la cartella **sopra `public`**, non dentro `public`).
 3. Caricare lo ZIP scaricato da GitHub ed **estrarlo in questa directory**. Se il nuovo sito contiene file di esempio di CloudPanel, rimuovere soltanto i file di esempio o sovrascriverli con quelli del pacchetto; **non** eseguire questa operazione su un sito gia utilizzato.
+4. Aprire `public/` e controllare `index.php`: il file di Obake contiene il riferimento a `../vendor/autoload.php`. Se e presente un `index.html` predefinito di CloudPanel con la scritta **Hello World :-)**, eliminare **solo** quel file per evitare che venga mostrata la pagina iniziale del pannello anziche Obake.
 
-Dopo l'estrazione, nella stessa cartella devono comparire `artisan`, `app/`, `bootstrap/`, `config/`, `database/`, `public/`, `resources/`, `routes/`, `storage/`, `vendor/` e `.env.example`. In particolare, `public/build/manifest.json` deve esistere.
+Dopo l'estrazione, nella stessa cartella devono comparire `artisan`, `app/`, `bootstrap/`, `config/`, `database/`, `public/`, `resources/`, `routes/`, `storage/`, `vendor/` e `.env.example`. In particolare, `public/build/manifest.json` deve esistere. Se compare ancora **Hello World :-)**, ricontrollare la Root Directory in CloudPanel e verificare che non punti alla cartella superiore o a un'altra installazione.
 
 ### 4. Configurare database e indirizzo del sito
 
