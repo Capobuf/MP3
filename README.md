@@ -111,6 +111,8 @@ Sostituire `UTENTE_SITO` e `NOME_DOMINIO` con i valori reali, e il binario PHP s
 
 **Aggiornamenti futuri:** non seguire nuovamente la procedura di installazione da zero; conservare `.env` (soprattutto `APP_KEY`), database e `storage/`, e non sovrascriverli con una nuova estrazione. Lo ZIP contiene solo il modello `.env.example`, non un `.env` da sovrascrivere.
 
+**Privacy del futuro deploy CI:** non inserire il dominio, l'URL reale o il percorso assoluto CloudPanel nei workflow, nei loro input pubblici o nella documentazione. In fase di implementazione del deploy (#82), configurarli soltanto come **GitHub Actions Environment Secrets** di produzione, disponibili al solo job di deploy autorizzato. Non registrarli in log, annotazioni, riepiloghi o artifact; il workflow che crea lo ZIP non deve accedere ai secrets di produzione.
+
 Riferimenti CloudPanel: [Laravel](https://www.cloudpanel.io/docs/v2/php/applications/laravel/), [File Manager](https://www.cloudpanel.io/docs/v2/frontend-area/file-manager/), [Databases](https://www.cloudpanel.io/docs/v2/frontend-area/databases/), [Cron Jobs](https://www.cloudpanel.io/docs/v2/frontend-area/cron-jobs/).
 
 ## Requisiti per lo sviluppo
