@@ -1,0 +1,93 @@
+name: SSH check
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Verify connection
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 3
+    environment: Cloudpanel
+    steps:
+      - name: Check access
+        shell: python
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_ROOT: ${{ secrets.DEPLOY_ROOT }}
+          DEPLOY_URL: ${{ secrets.DEPLOY_URL }}
+          DEPLOY_DOMAIN: ${{ secrets.DEPLOY_DOMAIN }}
+          DEPLOY_PHP: ${{ secrets.DEPLOY_PHP }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+        run: |
+          import os
+          from pathlib import Path
+          import shlex
+          import subprocess
+          import sys
+          import tempfile
+          from urllib.parse import urlsplit
+
+          def verify():
+              names = ('HOST', 'USER', 'ROOT', 'URL', 'DOMAIN', 'PHP', 'SSH_KEY', 'KNOWN_HOSTS')
+              values = {name: os.environ.get('DEPLOY_' + name, '') for name in names}
+              if not all(values.values()):
+                  raise ValueError()
+              for name in ('HOST', 'USER', 'ROOT', 'URL', 'DOMAIN', 'PHP'):
+                  if any(ord(char) < 32 or ord(char) == 127 for char in values[name]):
+                      raise ValueError()
+              for name in ('HOST', 'USER'):
+                  if values[name].startswith('-') or any(char.isspace() for char in values[name]):
+                      raise ValueError()
+              if not all(values[name].startswith('/') for name in ('ROOT', 'PHP')):
+                  raise ValueError()
+              url = urlsplit(values['URL'])
+              if url.scheme != 'https' or url.hostname != values['DOMAIN'] or url.username or url.password:
+                  raise ValueError()
+              port = os.environ.get('DEPLOY_SSH_PORT') or '22'
+              if not port.isdecimal() or not 1 <= int(port) <= 65535:
+                  raise ValueError()
+
+              remote = '''set -eu
+          [ "$(id -un)" = "$1" ] && [ "$(id -u)" -ne 0 ] || exit 1
+          printf 'SSH=OK\n'
+          if [ -L "$2/current" ]; then cd -- "$2/current"; else cd -- "$2"; fi
+          [ -r artisan ] && [ -d app ] && [ -r public/index.php ] || exit 1
+          [ -r vendor/autoload.php ] && [ -r .env ] && [ ! -e public/public ] || exit 1
+          printf 'TARGET=OK\n'
+          "$3" -n -r 'exit(PHP_MAJOR_VERSION === 8 && PHP_MINOR_VERSION === 5 ? 0 : 1);'
+          printf 'PHP=OK\n'
+          '''
+              os.umask(0o077)
+              with tempfile.TemporaryDirectory() as directory:
+                  key = Path(directory) / 'key'
+                  hosts = Path(directory) / 'known_hosts'
+                  key.write_text(values['SSH_KEY'].rstrip() + '\n')
+                  hosts.write_text(values['KNOWN_HOSTS'].rstrip() + '\n')
+                  command = shlex.join(['sh', '-s', '--', values['USER'], values['ROOT'], values['PHP']])
+                  result = subprocess.run([
+                      'ssh', '-F', '/dev/null', '-T', '-i', str(key), '-p', port,
+                      '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'IdentityAgent=none',
+                      '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={hosts}',
+                      '-o', 'GlobalKnownHostsFile=/dev/null', '-o', 'UpdateHostKeys=no',
+                      '-o', 'HostKeyAlgorithms=ssh-ed25519',
+                      '-o', 'ClearAllForwardings=yes', '-o', 'ConnectTimeout=15',
+                      '-o', 'PasswordAuthentication=no', '-o', 'KbdInteractiveAuthentication=no',
+                      '-l', values['USER'], values['HOST'], command,
+                  ], input=remote, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                     text=True, timeout=45, check=True)
+                  if result.stdout.splitlines() != ['SSH=OK', 'TARGET=OK', 'PHP=OK']:
+                      raise ValueError()
+              print('SSH=OK\nTARGET=OK\nPHP=OK')
+
+          try:
+              verify()
+          except Exception:
+              print('CHECK=FAIL')
+              sys.exit(1)
