@@ -163,7 +163,7 @@ function cell(record: SectionReportData['records'][number], column: Column) {
         case 'reference_amount':
             return money(record[column]);
         case 'variance':
-            return money(record.variance, 'Non confrontabile');
+            return money(record.variance);
         default:
             return record[column] ?? '—';
     }
@@ -365,8 +365,7 @@ export function SectionReport({
                 <>
                     <strong>{data.records.length}</strong> voci nel report ·{' '}
                     <strong>{data.totals.count}</strong> spese nei totali ·{' '}
-                    <strong>{data.totals.incomplete}</strong> con dati
-                    incompleti
+                    <strong>{data.totals.estimated_count}</strong> solo stima
                 </>
             }
         >

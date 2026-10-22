@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\Vendor;
 use App\Rules\CommentContent;
 use App\Support\Backups\BackupArchive as Archive;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -45,6 +46,7 @@ class TenantBackup
         return app(TenantCsvTransfer::class)->isEmpty($tenant)
             && ($statuses === [] || $statuses == ProjectStatus::DEFAULTS)
             && $tenant->contract_reminders === null
+            && $tenant->logo_path === null
             && ! DB::table('undo_actions')->where('tenant_id', $tenant->id)->exists()
             && ! DB::table('contract_reminder_deliveries')->where('tenant_id', $tenant->id)->exists();
     }
@@ -54,7 +56,7 @@ class TenantBackup
         $zip = Archive::open($path, ZipArchive::CREATE | ZipArchive::EXCL);
         try {
             DB::transaction(function () use ($tenant, $zip): void {
-                Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+                $tenant = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
                 $tables = app(UndoHistory::class)->snapshot($tenant);
                 $tables = array_map(array_values(...), $tables);
                 $tables['comments'] = [];
@@ -65,9 +67,19 @@ class TenantBackup
                 }
                 $tables['contract_reminder_deliveries'] = DB::table('contract_reminder_deliveries')->where('tenant_id', $tenant->id)->get()->map(fn ($row) => (array) $row)->all();
                 $members = $tenant->users()->pluck('users.id')->all();
-                $userIds = array_unique([...$members, ...($tenant->fresh()->contract_reminders['user_ids'] ?? []), ...array_column($tables['attachments'], 'uploaded_by'), ...array_column($tables['comments'], 'user_id')]);
+                $userIds = array_unique([...$members, ...($tenant->contract_reminders['user_ids'] ?? []), ...array_column($tables['attachments'], 'uploaded_by'), ...array_column($tables['comments'], 'user_id')]);
                 $users = DB::table('users')->whereIn('id', array_filter($userIds))->get(['id', 'name', 'email'])->map(fn ($user) => (array) $user)->all();
-                $data = ['tenant' => $tenant->fresh()->only('id', 'name', 'slug', 'contract_reminders'), 'users' => $users, 'members' => $members, 'tables' => $tables];
+                $data = ['tenant' => $tenant->only('id', 'name', 'slug', 'contract_reminders', 'logo_path'), 'users' => $users, 'members' => $members, 'tables' => $tables];
+                if ($tenant->logo_path !== null) {
+                    $this->validateLogoPath($tenant->logo_path, $tenant->id);
+                    $disk = Storage::disk('attachments');
+                    $source = $disk->path($tenant->logo_path);
+                    Archive::check(is_file($source) && ! is_link($source) && realpath($source) === realpath($disk->path('')).'/'.$tenant->logo_path, 'Logo mancante o percorso non regolare.');
+                    $this->validateLogo($source, basename($tenant->logo_path));
+                    // Read the bounded image while the tenant lock still protects its reference and file.
+                    $contents = file_get_contents($source);
+                    Archive::check($contents !== false && $zip->addFromString('logo', $contents), 'Copia logo fallita.');
+                }
                 Archive::check($zip->addFromString('data.json', json_encode($data, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)), 'Scrittura dei dati tenant fallita.');
                 foreach ($tables['attachments'] as $file) {
                     Archive::check($file['disk'] === 'attachments' && str_starts_with($file['path'], $tenant->id.'/'), 'Percorso allegato non appartenente al tenant.');
@@ -101,6 +113,14 @@ class TenantBackup
             DB::transaction(function () use ($tenant, $zip, $manifest, $data, &$createdFiles): void {
                 $tenant = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
                 Archive::check($this->isEmpty($tenant), 'Il ripristino richiede un ambiente nuovo o vuoto, senza impostazioni personalizzate.');
+                $logoPath = null;
+                if (isset($data['tenant']['logo_path'])) {
+                    $logoPath = $tenant->id.'/logos/'.Str::uuid().'.'.pathinfo($data['tenant']['logo_path'], PATHINFO_EXTENSION);
+                    $createdFiles[] = $logoPath;
+                    $destination = Storage::disk('attachments')->path($logoPath);
+                    Archive::copyEntry($zip, 'logo', $destination);
+                    $this->validateLogo($destination, basename($logoPath));
+                }
                 $maps = ['users' => $this->users($data['users'], $manifest['installation'])];
                 $members = array_map(fn ($id) => $this->reference($maps, 'users', $id), $data['members']);
                 Archive::check(array_diff($tenant->users()->pluck('users.id')->all(), $members) === [], 'Le associazioni utente del tenant di destinazione sono in conflitto con il backup.');
@@ -166,7 +186,7 @@ class TenantBackup
                 if ($settings !== null) {
                     $settings['user_ids'] = array_map(fn ($id) => $this->reference($maps, 'users', $id), $settings['user_ids']);
                 }
-                $tenant->forceFill(['contract_reminders' => $settings])->save();
+                $tenant->forceFill(['contract_reminders' => $settings, 'logo_path' => $logoPath])->saveOrFail();
                 $tenant->users()->sync($members);
             });
         } catch (Throwable $error) {
@@ -177,6 +197,19 @@ class TenantBackup
         } finally {
             $zip->close();
         }
+    }
+
+    private function validateLogoPath(string $path, int $tenantId): void
+    {
+        Archive::safePath($path);
+        Archive::check(preg_match('~^'.$tenantId.'/logos/[^/]+\.(png|jpg|jpeg)$~D', $path) === 1, 'Percorso logo non appartenente al tenant o formato non valido.');
+    }
+
+    private function validateLogo(string $path, string $name): void
+    {
+        Validator::make(['logo' => new UploadedFile($path, $name, null, null, true)], [
+            'logo' => ['required', 'image', 'mimes:png,jpg,jpeg', 'extensions:png,jpg,jpeg', 'max:2048', 'dimensions:max_width=4096,max_height=4096'],
+        ])->validate();
     }
 
     /** @param list<array<string, mixed>> $users
@@ -217,7 +250,8 @@ class TenantBackup
     private function validate(array $data, array $manifest): void
     {
         Validator::make($data, [
-            'tenant' => ['required', 'array:id,name,slug,contract_reminders'],
+            'tenant' => ['required', 'array:id,name,slug,contract_reminders,logo_path'],
+            'tenant.logo_path' => ['sometimes', 'nullable', 'string'],
             'tenant.id' => ['required', 'integer', 'min:1'],
             'tenant.name' => ['required', 'string'], 'tenant.slug' => ['required', 'string'],
             'tenant.contract_reminders' => ['present', 'nullable', 'array'],
@@ -253,6 +287,12 @@ class TenantBackup
             }
         }
         $expectedFiles = ['data.json'];
+        // Missing metadata in older archives means no logo; declared logos always require a file.
+        if (isset($data['tenant']['logo_path'])) {
+            $this->validateLogoPath($data['tenant']['logo_path'], $data['tenant']['id']);
+            $expectedFiles[] = 'logo';
+            Archive::check(isset($manifest['files']['logo']) && $manifest['files']['logo']['size'] <= 2048 * 1024, 'Logo mancante o troppo grande.');
+        }
         foreach ($data['tables'] as $table => $rows) {
             /** @var list<array<string, mixed>> $rows */
             foreach ($rows as $row) {

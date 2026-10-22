@@ -138,7 +138,7 @@ export function EconomicChart({
                                                 : money(row.actual)}
                                         </p>
                                         <p>
-                                            Scostamento confrontabile:{' '}
+                                            Scostamento:{' '}
                                             <span
                                                 className={varianceTextClass(
                                                     row.variance,
@@ -150,8 +150,8 @@ export function EconomicChart({
                                             </span>
                                         </p>
                                         <p className="mt-2 text-muted-foreground">
-                                            {row.count} spese · {row.incomplete}{' '}
-                                            incomplete
+                                            {row.count} spese ·{' '}
+                                            {row.estimated_count} solo stima
                                         </p>
                                     </div>
                                 ) : null;

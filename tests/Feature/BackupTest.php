@@ -183,6 +183,224 @@ class BackupTest extends TestCase
         $this->assertSame('success', $backups->settings($target)['last_status']);
     }
 
+    public static function logoFormats(): array
+    {
+        return [['png'], ['jpg']];
+    }
+
+    #[DataProvider('logoFormats')]
+    public function test_tenant_backup_restores_logo_bytes(string $extension): void
+    {
+        [$source] = $this->fixture();
+        $logo = UploadedFile::fake()->image('logo.'.$extension);
+        $source->fresh()->forceFill(['logo_path' => $logo->store($source->id.'/logos', 'attachments')])->save();
+        $backups = app(BackupManager::class);
+        $path = $backups->path($source, $backups->create($source));
+        $target = $this->tenant('destination');
+        $backups->restoreTenant($target, $path);
+        $this->assertNotNull($target->fresh()->logo_path);
+        $this->assertStringStartsWith($target->id.'/logos/', $target->fresh()->logo_path);
+        $this->assertSame('destination', $target->fresh()->name);
+        $this->assertSame('destination', $target->fresh()->slug);
+        $this->assertSame('allegato verificabile', Storage::disk('attachments')->get($target->attachments()->sole()->path));
+        $zip = BackupArchive::open($path);
+        $manifest = BackupArchive::verify($zip, 'tenant');
+        $this->assertArrayHasKey('logo', $manifest['files']);
+        $this->assertSame($source->fresh()->logo_path, BackupArchive::json($zip, 'data.json')['tenant']['logo_path']);
+        $zip->close();
+        $this->assertSame(file_get_contents($logo->getPathname()), Storage::disk('attachments')->get($target->fresh()->logo_path));
+    }
+
+    public static function absentLogos(): array
+    {
+        return [[false], [true]];
+    }
+
+    #[DataProvider('absentLogos')]
+    public function test_absent_and_legacy_logo_metadata_restore_without_extra_files(bool $legacy): void
+    {
+        [$source] = $this->fixture();
+        $backups = app(BackupManager::class);
+        $path = $backups->path($source, $backups->create($source));
+        $zip = BackupArchive::open($path);
+        $data = BackupArchive::json($zip, 'data.json');
+        $this->assertArrayHasKey('logo_path', $data['tenant']);
+        $this->assertNull($data['tenant']['logo_path']);
+        $this->assertFalse($zip->locateName('logo'));
+        $zip->close();
+        if ($legacy) {
+            $this->rewriteArchive($path, function ($zip, &$data): void {
+                unset($data['tenant']['logo_path']);
+            });
+        }
+        $target = $this->tenant('destination');
+        $backups->restoreTenant($target, $path);
+        $this->assertNull($target->fresh()->logo_path);
+        $this->assertCount(1, Storage::disk('attachments')->allFiles((string) $target->id));
+        $this->assertSame('allegato verificabile', Storage::disk('attachments')->get($target->attachments()->sole()->path));
+    }
+
+    private function rewriteArchive(string $path, \Closure $change): void
+    {
+        $zip = BackupArchive::open($path);
+        $data = BackupArchive::json($zip, 'data.json');
+        $change($zip, $data);
+        $zip->deleteName('manifest.json');
+        $zip->addFromString('data.json', json_encode($data, JSON_THROW_ON_ERROR));
+        $zip->close();
+        BackupArchive::seal($path, 'tenant', ['installation' => hash('sha256', config('app.key'))]);
+    }
+
+    public static function invalidLogos(): array
+    {
+        return array_map(fn ($case) => [$case], ['missing', 'altered', 'undeclared', 'invalid', 'wide', 'large', 'foreign', 'traversal', 'symlink']);
+    }
+
+    #[DataProvider('invalidLogos')]
+    public function test_invalid_archived_logo_rolls_back_everything(string $case): void
+    {
+        [$source] = $this->fixture();
+        $source->forceFill(['logo_path' => UploadedFile::fake()->image('logo.png')->store($source->id.'/logos', 'attachments')])->save();
+        $backups = app(BackupManager::class);
+        $path = $backups->path($source, $backups->create($source));
+        if (in_array($case, ['altered', 'symlink'])) {
+            $zip = BackupArchive::open($path);
+            if ($case === 'altered') {
+                $zip->addFromString('logo', 'altered');
+            } else {
+                $zip->setExternalAttributesName('logo', \ZipArchive::OPSYS_UNIX, 0120777 << 16);
+            }
+            $zip->close();
+        } else {
+            $this->rewriteArchive($path, function ($zip, &$data) use ($case): void {
+                match ($case) {
+                    'missing' => $zip->deleteName('logo'),
+                    'undeclared' => $data['tenant']['logo_path'] = null,
+                    'invalid' => $zip->addFromString('logo', 'not an image'),
+                    'wide' => $zip->addFromString('logo', UploadedFile::fake()->image('wide.png', 4097, 1)->get()),
+                    'large' => $zip->addFromString('logo', str_repeat('x', 2048 * 1024 + 1)),
+                    'foreign' => $data['tenant']['logo_path'] = '999/logos/logo.png',
+                    'traversal' => $data['tenant']['logo_path'] = $data['tenant']['id'].'/logos/../logo.png',
+                };
+            });
+        }
+        $target = $this->tenant('destination');
+        $before = Storage::disk('attachments')->allFiles();
+        try {
+            $backups->restoreTenant($target, $path);
+            $this->fail('Invalid logo accepted');
+        } catch (\RuntimeException) {
+            $this->assertTrue(app(TenantBackup::class)->isEmpty($target->fresh()));
+            $this->assertSame($before, Storage::disk('attachments')->allFiles());
+            $this->assertSame([], $target->users()->pluck('users.id')->all());
+        }
+    }
+
+    public static function invalidSourceLogos(): array
+    {
+        return array_map(fn ($case) => [$case], ['missing', 'invalid', 'foreign', 'traversal', 'symlink', 'directory-symlink']);
+    }
+
+    #[DataProvider('invalidSourceLogos')]
+    public function test_backup_rejects_missing_invalid_or_unsafe_source_logo(string $case): void
+    {
+        $source = $this->tenant('source');
+        $disk = Storage::disk('attachments');
+        $path = UploadedFile::fake()->image('logo.png')->store($source->id.'/logos', 'attachments');
+        if ($case === 'missing') {
+            $disk->delete($path);
+        } elseif ($case === 'invalid') {
+            $disk->put($path, 'invalid');
+        } elseif ($case === 'foreign') {
+            $path = '999/logos/logo.png';
+        } elseif ($case === 'traversal') {
+            $path = $source->id.'/logos/../logo.png';
+        } elseif ($case === 'symlink') {
+            $disk->move($path, 'original.png');
+            symlink($disk->path('original.png'), $disk->path($path));
+        } else {
+            rename($disk->path($source->id.'/logos'), $disk->path('original'));
+            symlink($disk->path('original'), $disk->path($source->id.'/logos'));
+        }
+        $source->forceFill(['logo_path' => $path])->save();
+        try {
+            app(BackupManager::class)->create($source);
+            $this->fail('Unsafe source logo accepted');
+        } catch (\RuntimeException) {
+            $this->assertSame([], app(BackupManager::class)->archives($source));
+            $this->assertSame([], Storage::disk('backups')->allFiles('.pending'));
+        }
+    }
+
+    public function test_restore_rejects_target_with_only_a_logo(): void
+    {
+        $source = $this->tenant('source');
+        $target = $this->tenant('destination');
+        $path = UploadedFile::fake()->image('logo.png')->store($target->id.'/logos', 'attachments');
+        $target->forceFill(['logo_path' => $path])->save();
+        $before = Storage::disk('attachments')->get($path);
+        $backups = app(BackupManager::class);
+        $archive = $backups->path($source, $backups->create($source));
+        $this->assertFalse(app(TenantBackup::class)->isEmpty($target));
+        try {
+            $backups->restoreTenant($target, $archive);
+            $this->fail('Existing logo overwritten');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('ambiente nuovo o vuoto', $error->getMessage());
+            $this->assertSame($path, $target->fresh()->logo_path);
+            $this->assertSame($before, Storage::disk('attachments')->get($path));
+        }
+    }
+
+    public static function restoreFailures(): array
+    {
+        return [['attachment-copy'], ['save']];
+    }
+
+    #[DataProvider('restoreFailures')]
+    public function test_logo_and_attachments_are_removed_on_restore_failure(string $failure): void
+    {
+        [$source] = $this->fixture();
+        $source->forceFill(['logo_path' => UploadedFile::fake()->image('logo.png')->store($source->id.'/logos', 'attachments')])->save();
+        $backups = app(BackupManager::class);
+        $path = $backups->path($source, $backups->create($source));
+        $target = $this->tenant('destination');
+        $disk = Storage::disk('attachments');
+        $before = $disk->allFiles();
+        if ($failure === 'attachment-copy') {
+            $this->rewriteArchive($path, function ($zip, &$data): void {
+                $data['tables']['attachments'][] = [...$data['tables']['attachments'][0], 'id' => 99999];
+                $zip->addFromString('attachments/99999', 'allegato verificabile');
+            });
+            $copies = 0;
+            $root = $disk->path('');
+            $disk = \Mockery::mock($disk)->makePartial();
+            Storage::shouldReceive('disk')->with('attachments')->andReturn($disk);
+            $disk->shouldReceive('path')->andReturnUsing(function ($file) use (&$copies, $target, $root): string {
+                if (str_starts_with($file, $target->id.'/') && ++$copies === 3) {
+                    throw new \RuntimeException('Simulated attachment copy failure');
+                }
+
+                return $root.$file;
+            });
+        } else {
+            Tenant::saving(function ($tenant) use ($target): void {
+                if ($tenant->id === $target->id) {
+                    throw new \RuntimeException('Simulated tenant save failure');
+                }
+            });
+        }
+        try {
+            $backups->restoreTenant($target, $path);
+            $this->fail('Restore failure expected');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('Simulated', $error->getMessage());
+            $this->assertTrue(app(TenantBackup::class)->isEmpty($target->fresh()));
+            $this->assertSame($before, $disk->allFiles());
+            $this->assertSame([], $target->users()->pluck('users.id')->all());
+        }
+    }
+
     public function test_authorization_manual_backup_and_authenticated_download(): void
     {
         [$tenant, $user] = $this->fixture();

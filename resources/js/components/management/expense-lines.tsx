@@ -159,9 +159,9 @@ export function ExpenseLines({
             totals[type] = null;
     }
     const variance =
-        totals.allocated === null || totals.actual === null
+        incomplete.size > 0
             ? null
-            : totals.actual - totals.allocated;
+            : (totals.actual ?? 0n) - (totals.allocated ?? 0n);
     const allocatedLabel = 'Allocato';
     const view = useTableView<DraftLine>({
         rows: visible,

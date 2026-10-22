@@ -107,13 +107,13 @@ class SpreadsheetTransferTest extends TestCase
                 $economic = ExpenseOverview::query($tenant, $request)->sole();
                 $kpis = ExpenseAnalytics::data($tenant, $request);
                 $book = $this->workbook('/t/ambiente/expenses/export.xlsx?year=2026&search='.urlencode($title));
-                $variance = $actual === null ? null : ($actual === '0.00' ? '-100.00' : '-100.01');
+                $variance = $actual === '-0.01' ? '-100.01' : '-100.00';
                 $expected = ['100.00', $actual, $variance];
                 $this->assertSame($expected, [$expense->allocated_amount, $expense->actual_amount, $expense->variance], $title);
                 $this->assertSame($expected, [$economic->allocated_amount, $economic->actual_amount, $economic->variance], $title);
                 $this->assertSame($expected, [$kpis['current']['allocated'], $kpis['current']['actual'], $kpis['current']['variance']], $title);
-                $this->assertSame($actual === null ? 1 : 0, $kpis['current']['incomplete']);
-                $this->assertSame($actual === null ? [] : [$variance], array_column($kpis['variances'], 'variance'));
+                $this->assertSame($actual === null ? 1 : 0, $kpis['current']['estimated_count']);
+                $this->assertSame([$variance], array_column($kpis['variances'], 'variance'));
                 $this->assertSame(100.0, $book->getSheet(0)->getCell('I2')->getValue());
                 $this->assertSame($actual === null ? null : (float) $actual, $book->getSheet(0)->getCell('J2')->getValue());
                 $this->get('/t/ambiente/expenses?year=2026&search='.urlencode($title))->assertInertia(fn (Assert $page) => $page
@@ -139,20 +139,20 @@ class SpreadsheetTransferTest extends TestCase
         $expense = $tenant->expenses()->findOrFail($response->json('record.id'));
         $this->assertSame('99.99', $expense->allocated_amount);
         $this->assertSame('0.00', $expense->actual_amount);
-        foreach ([2026 => ['99.99', null], 2027 => [null, '0.00'], 2028 => ['0.00', null]] as $selected => [$allocated, $actual]) {
+        foreach ([2026 => ['99.99', null, '-99.99'], 2027 => [null, '0.00', '0.00'], 2028 => ['0.00', null, '0.00']] as $selected => [$allocated, $actual, $variance]) {
             $year = $tenant->budgetYears()->create(['year' => $selected]);
             $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
             $request = Request::create('/', 'GET', ['year' => $selected]);
             $economic = ExpenseOverview::query($tenant, $request)->sole();
-            $this->assertSame([$allocated, $actual, null], [$economic->allocated_amount, $economic->actual_amount, $economic->variance]);
+            $this->assertSame([$allocated, $actual, $variance], [$economic->allocated_amount, $economic->actual_amount, $economic->variance]);
             $kpis = ExpenseAnalytics::data($tenant, $request);
-            $this->assertSame([$allocated, $actual, null], [$kpis['current']['allocated'], $kpis['current']['actual'], $kpis['current']['variance']]);
-            $this->assertSame([], $kpis['variances']);
+            $this->assertSame([$allocated, $actual, $variance], [$kpis['current']['allocated'], $kpis['current']['actual'], $kpis['current']['variance']]);
+            $this->assertSame($variance === '0.00' ? [] : [$variance], array_column($kpis['variances'], 'variance'));
             $breakdown = ExpenseOverview::breakdown(ExpenseOverview::query($tenant, $request));
             $this->assertSame($actual === null ? 1 : 0, $breakdown['actual']['missing']);
             $this->assertSame($actual === '0.00' ? 1 : 0, $breakdown['actual']['zero']);
             $entry = app(AnnualBudget::class)->snapshot($tenant, $year)['entries'][0];
-            $this->assertSame([$allocated, $actual, null], [$entry['allocated'], $entry['actual'], $entry['variance']]);
+            $this->assertSame([$allocated, $actual, $variance], [$entry['allocated'], $entry['actual'], $entry['variance']]);
             foreach (['expenses' => ['I2', 'J2'], 'budget' => ['F2', 'G2']] as $resource => [$allocatedCell, $actualCell]) {
                 $sheet = $this->workbook('/t/ambiente/'.$resource.'/export.xlsx?year='.$selected)->getSheet(0);
                 $this->assertSame($allocated === null ? null : (float) $allocated, $sheet->getCell($allocatedCell)->getValue());
@@ -271,7 +271,121 @@ class SpreadsheetTransferTest extends TestCase
         $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
         $this->assertEquals(-20, $book->getSheet(0)->getCell('H2')->getValue());
         $this->assertEquals(-20, $book->getSheet(1)->getCell('E2')->getValue());
-        $this->assertSame('Completo', $book->getSheet(0)->getCell('I2')->getValue());
+        $this->assertSame('Effettivo registrato', $book->getSheet(0)->getCell('I2')->getValue());
+    }
+
+    public function test_report_budget_and_annual_xlsx_preserve_signed_numeric_variances_and_sources(): void
+    {
+        $tenant = $this->tenant();
+        $year = $tenant->budgetYears()->create(['year' => 2026]);
+        $project = $tenant->projects()->create(['name' => 'Separate amounts', 'year' => 2026]);
+        $forecast = $tenant->expenses()->create(['title' => 'Forecast', 'year' => 2026, 'project_id' => $project->id]);
+        $purchase = $tenant->expenses()->create(['title' => 'Purchase', 'year' => 2026, 'project_id' => $project->id]);
+        $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'project', 'project_id' => $project->id]);
+
+        foreach ([['100.01', '80.02', '-19.99', 'Effettivo registrato'], ['80.02', '100.01', '19.99', 'Effettivo registrato'], ['100.01', '100.01', '0.00', 'Effettivo registrato'], ['100.00', null, '-100.00', 'Solo stima'], [null, '80.00', '80.00', 'Effettivo registrato'], [null, null, '0.00', 'Nessun importo registrato'], [null, '0.00', '0.00', 'Effettivo registrato']] as [$allocated, $actual, $variance, $status]) {
+            $forecast->update(['allocated_amount' => $allocated]);
+            $purchase->update(['actual_amount' => $actual]);
+            $before = $tenant->expenses()->orderBy('id')->get()->map->getRawOriginal()->all();
+            $report = $this->getJson('/t/ambiente/projects/report?year=2026&record='.$project->id)->assertOk()
+                ->assertJsonPath('totals.variance', $variance)->json();
+            $snapshot = app(AnnualBudget::class)->snapshot($tenant, $year);
+            $this->assertSame($variance, $snapshot['totals']['variance']);
+            $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
+            $file = tempnam(sys_get_temp_dir(), 'variance-');
+            try {
+                file_put_contents($file, Excel::raw(app(SectionSpreadsheet::class)->annual($tenant, 2026), \Maatwebsite\Excel\Excel::XLSX));
+                $annual = IOFactory::load($file);
+                $this->assertSame($status, $book->getSheet(0)->getCell('I2')->getValue());
+                $this->assertSame($status, $annual->getSheetByName('Budget')->getCell('I2')->getValue());
+                foreach ([$book->getSheet(0)->getCell('H2'), $book->getSheet(1)->getCell('E2'), $annual->getSheetByName('Budget')->getCell('H2')] as $cell) {
+                    $this->assertSame((float) $report['totals']['variance'], $cell->getValue());
+                    $this->assertSame(DataType::TYPE_NUMERIC, $cell->getDataType());
+                    $this->assertSame(SectionSpreadsheet::VARIANCE, $cell->getStyle()->getNumberFormat()->getFormatCode());
+                    $this->assertStringNotContainsString('+', $cell->getFormattedValue());
+                    $this->assertSame(str_starts_with($variance, '-'), str_contains($cell->getFormattedValue(), '-'));
+                }
+            } finally {
+                unlink($file);
+            }
+            $this->assertSame($before, $tenant->expenses()->orderBy('id')->get()->map->getRawOriginal()->all());
+        }
+    }
+
+    public function test_budget_xlsx_selection_matches_report_rows_and_totals_including_empty_and_annual_exports(): void
+    {
+        $tenant = $this->tenant();
+        $year = $tenant->budgetYears()->create(['year' => 2026]);
+        $center = $tenant->costCenters()->create(['name' => 'Centro']);
+        $vendor = $tenant->vendors()->create(['name' => 'Fornitore']);
+        $contract = $tenant->contracts()->create(['name' => 'Contratto', 'year' => 2026, 'vendor_id' => $vendor->id]);
+        $project = $tenant->projects()->create(['name' => 'Progetto', 'year' => 2026]);
+        $shared = $tenant->expenses()->create(['title' => 'Condivisa storica', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
+        $tenant->expenses()->create(['title' => 'Progetto', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => '50', 'actual_amount' => '70']);
+        $zero = $tenant->expenses()->create(['title' => 'Zero', 'year' => 2026, 'allocated_amount' => '0']);
+        $excluded = $tenant->expenses()->create(['title' => 'Esclusa', 'year' => 2026, 'allocated_amount' => '999', 'actual_amount' => '999']);
+        foreach ([['contract', $contract, true], ['project', $project, true], ['expense', $zero, true], ['expense', $excluded, false], ['expense', $shared, true]] as [$type, $source, $included]) {
+            $year->entries()->create(['tenant_id' => $tenant->id, 'type' => $type, $type.'_id' => $source->id, 'included' => $included, 'cost_center_id' => $center->id]);
+        }
+        $ids = $year->entries()->orderBy('id')->pluck('id')->all();
+        $names = ['contract' => 'Contratto', 'project' => 'Progetto', 'expense' => 'Spesa'];
+        foreach ([[$ids[0]], [$ids[0], $ids[4]], [$ids[4]], [$ids[0], $ids[1], $ids[2], $ids[4]], $ids, [$ids[3]], [], null] as $selection) {
+            $query = $selection === null ? '' : '&entry_ids='.implode(',', $selection);
+            $snapshot = $this->getJson('/t/ambiente/budget/years/'.$year->id.'?'.$query)->assertOk()->json('budget');
+            $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026'.$query);
+            $sheet = $book->getSheetByName('Budget');
+            $this->assertSame(count($snapshot['entries']) + 1, $sheet->getHighestDataRow());
+            foreach ($snapshot['entries'] as $index => $entry) {
+                $row = $index + 2;
+                $this->assertSame($entry['description'], $sheet->getCell('C'.$row)->getValue());
+                $this->assertSame($entry['included'] ? 'Sì' : 'No', $sheet->getCell('D'.$row)->getValue());
+                $this->assertSame('Centro', $sheet->getCell('E'.$row)->getValue());
+                foreach (['F' => 'allocated', 'G' => 'actual', 'H' => 'variance'] as $column => $metric) {
+                    $this->assertSame($entry[$metric] === null ? null : (float) $entry[$metric], $sheet->getCell($column.$row)->getValue());
+                    if ($metric === 'variance') {
+                        $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell($column.$row)->getDataType());
+                        $this->assertSame(SectionSpreadsheet::VARIANCE, $sheet->getStyle($column.$row)->getNumberFormat()->getFormatCode());
+                        $this->assertStringNotContainsString('+', $sheet->getCell($column.$row)->getFormattedValue());
+                    }
+                }
+            }
+            foreach (['Totale' => $snapshot['totals'], ...$snapshot['groups']] as $group => $totals) {
+                $row = array_search($names[$group] ?? $group, array_column($book->getSheet(1)->toArray(), 1), true) + 1;
+                foreach (['C' => 'allocated', 'D' => 'actual', 'E' => 'variance'] as $column => $metric) {
+                    $this->assertSame($totals[$metric] === null ? null : (float) $totals[$metric], $book->getSheet(1)->getCell($column.$row)->getValue());
+                }
+            }
+        }
+        $annual = app(SectionSpreadsheet::class)->annual($tenant, 2026)->sheets()[4]->array();
+        $this->assertCount(5, $annual);
+        $this->assertSame('No', $annual[3][3]);
+        $this->assertNull($annual[4][5]);
+        $this->assertSame('150.00', app(AnnualBudget::class)->snapshot($tenant, $year)['totals']['allocated']);
+    }
+
+    public function test_budget_selection_rejects_malformed_foreign_year_and_removed_ids_for_xlsx_and_report(): void
+    {
+        $tenant = $this->tenant();
+        $year = $tenant->budgetYears()->create(['year' => 2026]);
+        $expense = $tenant->expenses()->create(['title' => 'Voce', 'year' => 2026]);
+        $valid = $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
+        $otherYear = $tenant->budgetYears()->create(['year' => 2027]);
+        $future = $otherYear->entries()->create(['tenant_id' => $tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
+        $other = Tenant::create(['name' => 'Altro', 'slug' => 'altro']);
+        $foreignYear = $other->budgetYears()->create(['year' => 2026]);
+        $foreignExpense = $other->expenses()->create(['title' => 'Privata', 'year' => 2026]);
+        $foreign = $foreignYear->entries()->create(['tenant_id' => $other->id, 'type' => 'expense', 'expense_id' => $foreignExpense->id]);
+        $removedExpense = $tenant->expenses()->create(['title' => 'Rimossa', 'year' => 2026]);
+        $removed = $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'expense', 'expense_id' => $removedExpense->id]);
+        $removed->delete();
+        foreach (['none', '0', '-1', '1.5', '1,', '1,,2', str_repeat('9', 30), (string) $foreign->id, (string) $future->id, (string) $removed->id, $valid->id.','.$removed->id, [$valid->id]] as $invalid) {
+            $query = http_build_query(['entry_ids' => $invalid]);
+            foreach (['/t/ambiente/budget/export.xlsx?year=2026&', '/t/ambiente/budget/years/'.$year->id.'?'] as $url) {
+                $this->getJson($url.$query)->assertUnprocessable();
+            }
+        }
+        $this->getJson('/t/ambiente/budget/export.xlsx?year=2028&entry_ids='.$valid->id)->assertUnprocessable();
+        $this->assertSame(1, $this->workbook('/t/ambiente/budget/export.xlsx?year=2028&entry_ids=')->getSheet(0)->getHighestDataRow());
     }
 
     public function test_allocated_templates_accept_previous_heading_without_losing_amounts(): void

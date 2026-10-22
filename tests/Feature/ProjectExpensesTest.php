@@ -85,7 +85,7 @@ class ProjectExpensesTest extends TestCase
         $this->get('/t/alfa/projects/'.$project->id.'?year=2027')->assertInertia(fn (Assert $page) => $page
             ->where('expenses.data.0.id', $expense->id)->where('totals.allocated', '120.00'));
         $this->get('/t/alfa/projects/'.$previous->id.'?year=2027')->assertInertia(fn (Assert $page) => $page
-            ->has('expenses.data', 0)->where('totals.allocated', '0.00'));
+            ->has('expenses.data', 0)->where('totals.allocated', null));
         $foreign = $this->other->projects()->create(['name' => 'Progetto Beta', 'status' => 'attivo']);
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['project_id' => $foreign->id])->assertUnprocessable()->assertJsonValidationErrors('project_id');
         $this->patchJson('/t/beta/expenses/'.$expense->id, ['project_id' => $foreign->id])->assertNotFound();
@@ -126,7 +126,7 @@ class ProjectExpensesTest extends TestCase
         $this->assertTrue($first->attachments()->whereKey($attachment->id)->exists());
         Storage::disk('local')->assertExists('fattura.pdf');
         $this->get('/t/alfa/projects/'.$project->id.'?year=2027&history=1')->assertInertia(fn (Assert $page) => $page
-            ->has('expenses.data', 0)->where('totals.allocated', '0.00'));
+            ->has('expenses.data', 0)->where('totals.allocated', null));
     }
 
     public function test_bulk_project_links_reject_foreign_records_without_partial_updates(): void
@@ -178,7 +178,7 @@ class ProjectExpensesTest extends TestCase
 
         $this->get('/t/alfa/dashboard?year=2026&project_id='.$project->id)->assertInertia(fn (Assert $page) => $page
             ->where('analytics.current.allocated', '9988.00')->where('analytics.current.actual', '9101.41')
-            ->where('analytics.current.variance', null));
+            ->where('analytics.current.variance', '-886.59'));
     }
 
     public function test_project_variance_preserves_missing_values_and_handles_zero_and_adjustments(): void
@@ -186,10 +186,10 @@ class ProjectExpensesTest extends TestCase
         $project = $this->tenant->projects()->create(['name' => 'Progetto', 'status' => 'attivo']);
         $path = '/t/alfa/projects/'.$project->id.'?year=2026';
         $this->get($path)->assertInertia(fn (Assert $page) => $page
-            ->where('analytics.current.allocated', null)->where('analytics.current.actual', null)->where('analytics.current.variance', null));
+            ->where('analytics.current.allocated', null)->where('analytics.current.actual', null)->where('analytics.current.variance', '0.00'));
         $this->tenant->expenses()->create(['title' => 'Effettivo zero', 'project_id' => $project->id, 'year' => 2026, 'actual_amount' => '0.00']);
         $this->get($path)->assertInertia(fn (Assert $page) => $page
-            ->where('analytics.current.allocated', null)->where('analytics.current.actual', '0.00')->where('analytics.current.variance', null));
+            ->where('analytics.current.allocated', null)->where('analytics.current.actual', '0.00')->where('analytics.current.variance', '0.00'));
         $this->tenant->expenses()->create(['title' => 'Preventivo', 'project_id' => $project->id, 'year' => 2026, 'allocated_amount' => '10.01']);
         $this->get($path)->assertInertia(fn (Assert $page) => $page->where('analytics.current.variance', '-10.01'));
         $this->tenant->expenses()->create(['title' => 'Rettifica', 'project_id' => $project->id, 'year' => 2026, 'actual_amount' => '-2.34']);

@@ -82,8 +82,8 @@ class DetailBreakdownTest extends TestCase
             ->where('totals.variance', '-19.99')->where('breakdown.actual.net', '80.02')
             ->has('breakdown.actual.items', 1)->where('breakdown.actual.items.0.id', (string) $expense->id)->has('expenses.data', 1));
         $this->get($path.'?year=2026')->assertInertia(fn (Assert $page) => $page
-            ->where('totals.count', 2)->where('totals.incomplete', 1)
-            ->where('totals.variance', '-30.07')->where('breakdown.actual.positive', '30.05')
+            ->where('totals.count', 2)->where('totals.estimated_count', 0)
+            ->where('totals.variance', '-0.02')->where('breakdown.actual.positive', '30.05')
             ->where('breakdown.actual.negative', '-10.04')->where('breakdown.actual.net', '20.01')
             ->where('breakdown.allocated.missing', 1)->has('expenses.data', 2));
         $this->get($path.'?history=1')->assertInertia(fn (Assert $page) => $page
@@ -92,7 +92,7 @@ class DetailBreakdownTest extends TestCase
             ->where('breakdown.actual.items.0.amount', '30.05')->has('breakdown.actual.items', 1)->has('expenses.data', 3));
     }
 
-    public function test_missing_zero_negative_and_comparable_variance_have_distinct_meanings(): void
+    public function test_missing_zero_negative_and_aggregate_variance_have_distinct_meanings(): void
     {
         foreach ([['0.00', '0.00'], ['0.01', '0.02'], ['-0.01', '-0.01'], ['10.10', null], [null, '20.20'], [null, null]] as [$allocated, $actual]) {
             $this->tenant->expenses()->create(['title' => 'Voce', 'year' => 2026, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
@@ -100,8 +100,8 @@ class DetailBreakdownTest extends TestCase
         $query = ExpenseOverview::economicQuery($this->tenant);
         $data = ExpenseOverview::breakdown($query);
         $totals = ExpenseOverview::totals($query);
-        $this->assertSame('0.01', $totals['variance']);
-        $this->assertSame(3, $totals['incomplete']);
+        $this->assertSame('10.11', $totals['variance']);
+        $this->assertSame(1, $totals['estimated_count']);
         $this->assertSame('20.22', $data['actual']['positive']);
         $this->assertSame('-0.01', $data['actual']['negative']);
         $this->assertSame('20.21', $data['actual']['net']);

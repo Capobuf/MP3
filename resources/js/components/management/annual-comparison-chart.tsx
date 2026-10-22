@@ -111,8 +111,8 @@ export function AnnualComparisonChart({
                                                 : money(row.actual)}
                                         </p>
                                         <p className="mt-1 text-muted-foreground">
-                                            {row.count} spese · {row.incomplete}{' '}
-                                            incomplete
+                                            {row.count} spese ·{' '}
+                                            {row.estimated_count} solo stima
                                         </p>
                                     </div>
                                 ) : null;

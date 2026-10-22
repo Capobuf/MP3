@@ -252,9 +252,16 @@ Un valore vuoto indica un importo da
 inserire, distinto da zero. Dopo il salvataggio o la cancellazione vengono
 ricaricati anche riepiloghi e grafici.
 
-Nel dettaglio di un progetto, i KPI sommano le spese collegate nell’anno
-selezionato. Lo scostamento del progetto è il totale effettivo meno il totale
-allocato, anche quando preventivo e acquisti sono registrati in spese distinte.
+In tutta l’app, report/PDF e XLSX lo scostamento è la somma degli effettivi
+meno la somma degli allocati nel perimetro selezionato, anche su spese distinte.
+Positivo = sovraspesa (senza `+`), negativo = risparmio, zero = pareggio.
+Una somma vuota vale zero solo nel calcolo dello scostamento: gli importi
+mancanti restano null e non indicano un errore. Una voce con allocato presente
+e nessun effettivo è segnalata come «Solo stima» con un triangolo grigio e tooltip.
+Per progetti e contratti si considerano gli importi complessivi delle spese
+attribuite nell’anno: previsione e acquisto possono essere su spese diverse.
+Un effettivo pari a zero è registrato e non genera la segnalazione. Un insieme vuoto
+ha scostamento zero e conteggio zero; un anno precedente assente resta assente.
 
 Glide è stato rimosso: non sono più disponibili copia/incolla di intervalli e
 modifica delle altre colonne nella griglia. Il riordino tramite trascinamento
@@ -558,6 +565,15 @@ identità degli utenti e associazioni. Riutilizza lo snapshot relazionale
 esistente e il controllo di ambiente vuoto di `TenantCsvTransfer`; non usa il
 CSV tecnico come backup e non ricalcola importi o riapplica le validazioni
 per nuovi record. La cronologia temporanea Undo rimane nel backup globale.
+
+Il backup tenant include anche il logo aziendale: `tenant.logo_path` in
+`data.json` dichiara il riferimento originale oppure `null`; quando presente,
+la sola entry `logo` è obbligatoria e verificata dall’inventario del manifest.
+Negli archivi precedenti l’assenza del metadato significa assenza del logo.
+Un logo dichiarato ma mancante, alterato o non valido blocca il ripristino.
+Si applicano gli stessi limiti del caricamento: PNG/JPEG, 2 MB, 4096×4096 pixel.
+Il ripristino genera un percorso privato nuovo nel tenant di destinazione;
+un logo già presente nella destinazione impedisce la sovrascrittura.
 
 Il ripristino web richiede uno ZIP compatibile e una conferma esplicita. Il
 tenant di destinazione deve essere privo di dati, cronologia Undo/promemoria e

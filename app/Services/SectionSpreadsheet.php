@@ -10,6 +10,7 @@ use App\Models\Expense;
 use App\Models\Project;
 use App\Models\Tenant;
 use App\Models\Vendor;
+use App\Support\BudgetSelection;
 use App\Support\CatalogQuery;
 use App\Support\CostCenterQuery;
 use App\Support\EconomicYearContext;
@@ -25,6 +26,8 @@ class SectionSpreadsheet
     public const LABELS = ['vendors' => 'Fornitori', 'contracts' => 'Contratti', 'projects' => 'Progetti', 'expenses' => 'Spese', 'cost-centers' => 'Centri di costo', 'budget' => 'Budget'];
 
     public const EUR = '#,##0.00 "€";[Red]-#,##0.00 "€"';
+
+    public const VARIANCE = '[Color9]#,##0.00 "€";[Color10]-#,##0.00 "€";0.00 "€"';
 
     public const DATE = 'dd/mm/yyyy';
 
@@ -216,19 +219,20 @@ class SectionSpreadsheet
     {
         $selected = EconomicYearContext::year($tenant, $request);
         $year = $tenant->budgetYears()->where('year', $selected)->first();
-        $snapshot = $year ? app(AnnualBudget::class)->snapshot($tenant, $year) : ['entries' => [], 'totals' => [], 'groups' => []];
+        $ids = BudgetSelection::ids($request, $tenant, $year);
+        $snapshot = $year ? app(AnnualBudget::class)->snapshot($tenant, $year, $ids) : ['entries' => [], 'totals' => [], 'groups' => []];
         $typeNames = ['contract' => 'Contratto', 'project' => 'Progetto', 'expense' => 'Spesa'];
-        $rows = array_map(fn ($row) => [$selected, $typeNames[$row['type']], $row['description'], $row['included'] ? 'Sì' : 'No', $row['cost_center'] ? self::path($row['cost_center']) : null, self::amount($row['allocated']), self::amount($row['actual']), self::amount($row['variance']), $row['incomplete'] ? 'Incompleto' : 'Completo', $row['notes'], self::excelDate($row['starts_on']), self::excelDate($row['ends_on'])], $snapshot['entries']);
+        $rows = array_map(fn ($row) => [$selected, $typeNames[$row['type']], $row['description'], $row['included'] ? 'Sì' : 'No', $row['cost_center'] ? self::path($row['cost_center']) : null, self::amount($row['allocated']), self::amount($row['actual']), self::amount($row['variance']), $row['estimated_count'] ? 'Solo stima' : ($row['actual'] !== null ? 'Effettivo registrato' : 'Nessun importo registrato'), $row['notes'], self::excelDate($row['starts_on']), self::excelDate($row['ends_on'])], $snapshot['entries']);
         $summaries = [];
         foreach (['Totale' => $snapshot['totals'], ...$snapshot['groups']] as $label => $totals) {
             if ($totals !== []) {
-                $summaries[] = [$selected, $typeNames[$label] ?? $label, self::amount($totals['allocated']), self::amount($totals['actual']), self::amount($totals['variance']), $totals['incomplete']];
+                $summaries[] = [$selected, $typeNames[$label] ?? $label, self::amount($totals['allocated']), self::amount($totals['actual']), self::amount($totals['variance']), $totals['estimated_count']];
             }
         }
 
         return new SectionWorkbook([
-            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Allocato', 'Effettivo', 'Scostamento', 'Completezza', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::EUR, 'K' => self::DATE, 'L' => self::DATE]),
-            new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Allocato', 'Effettivo', 'Scostamento', 'Voci incomplete'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::EUR]),
+            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Allocato', 'Effettivo', 'Scostamento', 'Importi registrati', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::VARIANCE, 'K' => self::DATE, 'L' => self::DATE]),
+            new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Allocato', 'Effettivo', 'Scostamento', 'Voci solo stima'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::VARIANCE]),
             $this->periodSheet($selected),
         ]);
     }

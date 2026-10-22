@@ -31,7 +31,7 @@ export function DetailKpis({
             value: money(actual),
         },
         {
-            label: aggregate ? 'Scostamento confrontabile' : 'Scostamento',
+            label: 'Scostamento',
             value: variance == null ? 'Non determinabile' : money(variance),
         },
         {

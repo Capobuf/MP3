@@ -248,14 +248,14 @@ class AnnualBudgetTest extends TestCase
         $actual = $this->tenant->expenses()->create(['title' => 'Acquisto', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => null, 'actual_amount' => '80']);
         $state = $this->add('project', $project->id, ['cost_center_id' => $center->id]);
         $this->assertSame('-20.00', $state['entries'][0]['variance']);
-        $this->assertSame(0, $state['entries'][0]['incomplete']);
+        $this->assertSame(0, $state['entries'][0]['estimated_count']);
         $this->assertSame('-20.00', $state['totals']['variance']);
         $this->assertSame('-20.00', $state['groups']['project']['variance']);
         $this->assertSame('-20.00', $state['cost_center_groups'][$center->id]['variance']);
         $this->get('/t/budget/projects/'.$project->id.'?year=2026')->assertInertia(fn (Assert $page) => $page->where('analytics.current.variance', '-20.00'));
         $id = $state['entries'][0]['id'];
         $this->getJson($this->url('').'?entry_ids='.$id)->assertOk()->assertJsonPath('budget.totals.variance', '-20.00');
-        $this->getJson($this->url('').'?entry_ids=')->assertOk()->assertJsonPath('budget.totals.variance', null);
+        $this->getJson($this->url('').'?entry_ids=')->assertOk()->assertJsonPath('budget.totals.variance', '0.00');
         $this->postJson($this->url('entries'), ['entries' => [['type' => 'expense', 'source_id' => $actual->id]]])->assertUnprocessable();
         $this->assertSame('-20.00', $this->state()['totals']['variance']);
         $this->getJson($this->url('').'?entry_ids='.$id)->assertOk()->assertJsonPath('budget.totals.variance', '-20.00');
@@ -267,9 +267,9 @@ class AnnualBudgetTest extends TestCase
         $this->assertSame('-20.00', $state['totals']['variance']);
         $this->assertSame('-20.00', $state['groups']['expense']['variance']);
         $this->assertSame('-20.00', $state['vendor_groups']['none']['variance']);
-        $this->assertNull($state['entries'][0]['variance']);
-        $this->assertNull($state['entries'][1]['variance']);
-        $this->getJson($this->url('').'?entry_ids='.$state['entries'][1]['id'])->assertOk()->assertJsonPath('budget.totals.variance', null);
+        $this->assertSame('80.00', $state['entries'][0]['variance']);
+        $this->assertSame('-100.00', $state['entries'][1]['variance']);
+        $this->getJson($this->url('').'?entry_ids='.$state['entries'][1]['id'])->assertOk()->assertJsonPath('budget.totals.variance', '-100.00');
     }
 
     public function test_report_snapshot_preserves_empty_excluded_zero_and_foreign_selections(): void
@@ -287,7 +287,7 @@ class AnnualBudgetTest extends TestCase
         $snapshot = $this->getJson($this->url('').'?entry_ids='.implode(',', $ids))->assertOk()
             ->assertJsonCount(3, 'budget.entries')->assertJsonPath('budget.totals.count', 2)
             ->assertJsonPath('budget.totals.allocated', '0.00')->assertJsonPath('budget.totals.actual', null)
-            ->assertJsonPath('budget.totals.variance', null)->assertJsonPath('budget.entries.2.included', false)
+            ->assertJsonPath('budget.totals.variance', '0.00')->assertJsonPath('budget.entries.2.included', false)
             ->json('budget');
         $this->assertSame('0.00', $snapshot['groups']['expense']['allocated']);
         $this->assertSame('0.00', $snapshot['cost_center_groups'][$center->id]['allocated']);
@@ -302,23 +302,24 @@ class AnnualBudgetTest extends TestCase
         $otherYear = $other->budgetYears()->create(['year' => 2026]);
         $otherExpense = $other->expenses()->create(['title' => 'Privata', 'year' => 2026]);
         $foreign = $otherYear->entries()->create(['tenant_id' => $other->id, 'type' => 'expense', 'expense_id' => $otherExpense->id]);
-        foreach (['', (string) $foreign->id] as $selection) {
-            $this->getJson($this->url('').'?entry_ids='.$selection)->assertOk()
-                ->assertJsonCount(0, 'budget.entries')->assertJsonPath('budget.totals.count', 0)
-                ->assertJsonPath('budget.totals.allocated', null)->assertJsonCount(0, 'budget.vendor_groups');
-        }
+        $this->getJson($this->url('').'?entry_ids=')->assertOk()
+            ->assertJsonCount(0, 'budget.entries')->assertJsonPath('budget.totals.count', 0)
+            ->assertJsonPath('budget.totals.allocated', null)->assertJsonCount(0, 'budget.vendor_groups');
+        $this->getJson($this->url('').'?entry_ids='.$foreign->id)->assertUnprocessable()->assertJsonValidationErrors('entry_ids');
         $this->getJson($this->url('', $otherYear).'?entry_ids='.$foreign->id)->assertNotFound();
     }
 
     public function test_variance_preserves_missing_sides_explicit_zero_and_negative_adjustments(): void
     {
-        foreach ([[null, '80', null], ['100', null, null], ['100', '0', '-100.00'], ['100', '100', '0.00'], ['-20', '-15', '5.00']] as [$allocated, $actual, $variance]) {
+        foreach ([[null, '80', '80.00', 0], ['100', null, '-100.00', 1], [null, null, '0.00', 0], ['100', '80', '-20.00', 0], ['80', '100', '20.00', 0], ['100', '0', '-100.00', 0], [null, '0', '0.00', 0], ['0', null, '0.00', 1], ['100', '100', '0.00', 0], ['-20', '-15', '5.00', 0]] as [$allocated, $actual, $variance, $estimates]) {
             $this->year->entries()->delete();
             $expense = $this->tenant->expenses()->create(['title' => 'Confronto', 'year' => 2026, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
             $state = $this->add('expense', $expense->id);
             $this->assertSame($variance, $state['entries'][0]['variance']);
             $this->assertSame($variance, $state['totals']['variance']);
-            $this->assertSame(0, $state['entries'][0]['incomplete']);
+            $this->assertSame($estimates, $state['entries'][0]['estimated_count']);
+            $this->assertSame($estimates, $state['totals']['estimated_count']);
+            $this->assertSame($estimates, $state['groups']['expense']['estimated_count']);
         }
     }
 
@@ -353,7 +354,7 @@ class AnnualBudgetTest extends TestCase
             ->where('previousBudget.totals.actual', '90.02')
             ->where('previousBudget.totals.variance', '-9.99')
             ->where('previousBudget.totals.count', 1)
-            ->where('previousBudget.totals.incomplete', 0));
+            ->where('previousBudget.totals.estimated_count', 0));
         $future = $this->tenant->budgetYears()->create(['year' => 2028]);
         $this->get('/t/budget/budget?year='.$future->year)->assertInertia(fn (Assert $page) => $page->where('previousBudget', null));
     }
@@ -399,7 +400,7 @@ class AnnualBudgetTest extends TestCase
         $this->assertNull($this->state()['entries'][0]['actual']);
     }
 
-    public function test_null_zero_negatives_comparable_variance_and_sankey_reconcile(): void
+    public function test_null_zero_negatives_aggregate_variance_and_sankey_reconcile(): void
     {
         $contract = $this->tenant->contracts()->create(['year' => 2026, 'name' => 'Parziale']);
         foreach ([['100', null], [null, '50'], ['0', '10'], ['-20.12', '-15.11']] as $index => [$allocated, $actual]) {
@@ -414,7 +415,7 @@ class AnnualBudgetTest extends TestCase
         $this->assertSame('-34.99', $state['totals']['variance']);
         $this->assertSame('100.00', $state['totals']['allocated_positive']);
         $this->assertSame('-20.12', $state['totals']['allocated_negative']);
-        $this->assertSame(1, $state['totals']['incomplete']);
+        $this->assertSame(0, $state['totals']['estimated_count']);
         $this->assertNull($state['entries'][1]['allocated']);
         $this->assertSame('0.00', $state['entries'][2]['allocated']);
         $this->assertSame('79.88', $state['groups']['contract']['allocated']);

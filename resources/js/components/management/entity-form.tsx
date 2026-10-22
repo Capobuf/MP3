@@ -857,7 +857,6 @@ export function EntityForm({
                                                             selected,
                                                         )
                                                     }
-                                                    includeNone
                                                     disabled={
                                                         formBusy || incompatible
                                                     }
