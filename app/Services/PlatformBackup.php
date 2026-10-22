@@ -71,7 +71,7 @@ class PlatformBackup
     /** @param array<string, mixed> $manifest */
     private function components(array $manifest): string
     {
-        foreach (['.env', 'artisan', 'composer.json', 'composer.lock', 'package-lock.json', 'bootstrap/app.php', 'routes/web.php'] as $required) {
+        foreach (['.env', 'artisan', 'composer.json', 'composer.lock', 'bootstrap/app.php', 'routes/web.php'] as $required) {
             Archive::check(isset($manifest['files'][$required]), 'Componente obbligatorio mancante nel backup globale.');
         }
         $dumps = array_values(array_filter(array_keys($manifest['files']), fn ($name) => is_string($name) && str_starts_with($name, 'db-dumps/') && str_ends_with($name, '.sql')));
