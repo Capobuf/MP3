@@ -76,8 +76,8 @@ export type Pagination<T> = {
     links: { url: string | null; label: string; active: boolean }[];
 };
 export type Totals = {
-    allocated: string;
-    actual: string;
+    allocated: string | null;
+    actual: string | null;
     variance: string;
     count: number;
     incomplete: number;

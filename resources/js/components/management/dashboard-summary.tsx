@@ -133,7 +133,7 @@ export function DashboardSummary({
                                                 variance:
                                                     scope === 'project'
                                                         ? 'Scostamento progetto'
-                                                        : 'Scostamento confrontabile',
+                                                        : 'Scostamento',
                                             }[metric]
                                         }
                                     </CardDescription>
@@ -157,6 +157,14 @@ export function DashboardSummary({
                                             />
                                         )}
                                     </CardTitle>
+                                    {!loading &&
+                                        metric === 'variance' &&
+                                        current.incomplete > 0 && (
+                                            <CardDescription>
+                                                Dati incompleti: scostamento
+                                                provvisorio.
+                                            </CardDescription>
+                                        )}
                                     {!loading && comparable && (
                                         <ComparisonBadge
                                             difference={Number(

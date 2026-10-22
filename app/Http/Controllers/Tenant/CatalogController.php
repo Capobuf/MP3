@@ -117,7 +117,7 @@ class CatalogController extends Controller
             'history' => $history,
             'expenseFilters' => [...$request->only('search', 'vendor_id', 'contract_id', 'project_id'), 'year' => $year, 'history' => $history ? '1' : '', 'sort' => $sort ?? ($item instanceof Contract ? 'period_starts_on' : 'year'), 'direction' => $sort !== null ? $direction : ($item instanceof Contract ? 'asc' : 'desc')],
             'totals' => ExpenseOverview::totals($annual),
-            'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id]), aggregateVariance: $catalog === 'projects'),
+            'analytics' => ExpenseAnalytics::kpis($tenant, Request::create($request->path(), 'GET', ['year' => $year, $field => $item->id])),
             'breakdown' => $item instanceof Contract && (clone $annual)->count() < 3 ? null : ExpenseOverview::breakdown($annual),
             'expenses' => $expenses->with(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])->orderByDesc('year')->orderBy('id')->paginate(25)->withQueryString(),
             'contracts' => $item instanceof Vendor ? $item->contracts()->forYear($year)->orderBy('name')->paginate(10, ['*'], 'contracts_page')->withQueryString() : null,

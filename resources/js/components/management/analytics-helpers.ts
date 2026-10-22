@@ -39,7 +39,6 @@ export const decimal = (value: number) => (value / 100).toFixed(2);
 const amountKeys = [
     'allocated',
     'actual',
-    'variance',
     'allocated_positive',
     'actual_positive',
     'allocated_negative',
@@ -67,6 +66,9 @@ export function sumGroups(rows: EconomicValues[]): EconomicValues {
                 present.reduce((total, value) => total + cents(value), 0),
             );
     }
+    result.variance = decimal(
+        cents(result.actual ?? '0.00') - cents(result.allocated ?? '0.00'),
+    );
     result.count = rows.reduce((sum, row) => sum + row.count, 0);
     result.incomplete = rows.reduce((sum, row) => sum + row.incomplete, 0);
     return result;

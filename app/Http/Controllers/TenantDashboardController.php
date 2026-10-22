@@ -18,8 +18,8 @@ class TenantDashboardController extends Controller
         $analytics = ExpenseAnalytics::data($tenant, $request);
         $current = $analytics['current'];
         $totals = [
-            'allocated' => $current['allocated'] ?? '0.00', 'actual' => $current['actual'] ?? '0.00',
-            'variance' => $current['variance'] ?? '0.00', 'count' => $current['count'], 'incomplete' => $current['incomplete'],
+            'allocated' => $current['allocated'], 'actual' => $current['actual'],
+            'variance' => $current['variance'], 'count' => $current['count'], 'incomplete' => $current['incomplete'],
         ];
 
         return Inertia::render('tenants/dashboard', [

@@ -43,10 +43,15 @@ export function VarianceChart({
                 )
             }
         >
+            {rows.some(
+                (row) => row.allocated === null || row.actual === null,
+            ) && (
+                <p className="text-sm text-muted-foreground">
+                    Dati incompleti: gli scostamenti sono provvisori.
+                </p>
+            )}
             {data.length === 0 ? (
-                <EmptyChart>
-                    Nessuno scostamento non nullo confrontabile.
-                </EmptyChart>
+                <EmptyChart>Nessuno scostamento diverso da zero.</EmptyChart>
             ) : (
                 <ChartContainer
                     className="w-full"
@@ -112,6 +117,13 @@ export function VarianceChart({
                                             Allocato: {money(row.allocated)}
                                         </p>
                                         <p>Effettivo: {money(row.actual)}</p>
+                                        {(row.allocated === null ||
+                                            row.actual === null) && (
+                                            <p>
+                                                Dati incompleti: scostamento
+                                                provvisorio.
+                                            </p>
+                                        )}
                                         <p>
                                             Scostamento:{' '}
                                             <span

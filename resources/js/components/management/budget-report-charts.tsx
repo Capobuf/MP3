@@ -2,6 +2,7 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
+    Cell,
     ReferenceLine,
     XAxis,
     YAxis,
@@ -90,7 +91,7 @@ export function BudgetReportChart({
             <p>
                 Nessuna voce{' '}
                 {kind === 'variances'
-                    ? 'con scostamento non nullo confrontabile'
+                    ? 'con scostamento diverso da zero'
                     : 'inclusa'}{' '}
                 nel report.
             </p>
@@ -130,7 +131,7 @@ export function BudgetReportChart({
                     <div className="budget-report-chart-batch" key={page}>
                         <p className="budget-report-note">
                             {kind === 'variances'
-                                ? 'Scostamento confrontabile'
+                                ? 'Scostamento'
                                 : 'Allocato (blu) · Effettivo (ocra)'}{' '}
                             · voci {page * 6 + 1}–{page * 6 + batch.length}
                         </p>
@@ -170,7 +171,19 @@ export function BudgetReportChart({
                                         dataKey={metric}
                                         fill={colors[index]}
                                         isAnimationActive={false}
-                                    />
+                                    >
+                                        {metric === 'variance' &&
+                                            batch.map((row) => (
+                                                <Cell
+                                                    key={row.id}
+                                                    fill={
+                                                        Number(row.variance) > 0
+                                                            ? 'var(--finance-overrun)'
+                                                            : 'var(--finance-saving)'
+                                                    }
+                                                />
+                                            ))}
+                                    </Bar>
                                 ))}
                             </BarChart>
                         </div>
@@ -198,6 +211,12 @@ export function BudgetReportChart({
                                                 {row.variance === null
                                                     ? 'Non confrontabile'
                                                     : money(row.variance)}
+                                                {row.incomplete > 0 && (
+                                                    <small>
+                                                        Dati incompleti:
+                                                        scostamento provvisorio.
+                                                    </small>
+                                                )}
                                             </td>
                                         )}
                                     </tr>

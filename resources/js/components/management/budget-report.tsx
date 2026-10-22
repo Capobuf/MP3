@@ -120,6 +120,15 @@ function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
                     {entry.incomplete > 0 && <small>Dati incompleti</small>}
                 </>
             );
+        case 'variance':
+            return (
+                <>
+                    {money(entry.variance)}
+                    {entry.incomplete > 0 && (
+                        <small>Dati incompleti: scostamento provvisorio.</small>
+                    )}
+                </>
+            );
         case 'description':
             return entry.description;
         case 'type':
@@ -129,7 +138,7 @@ function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
         case 'center':
             return entry.cost_center?.name ?? 'Senza centro di costo';
         default:
-            return amount(entry[column], column === 'variance');
+            return amount(entry[column]);
     }
 }
 const metrics = ['allocated', 'actual', 'variance'] as const;
@@ -139,7 +148,14 @@ function ReportTotals({ totals }: { totals: BudgetTotals }) {
             {metrics.map((metric) => (
                 <div key={metric} data-metric={metric}>
                     <dt>{budgetReportColumns[metric]}</dt>
-                    <dd>{amount(totals[metric], metric === 'variance')}</dd>
+                    <dd>
+                        {amount(totals[metric], metric === 'variance')}
+                        {metric === 'variance' && totals.incomplete > 0 && (
+                            <small>
+                                Dati incompleti: scostamento provvisorio.
+                            </small>
+                        )}
+                    </dd>
                 </div>
             ))}
         </dl>

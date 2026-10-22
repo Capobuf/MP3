@@ -11,7 +11,7 @@ use stdClass;
 final class ExpenseAnalytics
 {
     /** @return literal-string */
-    private static function columns(bool $aggregateVariance = false): string
+    private static function columns(): string
     {
         $columns = ['COUNT(*) AS count', 'SUM(CASE WHEN allocated_amount IS NULL OR actual_amount IS NULL THEN 1 ELSE 0 END) AS incomplete'];
         foreach (['allocated', 'actual'] as $metric) {
@@ -21,9 +21,6 @@ final class ExpenseAnalytics
             $columns[] = "SUM(CASE WHEN $amount > 0 THEN $cents ELSE 0 END) AS {$metric}_positive_cents";
             $columns[] = "SUM(CASE WHEN $amount < 0 THEN $cents ELSE 0 END) AS {$metric}_negative_cents";
         }
-        $columns[] = $aggregateVariance
-            ? 'SUM(CAST(ROUND(actual_amount * 100, 0) AS SIGNED)) - SUM(CAST(ROUND(allocated_amount * 100, 0) AS SIGNED)) AS variance_cents'
-            : 'SUM(CASE WHEN allocated_amount IS NOT NULL AND actual_amount IS NOT NULL THEN CAST(ROUND(actual_amount * 100, 0) AS SIGNED) - CAST(ROUND(allocated_amount * 100, 0) AS SIGNED) END) AS variance_cents';
         foreach (['complete' => 'allocated_amount IS NOT NULL AND actual_amount IS NOT NULL', 'allocated_only' => 'allocated_amount IS NOT NULL AND actual_amount IS NULL', 'actual_only' => 'allocated_amount IS NULL AND actual_amount IS NOT NULL', 'missing' => 'allocated_amount IS NULL AND actual_amount IS NULL'] as $key => $condition) {
             $columns[] = "SUM(CASE WHEN $condition THEN 1 ELSE 0 END) AS $key";
         }
@@ -35,10 +32,11 @@ final class ExpenseAnalytics
     private static function economic(stdClass $row): array
     {
         $result = ['count' => (int) $row->count, 'incomplete' => (int) $row->incomplete];
-        foreach (['allocated', 'actual', 'variance'] as $metric) {
+        foreach (['allocated', 'actual'] as $metric) {
             $value = $row->{$metric.'_cents'};
             $result[$metric] = $value === null ? null : Money::decimal((int) $value);
         }
+        $result['variance'] = Money::decimal((int) $row->actual_cents - (int) $row->allocated_cents);
         foreach (['allocated', 'actual'] as $metric) {
             foreach (['positive', 'negative'] as $sign) {
                 $result[$metric.'_'.$sign] = Money::decimal((int) $row->{$metric.'_'.$sign.'_cents'});
@@ -62,13 +60,13 @@ final class ExpenseAnalytics
     }
 
     /** @return array<string, mixed> */
-    public static function kpis(Tenant $tenant, Request $request, bool $aggregateVariance = false): array
+    public static function kpis(Tenant $tenant, Request $request): array
     {
         $year = EconomicYearContext::year($tenant, $request);
         $allYears = ExpenseOverview::query($tenant, $request, false)->toBase();
         $selected = (clone $allYears)->where('year', $year);
-        $current = self::summary((clone $selected)->selectRaw(self::columns($aggregateVariance))->sole());
-        $annual = (clone $allYears)->where('year', '<=', $year)->select('year')->selectRaw(self::columns($aggregateVariance))->groupBy('year')->orderByDesc('year')->limit(6)->get()
+        $current = self::summary((clone $selected)->selectRaw(self::columns())->sole());
+        $annual = (clone $allYears)->where('year', '<=', $year)->select('year')->selectRaw(self::columns())->groupBy('year')->orderByDesc('year')->limit(6)->get()
             ->map(fn (stdClass $row) => ['year' => (int) $row->year, ...self::summary($row)])->reverse()->values()->all();
         $previous = collect($annual)->firstWhere('year', $year - 1);
         $comparisons = [];
@@ -108,11 +106,12 @@ final class ExpenseAnalytics
             if (! isset($projectStatuses[$status])) {
                 $projectStatuses[$status] = ['id' => $status, 'name' => $statuses[$status] ?? 'Stato non disponibile', 'count' => 0, 'incomplete' => 0, 'allocated' => null, 'actual' => null, 'variance' => null, 'allocated_positive' => '0.00', 'actual_positive' => '0.00', 'allocated_negative' => '0.00', 'actual_negative' => '0.00'];
             }
-            foreach (['allocated', 'actual', 'variance', 'allocated_positive', 'actual_positive', 'allocated_negative', 'actual_negative'] as $metric) {
+            foreach (['allocated', 'actual', 'allocated_positive', 'actual_positive', 'allocated_negative', 'actual_negative'] as $metric) {
                 if ($project[$metric] !== null) {
                     $projectStatuses[$status][$metric] = Money::decimal(Money::cents($projectStatuses[$status][$metric] ?? '0.00') + Money::cents($project[$metric]));
                 }
             }
+            $projectStatuses[$status]['variance'] = Money::decimal(Money::cents($projectStatuses[$status]['actual'] ?? '0.00') - Money::cents($projectStatuses[$status]['allocated'] ?? '0.00'));
             $projectStatuses[$status]['count'] += $project['count'];
             $projectStatuses[$status]['incomplete'] += $project['incomplete'];
         }
@@ -135,16 +134,16 @@ final class ExpenseAnalytics
     /** @return array<int, array<string, mixed>> */
     private static function variances(Builder $query, Tenant $tenant): array
     {
-        $comparable = (clone $query)->whereNotNull('allocated_amount')->whereNotNull('actual_amount')->select('expenses.*')->selectRaw('CAST(ROUND(allocated_amount * 100, 0) AS SIGNED) AS allocated_cents, CAST(ROUND(actual_amount * 100, 0) AS SIGNED) AS actual_cents');
-        $expression = 'CAST(ROUND(actual_amount * 100, 0) AS SIGNED) - CAST(ROUND(allocated_amount * 100, 0) AS SIGNED)';
-        $rows = (clone $comparable)->whereRaw("($expression) > 0")->orderByRaw("($expression) DESC")->orderBy('id')->limit(5)->get()
-            ->concat((clone $comparable)->whereRaw("($expression) < 0")->orderByRaw("($expression) ASC")->orderBy('id')->limit(5)->get());
+        $ranked = (clone $query)->select('expenses.*')->selectRaw('CAST(ROUND(allocated_amount * 100, 0) AS SIGNED) AS allocated_cents, CAST(ROUND(actual_amount * 100, 0) AS SIGNED) AS actual_cents');
+        $expression = 'COALESCE(CAST(ROUND(actual_amount * 100, 0) AS SIGNED), 0) - COALESCE(CAST(ROUND(allocated_amount * 100, 0) AS SIGNED), 0)';
+        $rows = (clone $ranked)->whereRaw("($expression) > 0")->orderByRaw("($expression) DESC")->orderBy('id')->limit(5)->get()
+            ->concat((clone $ranked)->whereRaw("($expression) < 0")->orderByRaw("($expression) ASC")->orderBy('id')->limit(5)->get());
         $vendors = $tenant->vendors()->whereIn('id', $rows->pluck('vendor_id')->filter())->pluck('name', 'id');
         $projects = $tenant->projects()->whereIn('id', $rows->pluck('project_id')->filter())->pluck('name', 'id');
 
         return $rows->map(fn (stdClass $row) => [
             'id' => $row->id, 'title' => $row->title, 'vendor' => $vendors[$row->vendor_id] ?? 'Senza fornitore', 'project' => $projects[$row->project_id] ?? 'Senza progetto',
-            'allocated' => Money::decimal((int) $row->allocated_cents), 'actual' => Money::decimal((int) $row->actual_cents),
+            'allocated' => $row->allocated_cents === null ? null : Money::decimal((int) $row->allocated_cents), 'actual' => $row->actual_cents === null ? null : Money::decimal((int) $row->actual_cents),
             'variance' => Money::decimal((int) $row->actual_cents - (int) $row->allocated_cents),
         ])->all();
     }

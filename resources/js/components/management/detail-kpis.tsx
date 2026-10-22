@@ -31,7 +31,7 @@ export function DetailKpis({
             value: money(actual),
         },
         {
-            label: aggregate ? 'Scostamento confrontabile' : 'Scostamento',
+            label: 'Scostamento',
             value: variance == null ? 'Non determinabile' : money(variance),
         },
         {
@@ -57,6 +57,13 @@ export function DetailKpis({
                             >
                                 <SummaryValue value={card.value} />
                             </CardTitle>
+                            {index === 2 &&
+                                (allocated == null || actual == null) && (
+                                    <CardDescription>
+                                        Dati incompleti: scostamento
+                                        provvisorio.
+                                    </CardDescription>
+                                )}
                         </CardHeader>
                     </Card>
                 ))}

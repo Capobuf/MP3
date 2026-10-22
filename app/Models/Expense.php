@@ -77,14 +77,10 @@ class Expense extends Model
 
     protected $appends = ['variance'];
 
-    public function getVarianceAttribute(): ?string
+    public function getVarianceAttribute(): string
     {
-        if ($this->allocated_amount === null || $this->actual_amount === null) {
-            return null;
-        }
-
         return Money::decimal(
-            Money::cents($this->actual_amount) - Money::cents($this->allocated_amount)
+            Money::cents($this->actual_amount ?? '0.00') - Money::cents($this->allocated_amount ?? '0.00')
         );
     }
 }

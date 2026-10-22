@@ -55,24 +55,22 @@ final class ExpenseOverview
     }
 
     /** @param Builder<Expense> $query
-     * @return array<string, string|int>
+     * @return array<string, string|int|null>
      */
     public static function totals(Builder $query): array
     {
         // Sum integer cents so SQLite tests and MySQL DECIMAL queries share the same precision.
         $row = (clone $query)->reorder()->selectRaw('
             COUNT(*) as expense_count,
-            COALESCE(SUM(CAST(ROUND(allocated_amount * 100, 0) AS SIGNED)), 0) as allocated_cents,
-            COALESCE(SUM(CAST(ROUND(actual_amount * 100, 0) AS SIGNED)), 0) as actual_cents,
-            COALESCE(SUM(CASE WHEN allocated_amount IS NOT NULL AND actual_amount IS NOT NULL
-                THEN CAST(ROUND(actual_amount * 100, 0) AS SIGNED) - CAST(ROUND(allocated_amount * 100, 0) AS SIGNED) ELSE 0 END), 0) as variance_cents,
+            SUM(CAST(ROUND(allocated_amount * 100, 0) AS SIGNED)) as allocated_cents,
+            SUM(CAST(ROUND(actual_amount * 100, 0) AS SIGNED)) as actual_cents,
             COALESCE(SUM(CASE WHEN allocated_amount IS NULL OR actual_amount IS NULL THEN 1 ELSE 0 END), 0) as incomplete_count
         ')->first();
 
         return [
-            'allocated' => Money::decimal((int) $row?->getAttribute('allocated_cents')),
-            'actual' => Money::decimal((int) $row?->getAttribute('actual_cents')),
-            'variance' => Money::decimal((int) $row?->getAttribute('variance_cents')),
+            'allocated' => $row?->getAttribute('allocated_cents') === null ? null : Money::decimal((int) $row->getAttribute('allocated_cents')),
+            'actual' => $row?->getAttribute('actual_cents') === null ? null : Money::decimal((int) $row->getAttribute('actual_cents')),
+            'variance' => Money::decimal((int) $row?->getAttribute('actual_cents') - (int) $row?->getAttribute('allocated_cents')),
             'count' => (int) $row?->getAttribute('expense_count'),
             'incomplete' => (int) $row?->getAttribute('incomplete_count'),
         ];
@@ -126,7 +124,7 @@ final class ExpenseOverview
         return $result;
     }
 
-    /** @param array<string, string|int>|null $totals
+    /** @param array<string, string|int|null>|null $totals
      * @return array<string, mixed>
      */
     public static function page(Tenant $tenant, Request $request, ?array $totals = null): array

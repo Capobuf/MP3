@@ -138,7 +138,7 @@ export function EconomicChart({
                                                 : money(row.actual)}
                                         </p>
                                         <p>
-                                            Scostamento confrontabile:{' '}
+                                            Scostamento:{' '}
                                             <span
                                                 className={varianceTextClass(
                                                     row.variance,

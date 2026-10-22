@@ -149,8 +149,8 @@ class AnnualBudget
             $result[$metric.'_negative'] = Money::decimal(array_sum(array_filter($cents, fn ($value) => $value < 0)));
         }
         $comparable = array_filter($parts, fn ($part) => $part['allocated'] !== null && $part['actual'] !== null);
-        $result['variance'] = $result['allocated'] === null || $result['actual'] === null ? null : Money::decimal(Money::cents($result['actual']) - Money::cents($result['allocated']));
-        $result['incomplete'] = $result['allocated'] === null && $result['actual'] === null ? 1 : 0;
+        $result['variance'] = Money::decimal(Money::cents($result['actual'] ?? '0.00') - Money::cents($result['allocated'] ?? '0.00'));
+        $result['incomplete'] = $parts === [] || count($comparable) < count($parts) ? 1 : 0;
         $result['comparable_count'] = count($comparable);
 
         return $result;

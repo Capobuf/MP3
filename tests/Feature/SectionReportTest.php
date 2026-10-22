@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class SectionReportTest extends TestCase
@@ -20,6 +21,19 @@ class SectionReportTest extends TestCase
         $user = User::factory()->create();
         $user->tenants()->attach($this->tenant);
         $this->actingAs($user);
+    }
+
+    public function test_project_detail_and_report_reconcile_amounts_on_separate_expenses(): void
+    {
+        $project = $this->tenant->projects()->create(['name' => 'Separate amounts', 'year' => 2026]);
+        $this->tenant->expenses()->create(['title' => 'Forecast', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => '100.00']);
+        $this->tenant->expenses()->create(['title' => 'Purchase', 'year' => 2026, 'project_id' => $project->id, 'actual_amount' => '80.00']);
+
+        $this->get('/t/report/projects/'.$project->id.'?year=2026')->assertInertia(fn (Assert $page) => $page
+            ->where('analytics.current.variance', '-20.00')->where('analytics.current.incomplete', 2));
+        $this->getJson('/t/report/projects/report?year=2026&record='.$project->id)->assertOk()
+            ->assertJsonPath('totals.allocated', '100.00')->assertJsonPath('totals.actual', '80.00')
+            ->assertJsonPath('totals.variance', '-20.00')->assertJsonPath('totals.incomplete', 2);
     }
 
     public function test_all_filtered_rows_are_returned_in_order_independently_of_pagination(): void

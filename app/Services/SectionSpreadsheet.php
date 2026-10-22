@@ -27,6 +27,8 @@ class SectionSpreadsheet
 
     public const EUR = '#,##0.00 "€";[Red]-#,##0.00 "€"';
 
+    public const VARIANCE = '[Color9]#,##0.00 "€";[Color10]-#,##0.00 "€";0.00 "€"';
+
     public const DATE = 'dd/mm/yyyy';
 
     /** @return array<string, string> */
@@ -229,8 +231,8 @@ class SectionSpreadsheet
         }
 
         return new SectionWorkbook([
-            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Allocato', 'Effettivo', 'Scostamento', 'Completezza', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::EUR, 'K' => self::DATE, 'L' => self::DATE]),
-            new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Allocato', 'Effettivo', 'Scostamento', 'Voci incomplete'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::EUR]),
+            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Allocato', 'Effettivo', 'Scostamento', 'Completezza', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::VARIANCE, 'K' => self::DATE, 'L' => self::DATE]),
+            new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Allocato', 'Effettivo', 'Scostamento', 'Voci incomplete'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::VARIANCE]),
             $this->periodSheet($selected),
         ]);
     }

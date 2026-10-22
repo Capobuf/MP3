@@ -96,7 +96,7 @@ describe('Section report', () => {
                     ...expense,
                     id: 8,
                     actual_amount: null,
-                    variance: null,
+                    variance: '0.00',
                     lines: [],
                 },
             ],
@@ -105,7 +105,7 @@ describe('Section report', () => {
         expect(options.blocks).not.toContain('linked');
         const html = render(source, { ...options, hiddenBlocks: [] });
         expect(html).toContain('Da inserire');
-        expect(html).toContain('Non confrontabile');
+        expect(html).toContain('Dati incompleti: scostamento provvisorio.');
         expect(html).toContain('Contratto senza nome');
         expect(html).toContain('0,00');
         expect(html).toContain('-2,50');
@@ -140,3 +140,27 @@ describe('Section report', () => {
         expect(render(source)).toContain('Non classificato');
     });
 });
+
+it.each([
+    ['-19.99', '-19,99'],
+    ['19.99', '19,99'],
+    ['0.00', '0,00'],
+])(
+    'prints project variance %s with the incomplete warning even without scope',
+    (variance, formatted) => {
+        const source = {
+            ...data,
+            resource: 'projects' as const,
+            totals: { ...data.totals, variance, incomplete: 2 },
+        };
+        const html = render(source, {
+            ...defaultSectionReportOptions(source, 'Azienda'),
+            blocks: ['kpis'],
+            showScope: false,
+        });
+        expect(html).toContain(formatted);
+        expect(html).not.toContain(`+${formatted}`);
+        if (variance === '0.00') expect(html).not.toContain('-0,00');
+        expect(html).toContain('Dati incompleti: scostamento provvisorio.');
+    },
+);

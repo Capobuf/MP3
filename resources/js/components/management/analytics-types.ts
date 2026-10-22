@@ -51,8 +51,8 @@ export type VarianceRow = {
     title: string;
     vendor: string;
     project: string;
-    allocated: string;
-    actual: string;
+    allocated: string | null;
+    actual: string | null;
     variance: string;
 };
 export type ContractExpiry = {
