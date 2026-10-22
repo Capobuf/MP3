@@ -1,19 +1,8 @@
 import { Link, usePage } from '@inertiajs/react';
-import { useState } from 'react';
 import AppLogoIcon from '@/components/app-logo-icon';
 import { cn } from '@/lib/utils';
 import { home } from '@/routes';
 import type { AuthLayoutProps } from '@/types';
-
-const backgrounds = [
-    'cherry-blossoms',
-    'torii-gate',
-    'mountain',
-    'waterfall',
-    'bamboo',
-    'cranes',
-    'wave',
-];
 
 export default function AuthSplitLayout({
     children,
@@ -23,16 +12,13 @@ export default function AuthSplitLayout({
     showLogo = false,
 }: AuthLayoutProps) {
     const { name } = usePage().props;
-    const [background] = useState(
-        () => backgrounds[Math.floor(Math.random() * backgrounds.length)],
-    );
 
     return (
         <div className="grid min-h-svh items-center bg-card text-card-foreground lg:grid-cols-2">
             <div
                 className="hidden self-stretch border-r bg-sidebar bg-cover bg-center p-10 text-sidebar-foreground lg:flex lg:flex-col"
                 style={{
-                    backgroundImage: `url('/branding/auth/${background}.webp')`,
+                    backgroundImage: 'var(--auth-background)',
                 }}
             >
                 <Link
