@@ -11,34 +11,36 @@ export default function AuthSplitLayout({
     const { name } = usePage().props;
 
     return (
-        <div className="relative grid h-dvh flex-col items-center justify-center px-8 sm:px-0 lg:max-w-none lg:grid-cols-2 lg:px-0">
-            <div className="relative hidden h-full flex-col bg-muted p-10 text-foreground lg:flex dark:border-r">
-                <div className="absolute inset-0 bg-zinc-900" />
+        <div className="grid min-h-svh items-center bg-card text-card-foreground lg:grid-cols-2">
+            <div className="hidden self-stretch border-r bg-sidebar p-10 text-sidebar-foreground lg:flex lg:flex-col">
                 <Link
                     href={home()}
-                    className="relative z-20 flex items-center text-lg font-medium"
+                    className="flex w-fit items-center gap-2 rounded-sm text-lg font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
                 >
-                    <AppLogoIcon className="mr-2 size-10" variant="white" />
+                    <AppLogoIcon className="size-10" />
                     {name}
                 </Link>
             </div>
-            <div className="w-full lg:p-8">
-                <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
+            <main className="min-w-0 px-6 py-10 sm:px-8">
+                <div className="mx-auto flex w-full max-w-sm flex-col gap-6">
                     <Link
                         href={home()}
-                        className="relative z-20 flex items-center justify-center lg:hidden"
+                        className="mx-auto flex flex-col items-center gap-2 rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring lg:hidden"
                     >
                         <AppLogoIcon className="size-16" />
+                        {name}
                     </Link>
-                    <div className="flex flex-col items-start gap-2 text-left sm:items-center sm:text-center">
-                        <h1 className="text-xl font-medium">{title}</h1>
+                    <div className="flex flex-col items-center gap-2 text-center">
+                        <h1 className="text-2xl font-semibold tracking-tight">
+                            {title}
+                        </h1>
                         <p className="text-sm text-balance text-muted-foreground">
                             {description}
                         </p>
                     </div>
                     {children}
                 </div>
-            </div>
+            </main>
         </div>
     );
 }
