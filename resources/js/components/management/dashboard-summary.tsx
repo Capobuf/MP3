@@ -77,8 +77,8 @@ type SummaryValues = Pick<
     | 'actual'
     | 'variance'
     | 'count'
-    | 'incomplete'
-    | 'complete_percentage'
+    | 'estimated_count'
+    | 'estimated_percentage'
 >;
 
 export type SummaryAnalytics = {
@@ -100,7 +100,7 @@ export function DashboardSummary({
 }) {
     const { current, previous, comparisons } = analytics;
     const previousYear = previous?.year ?? year - 1;
-    const points = comparisons.completeness.points;
+    const points = comparisons.estimates.points;
     const isBudget = scope === 'budget';
     return (
         <div className="@container/summary flex flex-col gap-3">
@@ -133,7 +133,7 @@ export function DashboardSummary({
                                                 variance:
                                                     scope === 'project'
                                                         ? 'Scostamento progetto'
-                                                        : 'Scostamento confrontabile',
+                                                        : 'Scostamento',
                                             }[metric]
                                         }
                                     </CardDescription>
@@ -173,16 +173,15 @@ export function DashboardSummary({
                 )}
                 <Card className="@container/card min-w-0">
                     <CardHeader>
-                        <CardDescription>
-                            Completezza{' '}
-                            {isBudget ? 'del Budget' : 'delle spese'}
-                        </CardDescription>
+                        <CardDescription>Voci solo stimate</CardDescription>
                         <CardTitle className="summary-value">
                             {loading ? (
                                 <Skeleton className="skeleton-shimmer h-8 w-24" />
                             ) : (
                                 <SummaryValue
-                                    value={percent(current.complete_percentage)}
+                                    value={percent(
+                                        current.estimated_percentage,
+                                    )}
                                 />
                             )}
                         </CardTitle>

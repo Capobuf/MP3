@@ -193,15 +193,21 @@ class UndoTest extends TestCase
         $line = $expense->lines()->create(['description' => 'Prima', 'type' => 'allocated', 'unit_price' => '20', 'quantity' => '1', 'total' => '20', 'year' => 2026, 'position' => 0]);
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['title' => 'Nuova', 'cost_center_ids' => [], 'lines' => [
             ['description' => 'Dopo', 'type' => 'allocated', 'unit_price' => '30'],
-        ]])->assertOk();
+        ]])->assertOk()->assertJsonPath('record.actual_amount', null)->assertJsonPath('record.variance', '-30.00');
+        $this->get('/t/alfa/expenses/'.$expense->id)->assertInertia(fn (Assert $page) => $page
+            ->where('expense.actual_amount', null)->where('expense.variance', '-30.00'));
         $action = $this->undo();
         $this->assertDatabaseHas('expense_lines', ['id' => $line->id, 'description' => 'Prima']);
         $this->assertSame('20.00', $expense->fresh()->allocated_amount);
+        $this->assertNull($expense->fresh()->actual_amount);
+        $this->assertSame('-20.00', $expense->fresh()->variance);
         $this->assertSame('Originale', $expense->fresh()->title);
         $this->assertDatabaseHas('cost_center_expense', ['expense_id' => $expense->id, 'cost_center_id' => $center->id]);
         $this->redo($action);
         $this->assertSame('Nuova', $expense->fresh()->title);
         $this->assertSame('30.00', $expense->fresh()->allocated_amount);
+        $this->assertNull($expense->fresh()->actual_amount);
+        $this->assertSame('-30.00', $expense->fresh()->variance);
         $this->assertSame('Dopo', $expense->fresh()->lines()->sole()->description);
         $this->assertDatabaseCount('cost_center_expense', 0);
     }

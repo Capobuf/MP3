@@ -76,11 +76,11 @@ export type Pagination<T> = {
     links: { url: string | null; label: string; active: boolean }[];
 };
 export type Totals = {
-    allocated: string;
-    actual: string;
+    allocated: string | null;
+    actual: string | null;
     variance: string;
     count: number;
-    incomplete: number;
+    estimated_count: number;
 };
 export type BreakdownMetric = {
     items: { id: string; name: string; amount: string }[];

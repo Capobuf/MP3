@@ -12,7 +12,7 @@ const labels = {
     complete: 'Entrambi presenti',
     allocated_only: 'Solo allocato',
     actual_only: 'Solo effettivo',
-    missing: 'Entrambi mancanti',
+    missing: 'Nessun importo registrato',
 };
 export function CompletenessChart({ rows }: { rows: Completeness[] }) {
     const [selected, setSelected] = useState<Completeness['id'] | null>(null);
@@ -30,7 +30,7 @@ export function CompletenessChart({ rows }: { rows: Completeness[] }) {
     );
     return (
         <AnalyticsCard
-            title="Completezza dei dati"
+            title="Importi registrati"
             controls={
                 selected !== null && (
                     <ChartReset onReset={() => setSelected(null)} />

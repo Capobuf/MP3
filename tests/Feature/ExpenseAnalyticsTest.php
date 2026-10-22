@@ -33,6 +33,40 @@ class ExpenseAnalyticsTest extends TestCase
         return ExpenseAnalytics::data($this->tenant, Request::create('/t/alfa/dashboard', 'GET', ['year' => 2026, ...$filters]));
     }
 
+    public function test_variance_policy_preserves_source_nulls_and_reconciles_every_summary(): void
+    {
+        foreach ([
+            ['100.00', '80.00', '-20.00'], ['80.00', '100.00', '20.00'], ['100.00', '100.00', '0.00'],
+            ['100.00', null, '-100.00'], [null, '80.00', '80.00'], [null, null, '0.00'],
+            ['100.00', '0.00', '-100.00'], ['-20.00', '-15.00', '5.00'], ['100.01', '80.02', '-19.99'],
+        ] as $index => [$allocated, $actual, $variance]) {
+            $expense = $this->tenant->expenses()->create(['title' => 'Case '.$index, 'year' => 2026, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
+            $before = $expense->refresh()->getRawOriginal();
+            $data = $this->analytics(['search' => $expense->title]);
+            $this->assertSame($variance, $expense->variance);
+            $this->assertSame($variance, $data['current']['variance']);
+            $this->assertSame($allocated, $data['current']['allocated']);
+            $this->assertSame($actual, $data['current']['actual']);
+            $this->assertSame($allocated !== null && $actual === null ? 1 : 0, $data['current']['estimated_count']);
+            foreach (['vendors', 'projects', 'contracts', 'projectStatuses'] as $group) {
+                $this->assertSame($variance, $data[$group][0]['variance']);
+            }
+            foreach (['projects', 'contracts'] as $group) {
+                $this->assertSame($variance, $data['pairs'][$group][0]['variance']);
+            }
+            $this->getJson('/t/alfa/expenses/report?year=2026&record='.$expense->id)->assertOk()
+                ->assertJsonPath('totals.variance', $variance)->assertJsonPath('totals.allocated', $allocated)->assertJsonPath('totals.actual', $actual)
+                ->assertJsonPath('records.0.allocated_amount', $allocated)
+                ->assertJsonPath('records.0.actual_amount', $actual);
+            $this->assertSame($before, $expense->refresh()->getRawOriginal());
+        }
+        $empty = $this->analytics(['search' => 'No records']);
+        $this->assertSame('0.00', $empty['current']['variance']);
+        $this->assertSame(0, $empty['current']['count']);
+        $this->assertNull($empty['previous']);
+        $this->assertNull($empty['comparisons']['variance']['difference']);
+    }
+
     public function test_annual_comparisons_preserve_every_filter_and_tenant_scope(): void
     {
         $vendor = $this->tenant->vendors()->create(['name' => 'Fornitore']);
@@ -81,7 +115,7 @@ class ExpenseAnalyticsTest extends TestCase
                 ->has('expenses.data', 2)
                 ->where('analytics.current.count', 1)
                 ->where('analytics.current.allocated', '20.02')
-                ->where('analytics.current.complete_percentage', 100)
+                ->where('analytics.current.estimated_percentage', 0)
                 ->where('analytics.previous.year', 2025)
                 ->where('analytics.previous.count', 1)
                 ->where('analytics.previous.allocated', '10.01')
@@ -104,11 +138,11 @@ class ExpenseAnalyticsTest extends TestCase
         $this->assertNull($data['comparisons']['actual']['percentage']);
         $empty = $this->analytics(['search' => 'Assente']);
         $this->assertNull($empty['current']['allocated']);
-        $this->assertNull($empty['current']['variance']);
-        $this->assertNull($empty['current']['complete_percentage']);
+        $this->assertSame('0.00', $empty['current']['variance']);
+        $this->assertNull($empty['current']['estimated_percentage']);
     }
 
-    public function test_null_zero_cent_precision_and_comparable_variance(): void
+    public function test_null_zero_cent_precision_and_aggregate_variance(): void
     {
         foreach ([['0.00', '0.00'], ['0.01', '0.02'], ['-0.01', '-0.01'], ['10.10', null], [null, '20.20'], [null, null]] as [$allocated, $actual]) {
             $this->tenant->expenses()->create(['title' => 'Costo', 'year' => 2026, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
@@ -116,13 +150,17 @@ class ExpenseAnalyticsTest extends TestCase
         $data = $this->analytics();
         $this->assertSame('10.10', $data['current']['allocated']);
         $this->assertSame('20.21', $data['current']['actual']);
-        $this->assertSame('0.01', $data['current']['variance']);
+        $this->assertSame('10.11', $data['current']['variance']);
         $this->assertSame('20.22', $data['current']['actual_positive']);
         $this->assertSame('-0.01', $data['current']['actual_negative']);
         $this->assertSame([3, 1, 1, 1], array_column($data['current']['completeness'], 'count'));
-        $this->assertEquals(50, $data['current']['complete_percentage']);
-        $this->assertCount(1, $data['variances']);
-        $this->assertSame('0.01', $data['variances'][0]['variance']);
+        $this->assertEqualsWithDelta(100 / 6, $data['current']['estimated_percentage'], 0.0001);
+        $this->assertSame(['20.20', '0.01', '-10.10'], array_column($data['variances'], 'variance'));
+        $this->assertNull($data['variances'][0]['allocated']);
+        $this->assertNull($data['variances'][2]['actual']);
+        foreach (['vendors', 'projects', 'contracts', 'projectStatuses'] as $group) {
+            $this->assertSame('10.11', $data[$group][0]['variance']);
+        }
         $this->assertSame('none', $data['vendors'][0]['id']);
         $this->assertSame('none', $data['projects'][0]['id']);
         $this->assertSame('none', $data['contracts'][0]['id']);
@@ -133,21 +171,21 @@ class ExpenseAnalyticsTest extends TestCase
         $this->assertSame('0.00', $missing['vendors'][0]['actual_positive']);
     }
 
-    public function test_completeness_comparison_and_unavailable_metrics_keep_their_meaning(): void
+    public function test_estimate_share_comparison_and_unavailable_metrics_keep_their_meaning(): void
     {
         $this->tenant->expenses()->create(['title' => 'Precedente', 'year' => 2025, 'allocated_amount' => '0.00', 'actual_amount' => '0.00']);
         $this->tenant->expenses()->create(['title' => 'Completa', 'year' => 2026, 'allocated_amount' => '0.00', 'actual_amount' => '0.00']);
         $this->tenant->expenses()->create(['title' => 'Incompleta', 'year' => 2026, 'allocated_amount' => '0.00']);
         $data = $this->analytics();
         $this->assertSame('0.00', $data['current']['actual']);
-        $this->assertEquals(-50, $data['comparisons']['completeness']['points']);
+        $this->assertEquals(50, $data['comparisons']['estimates']['points']);
         $this->assertSame('0.00', $data['comparisons']['actual']['difference']);
         $this->assertNull($data['comparisons']['actual']['percentage']);
-        $incomplete = $this->analytics(['search' => 'Incompleta']);
-        $this->assertSame(1, $incomplete['current']['count']);
-        $this->assertNull($incomplete['current']['actual']);
-        $this->assertNull($incomplete['current']['variance']);
-        $this->assertEquals(0, $incomplete['current']['complete_percentage']);
+        $estimate = $this->analytics(['search' => 'Incompleta']);
+        $this->assertSame(1, $estimate['current']['count']);
+        $this->assertNull($estimate['current']['actual']);
+        $this->assertSame('0.00', $estimate['current']['variance']);
+        $this->assertEquals(100, $estimate['current']['estimated_percentage']);
     }
 
     public function test_all_groups_and_sankey_pairs_reconcile_without_deduced_relations(): void

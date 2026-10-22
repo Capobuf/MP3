@@ -44,9 +44,7 @@ export function VarianceChart({
             }
         >
             {data.length === 0 ? (
-                <EmptyChart>
-                    Nessuno scostamento non nullo confrontabile.
-                </EmptyChart>
+                <EmptyChart>Nessuno scostamento diverso da zero.</EmptyChart>
             ) : (
                 <ChartContainer
                     className="w-full"

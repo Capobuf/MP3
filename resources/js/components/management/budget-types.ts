@@ -15,7 +15,7 @@ export type BudgetTotals = {
     actual: string | null;
     variance: string | null;
     count: number;
-    incomplete: number;
+    estimated_count: number;
     comparable_count: number;
     allocated_positive: string;
     allocated_negative: string;
@@ -95,9 +95,9 @@ export function budgetSummary(
 ): SummaryAnalytics {
     const values = (totals: BudgetTotals) => ({
         ...totals,
-        complete_percentage:
+        estimated_percentage:
             totals.count > 0
-                ? ((totals.count - totals.incomplete) * 100) / totals.count
+                ? (totals.estimated_count * 100) / totals.count
                 : null,
     });
     const current = values(totals);
@@ -130,12 +130,12 @@ export function budgetSummary(
             allocated: compare('allocated'),
             actual: compare('actual'),
             variance: compare('variance'),
-            completeness: {
+            estimates: {
                 points:
-                    previous?.complete_percentage != null &&
-                    current.complete_percentage !== null
-                        ? current.complete_percentage -
-                          previous.complete_percentage
+                    previous?.estimated_percentage != null &&
+                    current.estimated_percentage !== null
+                        ? current.estimated_percentage -
+                          previous.estimated_percentage
                         : null,
             },
         },

@@ -117,9 +117,11 @@ function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
                     <span className="budget-report-status-label">
                         {entry.included ? 'Inclusa' : 'Esclusa'}
                     </span>
-                    {entry.incomplete > 0 && <small>Dati incompleti</small>}
+                    {entry.estimated_count > 0 && <small>Solo stima</small>}
                 </>
             );
+        case 'variance':
+            return money(entry.variance);
         case 'description':
             return entry.description;
         case 'type':
@@ -129,7 +131,7 @@ function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
         case 'center':
             return entry.cost_center?.name ?? 'Senza centro di costo';
         default:
-            return amount(entry[column], column === 'variance');
+            return amount(entry[column]);
     }
 }
 const metrics = ['allocated', 'actual', 'variance'] as const;
@@ -379,8 +381,8 @@ export function BudgetReport({
                 <>
                     <strong>{budget.entries.length}</strong> righe nel report ·{' '}
                     <strong>{budget.totals.count}</strong> voci incluse nei
-                    totali · <strong>{budget.totals.incomplete}</strong> con
-                    dati incompleti
+                    totali · <strong>{budget.totals.estimated_count}</strong>{' '}
+                    solo stima
                 </>
             }
         >

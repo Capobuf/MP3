@@ -27,9 +27,9 @@ import type {
 const totals: BudgetTotals = {
     allocated: '0.00',
     actual: null,
-    variance: null,
+    variance: '0.00',
     count: 1,
-    incomplete: 0,
+    estimated_count: 1,
     comparable_count: 0,
     allocated_positive: '0.00',
     allocated_negative: '0.00',
@@ -211,7 +211,7 @@ describe('Budget report', () => {
         expect(html).not.toContain('<script>');
         expect(html).toContain('0,00');
         expect(html).toContain('Da inserire');
-        expect(html).toContain('Non confrontabile');
+        expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
         expect(html).toContain('Esclusa');
         expect(html).not.toContain('Ripartizione del Budget');
         expect(html).not.toContain('<button');
@@ -468,3 +468,39 @@ it('keeps known allocated amounts in the supplier bar chart when all actuals are
     expect(zero).not.toContain('Da inserire</td>');
     expect(zero).toContain('0,00');
 });
+
+it.each([
+    ['-19.99', '-19,99'],
+    ['19.99', '19,99'],
+    ['0.00', '0,00'],
+])(
+    'prints variance %s without a positive or zero sign',
+    (variance, formatted) => {
+        const html = renderToStaticMarkup(
+            <BudgetReport
+                data={{
+                    budget: {
+                        ...summary,
+                        totals: { ...totals, variance },
+                        entries: [{ ...entries[0], included: true, variance }],
+                    },
+                    filters: [],
+                }}
+                options={{
+                    ...defaultBudgetReportOptions('Tenant'),
+                    blocks: ['kpis', 'table'],
+                    groupByType: false,
+                    columns: ['variance'],
+                    showScope: false,
+                }}
+                tenantName="Tenant"
+                year={2026}
+                createdAt="DATA"
+            />,
+        );
+        expect(html).toContain(formatted);
+        expect(html).not.toContain(`+${formatted}`);
+        if (variance === '0.00') expect(html).not.toContain('-0,00');
+        expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
+    },
+);

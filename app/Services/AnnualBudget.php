@@ -149,8 +149,8 @@ class AnnualBudget
             $result[$metric.'_negative'] = Money::decimal(array_sum(array_filter($cents, fn ($value) => $value < 0)));
         }
         $comparable = array_filter($parts, fn ($part) => $part['allocated'] !== null && $part['actual'] !== null);
-        $result['variance'] = $result['allocated'] === null || $result['actual'] === null ? null : Money::decimal(Money::cents($result['actual']) - Money::cents($result['allocated']));
-        $result['incomplete'] = $result['allocated'] === null && $result['actual'] === null ? 1 : 0;
+        $result['variance'] = Money::decimal(Money::cents($result['actual'] ?? '0.00') - Money::cents($result['allocated'] ?? '0.00'));
+        $result['estimated_count'] = $result['allocated'] !== null && $result['actual'] === null ? 1 : 0;
         $result['comparable_count'] = count($comparable);
 
         return $result;
@@ -161,7 +161,7 @@ class AnnualBudget
      */
     public function totals(array $rows): array
     {
-        $result = ['count' => count($rows), 'incomplete' => array_sum(array_column($rows, 'incomplete')), 'comparable_count' => array_sum(array_column($rows, 'comparable_count'))];
+        $result = ['count' => count($rows), 'estimated_count' => array_sum(array_column($rows, 'estimated_count')), 'comparable_count' => array_sum(array_column($rows, 'comparable_count'))];
         $values = $this->values(array_map(fn ($row) => ['allocated' => $row['allocated'], 'actual' => $row['actual']], $rows));
         foreach (['allocated', 'actual', 'variance'] as $field) {
             $result[$field] = $values[$field];
