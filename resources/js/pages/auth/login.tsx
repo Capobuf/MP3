@@ -26,7 +26,7 @@ export default function Login({ status, canResetPassword }: Props) {
             <Form
                 {...store.form()}
                 resetOnSuccess={['password']}
-                className="flex flex-col gap-6"
+                className="flex flex-col gap-6 [--input:var(--muted-foreground)]"
             >
                 {({ processing, errors }) => (
                     <>
