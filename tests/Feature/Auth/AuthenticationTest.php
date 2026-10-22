@@ -17,6 +17,23 @@ class AuthenticationTest extends TestCase
         $response = $this->get(route('login'));
 
         $response->assertOk();
+
+        $this->assertSame(1, preg_match('/<link rel="preload" as="image" href="([^"]+)"/', $response->getContent(), $matches));
+        $background = $matches[1];
+
+        $this->assertFileExists(public_path($background));
+        $this->assertSame(1, substr_count($response->getContent(), 'as="image"'));
+        $response->assertSee("--auth-background: url('{$background}');", false)
+            ->assertSee('media="(min-width: 64rem)"', false);
+    }
+
+    public function test_app_pages_keep_the_auth_background_available_without_preloading_it(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('--auth-background:', false)
+            ->assertDontSee('as="image"', false);
     }
 
     public function test_users_can_authenticate_using_the_login_screen()

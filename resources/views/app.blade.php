@@ -4,6 +4,21 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
+        @php
+            $authBackground = '/branding/auth/'.\Illuminate\Support\Arr::random([
+                'cherry-blossoms',
+                'torii-gate',
+                'mountain',
+                'waterfall',
+                'bamboo',
+                'cranes',
+                'wave',
+            ]).'.webp';
+        @endphp
+        @if (str_starts_with($page['component'], 'auth/'))
+            <link rel="preload" as="image" href="{{ $authBackground }}" media="(min-width: 64rem)" fetchpriority="high">
+        @endif
+
         {{-- Inline script to detect system dark mode preference and apply it immediately --}}
         <script>
             (function() {
@@ -23,6 +38,7 @@
         <style>
             html {
                 background-color: oklch(1 0 0);
+                --auth-background: url('{{ $authBackground }}');
             }
 
             html.dark {
