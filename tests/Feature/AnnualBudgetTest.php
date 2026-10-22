@@ -248,7 +248,7 @@ class AnnualBudgetTest extends TestCase
         $actual = $this->tenant->expenses()->create(['title' => 'Acquisto', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => null, 'actual_amount' => '80']);
         $state = $this->add('project', $project->id, ['cost_center_id' => $center->id]);
         $this->assertSame('-20.00', $state['entries'][0]['variance']);
-        $this->assertSame(1, $state['entries'][0]['incomplete']);
+        $this->assertSame(0, $state['entries'][0]['estimated_count']);
         $this->assertSame('-20.00', $state['totals']['variance']);
         $this->assertSame('-20.00', $state['groups']['project']['variance']);
         $this->assertSame('-20.00', $state['cost_center_groups'][$center->id]['variance']);
@@ -311,13 +311,15 @@ class AnnualBudgetTest extends TestCase
 
     public function test_variance_preserves_missing_sides_explicit_zero_and_negative_adjustments(): void
     {
-        foreach ([[null, '80', '80.00'], ['100', null, '-100.00'], [null, null, '0.00'], ['100', '80', '-20.00'], ['80', '100', '20.00'], ['100', '0', '-100.00'], ['100', '100', '0.00'], ['-20', '-15', '5.00']] as [$allocated, $actual, $variance]) {
+        foreach ([[null, '80', '80.00', 0], ['100', null, '-100.00', 1], [null, null, '0.00', 0], ['100', '80', '-20.00', 0], ['80', '100', '20.00', 0], ['100', '0', '-100.00', 0], [null, '0', '0.00', 0], ['0', null, '0.00', 1], ['100', '100', '0.00', 0], ['-20', '-15', '5.00', 0]] as [$allocated, $actual, $variance, $estimates]) {
             $this->year->entries()->delete();
             $expense = $this->tenant->expenses()->create(['title' => 'Confronto', 'year' => 2026, 'allocated_amount' => $allocated, 'actual_amount' => $actual]);
             $state = $this->add('expense', $expense->id);
             $this->assertSame($variance, $state['entries'][0]['variance']);
             $this->assertSame($variance, $state['totals']['variance']);
-            $this->assertSame($allocated === null || $actual === null ? 1 : 0, $state['entries'][0]['incomplete']);
+            $this->assertSame($estimates, $state['entries'][0]['estimated_count']);
+            $this->assertSame($estimates, $state['totals']['estimated_count']);
+            $this->assertSame($estimates, $state['groups']['expense']['estimated_count']);
         }
     }
 
@@ -352,7 +354,7 @@ class AnnualBudgetTest extends TestCase
             ->where('previousBudget.totals.actual', '90.02')
             ->where('previousBudget.totals.variance', '-9.99')
             ->where('previousBudget.totals.count', 1)
-            ->where('previousBudget.totals.incomplete', 0));
+            ->where('previousBudget.totals.estimated_count', 0));
         $future = $this->tenant->budgetYears()->create(['year' => 2028]);
         $this->get('/t/budget/budget?year='.$future->year)->assertInertia(fn (Assert $page) => $page->where('previousBudget', null));
     }
@@ -413,7 +415,7 @@ class AnnualBudgetTest extends TestCase
         $this->assertSame('-34.99', $state['totals']['variance']);
         $this->assertSame('100.00', $state['totals']['allocated_positive']);
         $this->assertSame('-20.12', $state['totals']['allocated_negative']);
-        $this->assertSame(2, $state['totals']['incomplete']);
+        $this->assertSame(0, $state['totals']['estimated_count']);
         $this->assertNull($state['entries'][1]['allocated']);
         $this->assertSame('0.00', $state['entries'][2]['allocated']);
         $this->assertSame('79.88', $state['groups']['contract']['allocated']);

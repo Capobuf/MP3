@@ -82,7 +82,7 @@ class DetailBreakdownTest extends TestCase
             ->where('totals.variance', '-19.99')->where('breakdown.actual.net', '80.02')
             ->has('breakdown.actual.items', 1)->where('breakdown.actual.items.0.id', (string) $expense->id)->has('expenses.data', 1));
         $this->get($path.'?year=2026')->assertInertia(fn (Assert $page) => $page
-            ->where('totals.count', 2)->where('totals.incomplete', 1)
+            ->where('totals.count', 2)->where('totals.estimated_count', 0)
             ->where('totals.variance', '-0.02')->where('breakdown.actual.positive', '30.05')
             ->where('breakdown.actual.negative', '-10.04')->where('breakdown.actual.net', '20.01')
             ->where('breakdown.allocated.missing', 1)->has('expenses.data', 2));
@@ -101,7 +101,7 @@ class DetailBreakdownTest extends TestCase
         $data = ExpenseOverview::breakdown($query);
         $totals = ExpenseOverview::totals($query);
         $this->assertSame('10.11', $totals['variance']);
-        $this->assertSame(3, $totals['incomplete']);
+        $this->assertSame(1, $totals['estimated_count']);
         $this->assertSame('20.22', $data['actual']['positive']);
         $this->assertSame('-0.01', $data['actual']['negative']);
         $this->assertSame('20.21', $data['actual']['net']);

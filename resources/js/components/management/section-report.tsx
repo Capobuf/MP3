@@ -365,8 +365,7 @@ export function SectionReport({
                 <>
                     <strong>{data.records.length}</strong> voci nel report ·{' '}
                     <strong>{data.totals.count}</strong> spese nei totali ·{' '}
-                    <strong>{data.totals.incomplete}</strong> con dati
-                    incompleti
+                    <strong>{data.totals.estimated_count}</strong> solo stima
                 </>
             }
         >

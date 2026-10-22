@@ -117,7 +117,7 @@ function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
                     <span className="budget-report-status-label">
                         {entry.included ? 'Inclusa' : 'Esclusa'}
                     </span>
-                    {entry.incomplete > 0 && <small>Dati incompleti</small>}
+                    {entry.estimated_count > 0 && <small>Solo stima</small>}
                 </>
             );
         case 'variance':
@@ -381,8 +381,8 @@ export function BudgetReport({
                 <>
                     <strong>{budget.entries.length}</strong> righe nel report ·{' '}
                     <strong>{budget.totals.count}</strong> voci incluse nei
-                    totali · <strong>{budget.totals.incomplete}</strong> con
-                    dati incompleti
+                    totali · <strong>{budget.totals.estimated_count}</strong>{' '}
+                    solo stima
                 </>
             }
         >

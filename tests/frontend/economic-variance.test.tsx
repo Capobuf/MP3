@@ -25,7 +25,7 @@ const empty: EconomicValues = {
     actual: null,
     variance: '0.00',
     count: 0,
-    incomplete: 0,
+    estimated_count: 0,
     allocated_positive: '0.00',
     allocated_negative: '0.00',
     actual_positive: '0.00',
@@ -45,7 +45,7 @@ const cases = [
 
 describe('Economic variance', () => {
     it.each(cases)(
-        'previews %s / %s with signed cents and incomplete data',
+        'previews %s / %s with signed cents and optional amounts',
         (allocated, actual, variance) => {
             const html = renderToStaticMarkup(
                 <ExpenseLines
@@ -104,7 +104,7 @@ describe('Economic variance', () => {
                 allocated: '100.01',
                 variance: null,
                 count: 1,
-                incomplete: 1,
+                estimated_count: 1,
             },
             {
                 ...empty,
@@ -113,7 +113,7 @@ describe('Economic variance', () => {
                 actual: '80.02',
                 variance: null,
                 count: 1,
-                incomplete: 1,
+                estimated_count: 0,
             },
         ];
         expect(topGroups(rows, 1, 'actual')[1]).toMatchObject({
@@ -122,19 +122,19 @@ describe('Economic variance', () => {
             actual: '80.02',
             variance: '-19.99',
             count: 2,
-            incomplete: 2,
+            estimated_count: 1,
         });
         expect(sumGroups([])).toEqual(empty);
         expect(
             sumGroups([
-                { ...empty, allocated: '0.00', count: 1, incomplete: 1 },
+                { ...empty, allocated: '0.00', count: 1, estimated_count: 1 },
             ]),
         ).toMatchObject({
             actual: null,
             allocated: '0.00',
             variance: '0.00',
             count: 1,
-            incomplete: 1,
+            estimated_count: 1,
         });
     });
     it('keeps temporal deltas distinct from savings and missing previous years', () => {
@@ -144,7 +144,7 @@ describe('Economic variance', () => {
             actual: '80.00',
             variance: '-20.00',
             count: 2,
-            incomplete: 2,
+            estimated_count: 1,
             comparable_count: 0,
         };
         expect(
@@ -158,6 +158,12 @@ describe('Economic variance', () => {
             difference: '30.00',
             percentage: null,
         });
+        expect(analytics.current.estimated_percentage).toBe(50);
+        expect(analytics.comparisons.estimates.points).toBe(0);
+        expect(
+            budgetSummary({ ...totals, count: 0, estimated_count: 0 }, null)
+                .current.estimated_percentage,
+        ).toBeNull();
         expect(
             budgetSummary(totals, {
                 year: 2025,
@@ -168,6 +174,8 @@ describe('Economic variance', () => {
             <DashboardSummary analytics={analytics} year={2026} />,
         );
         expect(html).toContain('In aumento: 30,00');
+        expect(html).toContain('Voci solo stimate');
+        expect(html).not.toContain('Completezza');
         expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
         expect(html).not.toContain('+30,00');
         expect(decimalInput('-1.234,56')).toBe('-1234.56');

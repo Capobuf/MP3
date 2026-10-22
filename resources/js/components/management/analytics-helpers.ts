@@ -55,7 +55,7 @@ export function sumGroups(rows: EconomicValues[]): EconomicValues {
         allocated_negative: '0.00',
         actual_negative: '0.00',
         count: 0,
-        incomplete: 0,
+        estimated_count: 0,
     };
     for (const key of amountKeys) {
         const present = rows
@@ -70,7 +70,10 @@ export function sumGroups(rows: EconomicValues[]): EconomicValues {
         cents(result.actual ?? '0.00') - cents(result.allocated ?? '0.00'),
     );
     result.count = rows.reduce((sum, row) => sum + row.count, 0);
-    result.incomplete = rows.reduce((sum, row) => sum + row.incomplete, 0);
+    result.estimated_count = rows.reduce(
+        (sum, row) => sum + row.estimated_count,
+        0,
+    );
     return result;
 }
 

@@ -13,7 +13,7 @@ final class ExpenseAnalytics
     /** @return literal-string */
     private static function columns(): string
     {
-        $columns = ['COUNT(*) AS count', 'SUM(CASE WHEN allocated_amount IS NULL OR actual_amount IS NULL THEN 1 ELSE 0 END) AS incomplete'];
+        $columns = ['COUNT(*) AS count', 'SUM(CASE WHEN allocated_amount IS NOT NULL AND actual_amount IS NULL THEN 1 ELSE 0 END) AS estimated_count'];
         foreach (['allocated', 'actual'] as $metric) {
             $amount = $metric.'_amount';
             $cents = "CAST(ROUND($amount * 100, 0) AS SIGNED)";
@@ -31,7 +31,7 @@ final class ExpenseAnalytics
     /** @return array<string, mixed> */
     private static function economic(stdClass $row): array
     {
-        $result = ['count' => (int) $row->count, 'incomplete' => (int) $row->incomplete];
+        $result = ['count' => (int) $row->count, 'estimated_count' => (int) $row->estimated_count];
         foreach (['allocated', 'actual'] as $metric) {
             $value = $row->{$metric.'_cents'};
             $result[$metric] = $value === null ? null : Money::decimal((int) $value);
@@ -56,7 +56,7 @@ final class ExpenseAnalytics
             $completeness[] = ['id' => $key, 'count' => $value, 'percentage' => $count > 0 ? $value * 100 / $count : null];
         }
 
-        return [...self::economic($row), 'completeness' => $completeness, 'complete_percentage' => $count > 0 ? (int) $row->complete * 100 / $count : null];
+        return [...self::economic($row), 'completeness' => $completeness, 'estimated_percentage' => $count > 0 ? (int) $row->estimated_count * 100 / $count : null];
     }
 
     /** @return array<string, mixed> */
@@ -76,7 +76,7 @@ final class ExpenseAnalytics
             $delta = $before !== null && $after !== null ? Money::cents($after) - Money::cents($before) : null;
             $comparisons[$metric] = ['difference' => $delta === null ? null : Money::decimal($delta), 'percentage' => $metric !== 'variance' && $delta !== null && Money::cents($before) > 0 ? $delta * 100 / Money::cents($before) : null];
         }
-        $comparisons['completeness'] = ['points' => isset($previous['complete_percentage'], $current['complete_percentage']) ? $current['complete_percentage'] - $previous['complete_percentage'] : null];
+        $comparisons['estimates'] = ['points' => isset($previous['estimated_percentage'], $current['estimated_percentage']) ? $current['estimated_percentage'] - $previous['estimated_percentage'] : null];
 
         return ['current' => $current, 'previous' => $previous, 'comparisons' => $comparisons, 'annual' => $annual];
     }
@@ -104,7 +104,7 @@ final class ExpenseAnalytics
         foreach ($groups['projects'] as $project) {
             $status = $project['status'] ?? 'no-status';
             if (! isset($projectStatuses[$status])) {
-                $projectStatuses[$status] = ['id' => $status, 'name' => $statuses[$status] ?? 'Stato non disponibile', 'count' => 0, 'incomplete' => 0, 'allocated' => null, 'actual' => null, 'variance' => null, 'allocated_positive' => '0.00', 'actual_positive' => '0.00', 'allocated_negative' => '0.00', 'actual_negative' => '0.00'];
+                $projectStatuses[$status] = ['id' => $status, 'name' => $statuses[$status] ?? 'Stato non disponibile', 'count' => 0, 'estimated_count' => 0, 'allocated' => null, 'actual' => null, 'variance' => null, 'allocated_positive' => '0.00', 'actual_positive' => '0.00', 'allocated_negative' => '0.00', 'actual_negative' => '0.00'];
             }
             foreach (['allocated', 'actual', 'allocated_positive', 'actual_positive', 'allocated_negative', 'actual_negative'] as $metric) {
                 if ($project[$metric] !== null) {
@@ -113,7 +113,7 @@ final class ExpenseAnalytics
             }
             $projectStatuses[$status]['variance'] = Money::decimal(Money::cents($projectStatuses[$status]['actual'] ?? '0.00') - Money::cents($projectStatuses[$status]['allocated'] ?? '0.00'));
             $projectStatuses[$status]['count'] += $project['count'];
-            $projectStatuses[$status]['incomplete'] += $project['incomplete'];
+            $projectStatuses[$status]['estimated_count'] += $project['estimated_count'];
         }
         $projectStatuses = array_values($projectStatuses);
 

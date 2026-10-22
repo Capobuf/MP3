@@ -38,7 +38,7 @@ const data: SectionReportData = {
         actual: '-2.50',
         variance: '-2.50',
         count: 1,
-        incomplete: 0,
+        estimated_count: 0,
     },
     records: [
         {
@@ -146,12 +146,12 @@ it.each([
     ['19.99', '19,99'],
     ['0.00', '0,00'],
 ])(
-    'prints project variance %s with the incomplete warning even without scope',
+    'prints project variance %s without provisional text even without scope',
     (variance, formatted) => {
         const source = {
             ...data,
             resource: 'projects' as const,
-            totals: { ...data.totals, variance, incomplete: 2 },
+            totals: { ...data.totals, variance, estimated_count: 2 },
         };
         const html = render(source, {
             ...defaultSectionReportOptions(source, 'Azienda'),

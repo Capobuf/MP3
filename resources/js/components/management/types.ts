@@ -80,7 +80,7 @@ export type Totals = {
     actual: string | null;
     variance: string;
     count: number;
-    incomplete: number;
+    estimated_count: number;
 };
 export type BreakdownMetric = {
     items: { id: string; name: string; amount: string }[];

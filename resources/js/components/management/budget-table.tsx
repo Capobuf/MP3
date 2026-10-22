@@ -142,42 +142,31 @@ const columnNames: Record<string, string> = {
 };
 const defaultOrder = Object.keys(columnNames);
 function missingAmounts(allocated: boolean, actual: boolean) {
-    if (allocated && actual) return 'Allocato ed effettivo mancanti';
-    if (allocated) return 'Importo allocato mancante';
-    if (actual) return 'Importo effettivo mancante';
-    return null;
+    return !allocated && actual ? 'Solo stima' : null;
 }
 
-function completionLabel(entry: BudgetEntry, year: number) {
-    if (entry.incomplete === 0) return null;
-    if (!entry.expenses.length) return `Nessuna spesa attribuita al ${year}`;
-    const contributing = entry.expenses.filter(
-        (expense) => expense.contributes,
-    );
-    return missingAmounts(
-        contributing.some((expense) => expense.allocated_amount == null),
-        contributing.some((expense) => expense.actual_amount == null),
-    );
+function completionLabel(entry: BudgetEntry) {
+    return entry.estimated_count > 0 ? 'Solo stima' : null;
 }
 
 function focusCompletion(id: number) {
     const detail = document.getElementById(`budget-detail-${id}`);
-    const incomplete = Array.from(
+    const estimates = Array.from(
         document.querySelectorAll<HTMLElement>(
-            `[data-budget-entry="${id}"] [data-budget-incomplete="true"], [data-budget-detail-owner="${id}"] [data-budget-incomplete="true"]`,
+            `[data-budget-entry="${id}"] [data-budget-estimate="true"], [data-budget-detail-owner="${id}"] [data-budget-estimate="true"]`,
         ),
     );
     const controls =
         'input:not(:disabled), button:not(:disabled), a[href], [role="button"][tabindex="0"]';
     const target =
-        incomplete
+        estimates
             .map((element) =>
                 element.matches(controls)
                     ? element
                     : element.querySelector<HTMLElement>(controls),
             )
             .find((element) => element !== null) ??
-        incomplete[0] ??
+        estimates[0] ??
         detail;
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({
@@ -273,7 +262,7 @@ function ExpenseAmount({
     value,
     label,
     busy,
-    highlightIncomplete,
+    highlightEstimate,
     expense,
     field,
     onRecordSave,
@@ -282,7 +271,7 @@ function ExpenseAmount({
     value: string | null | undefined;
     label: string;
     busy: boolean;
-    highlightIncomplete?: boolean;
+    highlightEstimate?: boolean;
     expense: Expense;
     field: 'allocated_amount' | 'actual_amount';
     onRecordSave: SaveRecord;
@@ -292,9 +281,9 @@ function ExpenseAmount({
     return (
         <div
             tabIndex={-1}
-            data-budget-incomplete={highlightIncomplete && value == null}
+            data-budget-estimate={highlightEstimate && value == null}
             className={cn(
-                highlightIncomplete &&
+                highlightEstimate &&
                     value == null &&
                     'rounded bg-accent ring-1 ring-primary/40 ring-inset',
             )}
@@ -334,7 +323,7 @@ function ExpenseRows({
     columnIds,
     slug,
     busy,
-    highlightIncomplete,
+    highlightEstimate,
     expandedExpenses,
     onToggleExpense,
     onExpenseEdit,
@@ -344,7 +333,7 @@ function ExpenseRows({
     columnIds: string[];
     slug: string;
     busy: boolean;
-    highlightIncomplete: boolean;
+    highlightEstimate: boolean;
     expandedExpenses: string[];
     onToggleExpense: (key: string) => void;
     onExpenseEdit: (id: number) => void;
@@ -354,7 +343,7 @@ function ExpenseRows({
         const key = `${entry.id}:${expense.id}`;
         const expanded = expandedExpenses.includes(key);
         const missing =
-            expense.contributes && entry.incomplete > 0
+            expense.contributes && entry.estimated_count > 0
                 ? missingAmounts(
                       expense.allocated_amount == null,
                       expense.actual_amount == null,
@@ -429,11 +418,11 @@ function ExpenseRows({
                                             size="sm"
                                             className={cn(
                                                 'h-auto justify-start px-0',
-                                                highlightIncomplete &&
+                                                highlightEstimate &&
                                                     'bg-accent ring-1 ring-primary/40',
                                             )}
-                                            data-budget-incomplete={
-                                                highlightIncomplete
+                                            data-budget-estimate={
+                                                highlightEstimate
                                             }
                                             disabled={busy}
                                             onClick={() =>
@@ -458,9 +447,8 @@ function ExpenseRows({
                                     }
                                     label={`Modifica ${columnNames[id]} della spesa ${expense.title}`}
                                     busy={busy}
-                                    highlightIncomplete={
-                                        highlightIncomplete &&
-                                        expense.contributes
+                                    highlightEstimate={
+                                        highlightEstimate && expense.contributes
                                     }
                                     expense={expense}
                                     field={
@@ -636,27 +624,26 @@ function EntryDetail({
     year,
     busy,
     onExpenseEdit,
-    highlightIncomplete,
+    highlightEstimate,
 }: {
     entry: BudgetEntry;
     slug: string;
     year: number;
     busy: boolean;
     onExpenseEdit: (id: number) => void;
-    highlightIncomplete: boolean;
+    highlightEstimate: boolean;
 }) {
     const expense = entry.expenses[0];
-    const missing = completionLabel(entry, year);
+    const missing = completionLabel(entry);
     return (
         <div className="flex min-w-0 flex-col gap-3">
-            {entry.incomplete > 0 && missing && (
+            {entry.estimated_count > 0 && missing && (
                 <div
                     tabIndex={-1}
-                    data-budget-incomplete={highlightIncomplete}
+                    data-budget-estimate={highlightEstimate}
                     className={cn(
                         'flex flex-wrap items-center gap-3 rounded text-sm focus-visible:ring-2 focus-visible:ring-ring',
-                        highlightIncomplete &&
-                            'bg-accent ring-1 ring-primary/40',
+                        highlightEstimate && 'bg-accent ring-1 ring-primary/40',
                     )}
                 >
                     <span>{missing}</span>
@@ -669,7 +656,7 @@ function EntryDetail({
                                 onExpenseEdit(expense?.id ?? entry.source_id!)
                             }
                         >
-                            Completa importi
+                            Modifica importi
                         </Button>
                     ) : (
                         <Button variant="link" size="sm" asChild>
@@ -946,8 +933,8 @@ export function BudgetTable({
                                     </Link>
                                 </Button>
                             )}
-                            {row.original.incomplete > 0 &&
-                                completionLabel(row.original, year) && (
+                            {row.original.estimated_count > 0 &&
+                                completionLabel(row.original) && (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <Button
@@ -956,7 +943,7 @@ export function BudgetTable({
                                                 size="icon"
                                                 className="size-6 shrink-0"
                                                 disabled={busy || loading}
-                                                aria-label={`${completionLabel(row.original, year)}: ${row.original.description}`}
+                                                aria-label={`${completionLabel(row.original)}: ${row.original.description}`}
                                                 aria-controls={`budget-detail-${row.original.id}`}
                                                 aria-expanded={details.includes(
                                                     row.original.id,
@@ -967,14 +954,11 @@ export function BudgetTable({
                                                     )
                                                 }
                                             >
-                                                <TriangleAlert className="text-destructive" />
+                                                <TriangleAlert className="text-muted-foreground" />
                                             </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            {completionLabel(
-                                                row.original,
-                                                year,
-                                            )}
+                                            {completionLabel(row.original)}
                                         </TooltipContent>
                                     </Tooltip>
                                 )}
@@ -1086,9 +1070,9 @@ export function BudgetTable({
                                 busy={busy}
                                 label={`Modifica ${columnNames[field]} della spesa ${row.original.description}`}
                                 expense={row.original.expenses[0]}
-                                highlightIncomplete={
+                                highlightEstimate={
                                     completionTarget?.id === row.original.id &&
-                                    row.original.incomplete > 0
+                                    row.original.estimated_count > 0
                                 }
                                 field={
                                     field === 'allocated'
@@ -1361,8 +1345,8 @@ export function BudgetTable({
     }
     function renderEntry(row: Row<BudgetEntry>) {
         const entry = row.original;
-        const highlightIncomplete =
-            completionTarget?.id === entry.id && entry.incomplete > 0;
+        const highlightEstimate =
+            completionTarget?.id === entry.id && entry.estimated_count > 0;
         return (
             <Fragment key={row.id}>
                 <SortableBudgetRow
@@ -1399,8 +1383,8 @@ export function BudgetTable({
                                                 slug={slug}
                                                 year={year}
                                                 busy={busy}
-                                                highlightIncomplete={
-                                                    highlightIncomplete
+                                                highlightEstimate={
+                                                    highlightEstimate
                                                 }
                                                 onExpenseEdit={onExpenseEdit}
                                             />
@@ -1417,7 +1401,7 @@ export function BudgetTable({
                                     )}
                                     slug={slug}
                                     busy={busy}
-                                    highlightIncomplete={highlightIncomplete}
+                                    highlightEstimate={highlightEstimate}
                                     expandedExpenses={expandedExpenses}
                                     onToggleExpense={(key) =>
                                         setExpandedExpenses((current) =>
@@ -1507,8 +1491,8 @@ export function BudgetTable({
                                 {label}
                                 <span className="block text-xs text-muted-foreground">
                                     {totals.count} voci incluse
-                                    {totals.incomplete > 0 &&
-                                        ` · ${totals.incomplete} ${totals.incomplete === 1 ? 'voce con dati incompleti' : 'voci con dati incompleti'}`}
+                                    {totals.estimated_count > 0 &&
+                                        ` · ${totals.estimated_count} ${totals.estimated_count === 1 ? 'voce solo stima' : 'voci solo stima'}`}
                                     {(!table
                                         .getColumn('allocated')
                                         ?.getIsVisible() ||
@@ -2042,17 +2026,32 @@ export function BudgetTable({
                                                             </Button>
                                                             {totals && (
                                                                 <div className="flex flex-wrap items-center gap-3">
-                                                                    {totals.incomplete >
+                                                                    {totals.estimated_count >
                                                                         0 && (
-                                                                        <span className="text-xs text-muted-foreground">
-                                                                            {
-                                                                                totals.incomplete
-                                                                            }{' '}
-                                                                            {totals.incomplete ===
-                                                                            1
-                                                                                ? 'voce con dati incompleti'
-                                                                                : 'voci con dati incompleti'}
-                                                                        </span>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger
+                                                                                asChild
+                                                                            >
+                                                                                <span
+                                                                                    tabIndex={
+                                                                                        0
+                                                                                    }
+                                                                                    aria-label={`${totals.estimated_count} ${totals.estimated_count === 1 ? 'voce solo stima' : 'voci solo stima'}`}
+                                                                                    className="inline-flex text-muted-foreground"
+                                                                                >
+                                                                                    <TriangleAlert className="size-4" />
+                                                                                </span>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent>
+                                                                                {
+                                                                                    totals.estimated_count
+                                                                                }{' '}
+                                                                                {totals.estimated_count ===
+                                                                                1
+                                                                                    ? 'voce solo stima'
+                                                                                    : 'voci solo stima'}
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
                                                                     )}
                                                                     <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
                                                                         {(

@@ -30,10 +30,10 @@ class SectionReportTest extends TestCase
         $this->tenant->expenses()->create(['title' => 'Purchase', 'year' => 2026, 'project_id' => $project->id, 'actual_amount' => '80.00']);
 
         $this->get('/t/report/projects/'.$project->id.'?year=2026')->assertInertia(fn (Assert $page) => $page
-            ->where('analytics.current.variance', '-20.00')->where('analytics.current.incomplete', 2));
+            ->where('analytics.current.variance', '-20.00')->where('analytics.current.estimated_count', 1));
         $this->getJson('/t/report/projects/report?year=2026&record='.$project->id)->assertOk()
             ->assertJsonPath('totals.allocated', '100.00')->assertJsonPath('totals.actual', '80.00')
-            ->assertJsonPath('totals.variance', '-20.00')->assertJsonPath('totals.incomplete', 2);
+            ->assertJsonPath('totals.variance', '-20.00')->assertJsonPath('totals.estimated_count', 1);
     }
 
     public function test_all_filtered_rows_are_returned_in_order_independently_of_pagination(): void
@@ -80,7 +80,7 @@ class SectionReportTest extends TestCase
         $this->tenant->expenses()->create(['title' => 'Incomplete', 'year' => 2026, 'contract_id' => $selected->id, 'allocated_amount' => '12.34', 'actual_amount' => null]);
         $this->getJson('/t/report/contracts/report?year=2026&vendor_id='.$vendor->id)
             ->assertOk()->assertJsonCount(1, 'records')->assertJsonPath('records.0.year', null)
-            ->assertJsonPath('records.0.linked_expenses.0.actual_amount', null)->assertJsonPath('totals.incomplete', 1)
+            ->assertJsonPath('records.0.linked_expenses.0.actual_amount', null)->assertJsonPath('totals.estimated_count', 1)
             ->assertJsonPath('filters.0', 'Fornitore: Supplier');
         $this->tenant->projectStatuses()->create(['key' => 'active', 'name' => 'In corso']);
         $this->tenant->projects()->create(['name' => 'Active', 'year' => 2026, 'status' => 'active']);

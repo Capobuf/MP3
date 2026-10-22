@@ -112,7 +112,7 @@ class SpreadsheetTransferTest extends TestCase
                 $this->assertSame($expected, [$expense->allocated_amount, $expense->actual_amount, $expense->variance], $title);
                 $this->assertSame($expected, [$economic->allocated_amount, $economic->actual_amount, $economic->variance], $title);
                 $this->assertSame($expected, [$kpis['current']['allocated'], $kpis['current']['actual'], $kpis['current']['variance']], $title);
-                $this->assertSame($actual === null ? 1 : 0, $kpis['current']['incomplete']);
+                $this->assertSame($actual === null ? 1 : 0, $kpis['current']['estimated_count']);
                 $this->assertSame([$variance], array_column($kpis['variances'], 'variance'));
                 $this->assertSame(100.0, $book->getSheet(0)->getCell('I2')->getValue());
                 $this->assertSame($actual === null ? null : (float) $actual, $book->getSheet(0)->getCell('J2')->getValue());
@@ -271,7 +271,7 @@ class SpreadsheetTransferTest extends TestCase
         $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
         $this->assertEquals(-20, $book->getSheet(0)->getCell('H2')->getValue());
         $this->assertEquals(-20, $book->getSheet(1)->getCell('E2')->getValue());
-        $this->assertSame('Incompleto', $book->getSheet(0)->getCell('I2')->getValue());
+        $this->assertSame('Effettivo registrato', $book->getSheet(0)->getCell('I2')->getValue());
     }
 
     public function test_report_budget_and_annual_xlsx_preserve_signed_numeric_variances_and_sources(): void
@@ -283,7 +283,7 @@ class SpreadsheetTransferTest extends TestCase
         $purchase = $tenant->expenses()->create(['title' => 'Purchase', 'year' => 2026, 'project_id' => $project->id]);
         $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'project', 'project_id' => $project->id]);
 
-        foreach ([['100.01', '80.02', '-19.99'], ['80.02', '100.01', '19.99'], ['100.01', '100.01', '0.00'], ['100.00', null, '-100.00'], [null, '80.00', '80.00'], [null, null, '0.00']] as [$allocated, $actual, $variance]) {
+        foreach ([['100.01', '80.02', '-19.99', 'Effettivo registrato'], ['80.02', '100.01', '19.99', 'Effettivo registrato'], ['100.01', '100.01', '0.00', 'Effettivo registrato'], ['100.00', null, '-100.00', 'Solo stima'], [null, '80.00', '80.00', 'Effettivo registrato'], [null, null, '0.00', 'Nessun importo registrato'], [null, '0.00', '0.00', 'Effettivo registrato']] as [$allocated, $actual, $variance, $status]) {
             $forecast->update(['allocated_amount' => $allocated]);
             $purchase->update(['actual_amount' => $actual]);
             $before = $tenant->expenses()->orderBy('id')->get()->map->getRawOriginal()->all();
@@ -296,6 +296,8 @@ class SpreadsheetTransferTest extends TestCase
             try {
                 file_put_contents($file, Excel::raw(app(SectionSpreadsheet::class)->annual($tenant, 2026), \Maatwebsite\Excel\Excel::XLSX));
                 $annual = IOFactory::load($file);
+                $this->assertSame($status, $book->getSheet(0)->getCell('I2')->getValue());
+                $this->assertSame($status, $annual->getSheetByName('Budget')->getCell('I2')->getValue());
                 foreach ([$book->getSheet(0)->getCell('H2'), $book->getSheet(1)->getCell('E2'), $annual->getSheetByName('Budget')->getCell('H2')] as $cell) {
                     $this->assertSame((float) $report['totals']['variance'], $cell->getValue());
                     $this->assertSame(DataType::TYPE_NUMERIC, $cell->getDataType());

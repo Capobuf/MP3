@@ -64,7 +64,7 @@ final class ExpenseOverview
             COUNT(*) as expense_count,
             SUM(CAST(ROUND(allocated_amount * 100, 0) AS SIGNED)) as allocated_cents,
             SUM(CAST(ROUND(actual_amount * 100, 0) AS SIGNED)) as actual_cents,
-            COALESCE(SUM(CASE WHEN allocated_amount IS NULL OR actual_amount IS NULL THEN 1 ELSE 0 END), 0) as incomplete_count
+            COALESCE(SUM(CASE WHEN allocated_amount IS NOT NULL AND actual_amount IS NULL THEN 1 ELSE 0 END), 0) as estimated_count
         ')->first();
 
         return [
@@ -72,7 +72,7 @@ final class ExpenseOverview
             'actual' => $row?->getAttribute('actual_cents') === null ? null : Money::decimal((int) $row->getAttribute('actual_cents')),
             'variance' => Money::decimal((int) $row?->getAttribute('actual_cents') - (int) $row?->getAttribute('allocated_cents')),
             'count' => (int) $row?->getAttribute('expense_count'),
-            'incomplete' => (int) $row?->getAttribute('incomplete_count'),
+            'estimated_count' => (int) $row?->getAttribute('estimated_count'),
         ];
     }
 

@@ -10,7 +10,7 @@ export type EconomicValues = {
     allocated_negative: string;
     actual_negative: string;
     count: number;
-    incomplete: number;
+    estimated_count: number;
 };
 export type EconomicGroup = EconomicValues & {
     id: GroupId;
@@ -24,7 +24,7 @@ export type Completeness = {
 };
 export type EconomicSummary = EconomicValues & {
     completeness: Completeness[];
-    complete_percentage: number | null;
+    estimated_percentage: number | null;
 };
 export type AnnualRow = EconomicSummary & { year: number };
 export type KpiComparison = {
@@ -63,7 +63,7 @@ export type ExpenseAnalytics = {
     current: EconomicSummary;
     previous: AnnualRow | null;
     comparisons: Record<'allocated' | 'actual' | 'variance', KpiComparison> & {
-        completeness: { points: number | null };
+        estimates: { points: number | null };
     };
     annual: AnnualRow[];
     vendors: EconomicGroup[];

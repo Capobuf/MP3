@@ -29,7 +29,7 @@ const totals: BudgetTotals = {
     actual: null,
     variance: '0.00',
     count: 1,
-    incomplete: 1,
+    estimated_count: 1,
     comparable_count: 0,
     allocated_positive: '0.00',
     allocated_negative: '0.00',

@@ -256,8 +256,11 @@ In tutta l’app, report/PDF e XLSX lo scostamento è la somma degli effettivi
 meno la somma degli allocati nel perimetro selezionato, anche su spese distinte.
 Positivo = sovraspesa (senza `+`), negativo = risparmio, zero = pareggio.
 Una somma vuota vale zero solo nel calcolo dello scostamento: gli importi
-mancanti restano null e la completezza resta distinta. Con dati incompleti
-lo scostamento è provvisorio, non un risparmio definitivo. Un insieme vuoto
+mancanti restano null e non indicano un errore. Una voce con allocato presente
+e nessun effettivo è segnalata come «Solo stima» con un triangolo grigio e tooltip.
+Per progetti e contratti si considerano gli importi complessivi delle spese
+attribuite nell’anno: previsione e acquisto possono essere su spese diverse.
+Un effettivo pari a zero è registrato e non genera la segnalazione. Un insieme vuoto
 ha scostamento zero e conteggio zero; un anno precedente assente resta assente.
 
 Glide è stato rimosso: non sono più disponibili copia/incolla di intervalli e

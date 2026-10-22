@@ -380,7 +380,7 @@ class ManagementTest extends TestCase
         $this->tenant->expenses()->create(['title' => 'Anno precedente', 'year' => 2025, 'allocated_amount' => '999']);
         $this->other->expenses()->create(['title' => 'Altro tenant', 'year' => 2026, 'allocated_amount' => '999']);
         $this->get('/t/alfa/dashboard?year=2026&vendor_id='.$vendor->id)->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('totals.allocated', '38.30')->where('totals.actual', '21.50')->where('totals.variance', '-16.80')->where('totals.incomplete', 2)->where('totals.count', 5)->has('expenses.data', 5)->where('analytics.vendors.0.name', 'Uno'));
+            ->where('totals.allocated', '38.30')->where('totals.actual', '21.50')->where('totals.variance', '-16.80')->where('totals.estimated_count', 1)->where('totals.count', 5)->has('expenses.data', 5)->where('analytics.vendors.0.name', 'Uno'));
         $this->get('/t/alfa/dashboard?year=2025')->assertInertia(fn (Assert $page) => $page->where('totals.allocated', '999.00')->has('expenses.data', 1));
         $this->get('/t/alfa/dashboard?year=2026&search=inesistente')->assertInertia(fn (Assert $page) => $page->where('totals.count', 0)->where('totals.variance', '0.00')->has('analytics.vendors', 0));
     }
@@ -578,10 +578,10 @@ class ManagementTest extends TestCase
         $expense = $this->tenant->expenses()->create(['title' => 'Cost', 'year' => 2026, 'vendor_id' => $vendor->id, 'project_id' => $project->id, 'allocated_amount' => '12.50']);
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['actual_amount' => '0'])->assertOk()->assertJsonPath('record.variance', '-12.50');
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
-            ->where('totals.allocated', '12.50')->where('totals.actual', '0.00')->where('totals.variance', '-12.50')->where('totals.incomplete', 0)
+            ->where('totals.allocated', '12.50')->where('totals.actual', '0.00')->where('totals.variance', '-12.50')->where('totals.estimated_count', 0)
             ->missing('vendorChart')->missing('projectChart')->missing('expiringContracts')->where('analytics.vendors.0.id', $vendor->id)->where('analytics.projects.0.id', $project->id));
         $this->patchJson('/t/alfa/expenses/'.$expense->id, ['allocated_amount' => null])->assertOk()->assertJsonPath('record.variance', '0.00');
-        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('totals.incomplete', 1));
+        $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page->where('totals.estimated_count', 0));
         $this->deleteJson('/t/alfa/expenses/batch', ['ids' => [$expense->id]])->assertOk();
         $this->get('/t/alfa/dashboard?year=2026')->assertInertia(fn (Assert $page) => $page
             ->where('totals.count', 0)->where('totals.allocated', null)->where('totals.actual', null)->has('analytics.vendors', 0)->has('analytics.projects', 0));
@@ -639,16 +639,16 @@ class ManagementTest extends TestCase
 
         $this->get($path.'?year=2026&history=1')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('year', 2026)->where('economicContext.years', [2026, 2025, 2024])->where('expenses.total', 28)
-            ->where('totals.allocated', '262.60')->where('totals.actual', '234.00')->where('totals.variance', '-28.60')->where('totals.incomplete', 0));
+            ->where('totals.allocated', '262.60')->where('totals.actual', '234.00')->where('totals.variance', '-28.60')->where('totals.estimated_count', 0));
         $response = $this->get($path.'?year=2026')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('year', 2026)->where('economicContext.years', [2026, 2025, 2024])->has('expenses.data', 25)->where('expenses.total', 26)
-            ->where('totals.count', 26)->where('totals.allocated', '262.60')->where('totals.actual', '234.00')->where('totals.variance', '-28.60')->where('totals.incomplete', 0));
+            ->where('totals.count', 26)->where('totals.allocated', '262.60')->where('totals.actual', '234.00')->where('totals.variance', '-28.60')->where('totals.estimated_count', 0));
         $this->get($response->inertiaProps('expenses.next_page_url'))->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('year', 2026)->has('expenses.data', 1)->where('expenses.data.0.year', 2026)->where('expenses.current_page', 2)
             ->where('totals.count', 26)->where('totals.allocated', '262.60')->where('totals.actual', '234.00'));
         $this->get($path.'?year=2025')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('year', 2025)->has('expenses.data', 2)->where('expenses.data.0.year', 2025)->where('expenses.data.1.year', 2025)
-            ->where('totals.count', 2)->where('totals.allocated', '20.00')->where('totals.actual', '30.00')->where('totals.variance', '10.00')->where('totals.incomplete', 1));
+            ->where('totals.count', 2)->where('totals.allocated', '20.00')->where('totals.actual', '30.00')->where('totals.variance', '10.00')->where('totals.estimated_count', 1));
         $this->get($path.'?year=2024')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('economicContext.years', [2026, 2025, 2024])->has('expenses.data', 0)->where('totals.count', 0)->where('totals.allocated', null)->where('totals.actual', null));
         foreach (['invalid', '1999', '2101', '2026.5'] as $year) {
