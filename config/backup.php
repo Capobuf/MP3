@@ -3,8 +3,14 @@
 // Keep Spatie's retention defaults; local archives never trigger email or remote uploads.
 $config = require base_path('vendor/spatie/laravel-backup/config/backup.php');
 $config['backup']['name'] = '.pending';
+// Production ZIPs contain the application and compiled assets, not development tools.
+$requiredSources = ['app', 'bootstrap', 'config', 'database/migrations', 'resources', 'routes', 'public', '.env', 'artisan', 'composer.json', 'composer.lock'];
+$optionalSources = ['database/seeders', 'database/factories', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'compose.yaml'];
 $config['backup']['source']['files'] = [
-    'include' => array_map(base_path(...), ['app', 'bootstrap', 'config', 'database/migrations', 'database/seeders', 'database/factories', 'resources', 'routes', 'public', '.env', 'artisan', 'composer.json', 'composer.lock', 'package.json', 'package-lock.json', 'vite.config.ts', 'tsconfig.json', 'compose.yaml']),
+    'include' => array_map(base_path(...), [
+        ...$requiredSources,
+        ...array_filter($optionalSources, fn (string $path) => file_exists(base_path($path))),
+    ]),
     'exclude' => [base_path('bootstrap/cache'), public_path('hot')],
     'follow_links' => false,
     'ignore_unreadable_directories' => false,
