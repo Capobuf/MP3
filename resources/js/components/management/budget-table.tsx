@@ -2017,7 +2017,7 @@ export function BudgetTable({
                                                         }
                                                         className="whitespace-normal"
                                                     >
-                                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                                        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
