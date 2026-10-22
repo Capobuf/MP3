@@ -20,6 +20,7 @@ export default function AuthSplitLayout({
     title,
     description,
     logoOnly = false,
+    showLogo = false,
 }: AuthLayoutProps) {
     const { name } = usePage().props;
     const [background] = useState(
@@ -48,11 +49,11 @@ export default function AuthSplitLayout({
                         href={home()}
                         className={cn(
                             'mx-auto flex flex-col items-center gap-2 rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring',
-                            !logoOnly && 'lg:hidden',
+                            !logoOnly && !showLogo && 'lg:hidden',
                         )}
                     >
                         <AppLogoIcon className="size-16" />
-                        {!logoOnly && name}
+                        {!logoOnly && !showLogo && name}
                     </Link>
                     <div
                         className={cn(
