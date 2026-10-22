@@ -26,7 +26,7 @@ export default function Login({ status, canResetPassword }: Props) {
             <Form
                 {...store.form()}
                 resetOnSuccess={['password']}
-                className="flex flex-col gap-6"
+                className="flex flex-col gap-6 [--input:var(--muted-foreground)]"
             >
                 {({ processing, errors }) => (
                     <>
@@ -41,31 +41,18 @@ export default function Login({ status, canResetPassword }: Props) {
                                     autoFocus
                                     tabIndex={1}
                                     autoComplete="email"
-                                    placeholder="email@example.com"
                                 />
                                 <InputError message={errors.email} />
                             </div>
 
                             <div className="grid gap-2">
-                                <div className="flex items-center">
-                                    <Label htmlFor="password">Password</Label>
-                                    {canResetPassword && (
-                                        <TextLink
-                                            href={request()}
-                                            className="ml-auto text-sm"
-                                            tabIndex={5}
-                                        >
-                                            Password dimenticata?
-                                        </TextLink>
-                                    )}
-                                </div>
+                                <Label htmlFor="password">Password</Label>
                                 <PasswordInput
                                     id="password"
                                     name="password"
                                     required
                                     tabIndex={2}
                                     autoComplete="current-password"
-                                    placeholder="Password"
                                 />
                                 <InputError message={errors.password} />
                             </div>
@@ -89,6 +76,15 @@ export default function Login({ status, canResetPassword }: Props) {
                                 {processing && <Spinner />}
                                 Accedi
                             </Button>
+                            {canResetPassword && (
+                                <TextLink
+                                    href={request()}
+                                    className="justify-self-center text-sm"
+                                    tabIndex={5}
+                                >
+                                    Password dimenticata?
+                                </TextLink>
+                            )}
                         </div>
                     </>
                 )}
@@ -105,5 +101,5 @@ export default function Login({ status, canResetPassword }: Props) {
 
 Login.layout = {
     title: 'Accedi a Obake',
-    description: 'Inserisci le tue credenziali per accedere al tuo ambiente.',
+    logoOnly: true,
 };
