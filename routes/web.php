@@ -29,9 +29,10 @@ use App\Http\Controllers\TenantDashboardController;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\RecordUndo;
 use App\Models\Tenant;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'welcome')->name('home');
+Route::get('/', fn (Request $request) => to_route($request->user() ? 'dashboard' : 'login'))->name('home');
 
 Route::middleware('auth')->group(function () {
     Route::post('undo', [UndoController::class, 'undoAny'])->name('undo.apply');
