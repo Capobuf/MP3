@@ -8,6 +8,7 @@ use App\Models\BudgetYear;
 use App\Models\Tenant;
 use App\Services\AnnualBudget;
 use App\Services\AttachmentFiles;
+use App\Support\BudgetSelection;
 use App\Support\EconomicYearContext;
 use App\Support\ExpenseOverview;
 use Illuminate\Http\JsonResponse;
@@ -53,8 +54,7 @@ class BudgetController extends Controller
 
     public function state(Request $request, Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget): JsonResponse
     {
-        $data = $request->validate(['entry_ids' => ['nullable', 'string', 'regex:/^\d+(,\d+)*$/D']]);
-        $ids = $request->has('entry_ids') ? array_map('intval', array_values(array_filter(explode(',', $data['entry_ids'] ?? '')))) : null;
+        $ids = BudgetSelection::ids($request, $tenant, $budgetYear);
 
         return response()->json(['budget' => $budget->snapshot($tenant, $budgetYear, $ids)]);
     }

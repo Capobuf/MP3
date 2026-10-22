@@ -6,6 +6,8 @@ Fornitori, contratti, progetti, spese, centri di costo e Budget hanno le azioni 
 
 Gli export rispettano i filtri applicati e includono tutte le pagine. Contratti e progetti hanno un foglio aggiuntivo con le spese per anno di attribuzione. Le spese includono il dettaglio delle righe economiche dell’anno selezionato; Budget usa le voci e i riepiloghi del servizio `AnnualBudget`. Gli importi di riferimento dei contratti sono distinti dagli importi delle spese. I report non contengono ID interni, formule o file allegati.
 
+Nel Budget, la vista iniziale esporta le sole voci incluse; un filtro senza risultati produce un file senza voci. Le caselle di selezione e i gruppi compressi non restringono l’export. I report annuali Drive mantengono tutte le voci dell’anno. Se una voce filtrata non è più disponibile, aggiornare il Budget prima di riprovare.
+
 Per importare, scaricare il modello della sezione e compilare il foglio **Dati** senza cambiare le intestazioni. Il foglio **Istruzioni** documenta i valori ammessi:
 
 - Date Excel oppure `gg/mm/aaaa` e `aaaa-mm-gg`, senza orario.

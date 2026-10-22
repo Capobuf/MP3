@@ -37,6 +37,7 @@ export function SpreadsheetActions({
     exportOnly = false,
     printOnly = false,
     onPrintReport,
+    getExportFilters,
 }: {
     slug: string;
     resource: string;
@@ -46,6 +47,7 @@ export function SpreadsheetActions({
     exportOnly?: boolean;
     printOnly?: boolean;
     onPrintReport?: () => void;
+    getExportFilters?: () => object | undefined;
 }) {
     const { transferLimits, economicContext, currentTenant } = usePage<{
         transferLimits: { xlsxMaxKb: number; xlsxMaxRows: number };
@@ -83,6 +85,49 @@ export function SpreadsheetActions({
                 failure instanceof Error
                     ? failure.message
                     : 'Report non disponibile.',
+            );
+        } finally {
+            setBusy(false);
+        }
+    }
+    async function exportFiltered() {
+        if (disabled || busy) return;
+        setBusy(true);
+        try {
+            const filters = getExportFilters?.();
+            if (!filters) throw new Error('Budget non disponibile. Riprova.');
+            const exportQuery = new URLSearchParams(query);
+            for (const [key, value] of Object.entries(filters)) {
+                exportQuery.set(key, String(value));
+            }
+            const response = await fetch(`${path}/export.xlsx?${exportQuery}`, {
+                headers: { Accept: 'application/json' },
+            });
+            if (
+                !response.ok ||
+                !response.headers
+                    .get('Content-Type')
+                    ?.startsWith(
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    )
+            ) {
+                const error = await response.json().catch(() => ({}));
+                throw new Error(error.message ?? 'Esportazione non riuscita.');
+            }
+            const url = URL.createObjectURL(await response.blob());
+            const link = document.createElement('a');
+            link.href = url;
+            link.download =
+                response.headers
+                    .get('Content-Disposition')
+                    ?.match(/filename="?([^";]+)/)?.[1] ?? `${resource}.xlsx`;
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch (failure) {
+            toast.error(
+                failure instanceof Error
+                    ? failure.message
+                    : 'Esportazione non riuscita.',
             );
         } finally {
             setBusy(false);
@@ -128,18 +173,30 @@ export function SpreadsheetActions({
                             )}
                             <DropdownMenuItem
                                 disabled={disabled || busy}
-                                asChild
+                                asChild={!getExportFilters}
+                                onSelect={
+                                    getExportFilters
+                                        ? () => void exportFiltered()
+                                        : undefined
+                                }
                             >
-                                <a
-                                    href={`${path}/export.xlsx?${query}`}
-                                    onClick={(event) => {
-                                        if (disabled || busy)
-                                            event.preventDefault();
-                                    }}
-                                >
-                                    <Download aria-hidden="true" />
-                                    Esporta Excel
-                                </a>
+                                {getExportFilters ? (
+                                    <>
+                                        <Download aria-hidden="true" />
+                                        Esporta Excel
+                                    </>
+                                ) : (
+                                    <a
+                                        href={`${path}/export.xlsx?${query}`}
+                                        onClick={(event) => {
+                                            if (disabled || busy)
+                                                event.preventDefault();
+                                        }}
+                                    >
+                                        <Download aria-hidden="true" />
+                                        Esporta Excel
+                                    </a>
+                                )}
                             </DropdownMenuItem>
                             {canPrint && (
                                 <DropdownMenuItem

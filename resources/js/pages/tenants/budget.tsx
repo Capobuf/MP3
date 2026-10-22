@@ -69,12 +69,14 @@ function BudgetHeader({
     onNewYear,
     onCopy,
     onPrintReport,
+    getExportFilters,
 }: {
     props: BudgetProps;
     busy: boolean;
     onNewYear: (year: number) => void;
     onCopy?: () => void;
     onPrintReport?: () => void;
+    getExportFilters?: () => object | undefined;
 }) {
     const visibleBusy = useDelayedBusy(busy);
     return (
@@ -135,6 +137,7 @@ function BudgetHeader({
                     <SpreadsheetActions
                         slug={props.tenant.slug}
                         onPrintReport={onPrintReport}
+                        getExportFilters={getExportFilters}
                         resource="budget"
                         label="Budget"
                         filters={{ year: props.selectedYear }}
@@ -280,6 +283,7 @@ function BudgetWorkspace({
                 busy={busy || loading || pending}
                 onNewYear={onNewYear}
                 onPrintReport={() => budgetTable.current?.printReport()}
+                getExportFilters={() => budgetTable.current?.exportFilters()}
                 onCopy={() => setImporting(true)}
             />
             <section aria-label="Riepilogo budget">
