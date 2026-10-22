@@ -1995,128 +1995,119 @@ export function BudgetTable({
                                         return (
                                             <Fragment key={row.id}>
                                                 <TableRow className="border-y bg-muted/60">
-                                                    <TableCell
-                                                        colSpan={
-                                                            visibleColumns.length
-                                                        }
-                                                        className="whitespace-normal"
-                                                    >
-                                                        <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-auto min-h-9 max-w-full text-left whitespace-normal"
-                                                                aria-label={`${row.getIsExpanded() ? 'Comprimi' : 'Espandi'} ${title}`}
-                                                                aria-expanded={row.getIsExpanded()}
-                                                                onClick={row.getToggleExpandedHandler()}
-                                                            >
-                                                                {row.getIsExpanded() ? (
-                                                                    <ChevronDown />
-                                                                ) : (
-                                                                    <ChevronRight />
+                                                    {visibleColumns.map(
+                                                        (column) => (
+                                                            <TableCell
+                                                                key={column.id}
+                                                                className={cn(
+                                                                    column.id ===
+                                                                        'description' &&
+                                                                        'whitespace-normal',
+                                                                    [
+                                                                        'allocated',
+                                                                        'actual',
+                                                                        'variance',
+                                                                    ].includes(
+                                                                        column.id,
+                                                                    ) &&
+                                                                        'text-right financial-value tabular-nums',
+                                                                    [
+                                                                        'allocated',
+                                                                        'actual',
+                                                                    ].includes(
+                                                                        column.id,
+                                                                    ) && 'pr-5',
+                                                                    column.id ===
+                                                                        'variance' &&
+                                                                        varianceTextClass(
+                                                                            totals?.variance,
+                                                                        ),
                                                                 )}
-                                                                <span className="font-semibold">
-                                                                    {title} ·{' '}
-                                                                    {
-                                                                        row
-                                                                            .subRows
-                                                                            .length
-                                                                    }
-                                                                </span>
-                                                            </Button>
-                                                            {totals && (
-                                                                <div className="flex flex-wrap items-center gap-3">
-                                                                    {totals.estimated_count >
-                                                                        0 && (
-                                                                        <Tooltip>
-                                                                            <TooltipTrigger
-                                                                                asChild
-                                                                            >
-                                                                                <span
-                                                                                    tabIndex={
-                                                                                        0
-                                                                                    }
-                                                                                    aria-label={`${totals.estimated_count} ${totals.estimated_count === 1 ? 'voce solo stima' : 'voci solo stima'}`}
-                                                                                    className="inline-flex text-muted-foreground"
-                                                                                >
-                                                                                    <TriangleAlert className="size-4" />
-                                                                                </span>
-                                                                            </TooltipTrigger>
-                                                                            <TooltipContent>
-                                                                                {
-                                                                                    totals.estimated_count
-                                                                                }{' '}
-                                                                                {totals.estimated_count ===
-                                                                                1
-                                                                                    ? 'voce solo stima'
-                                                                                    : 'voci solo stima'}
-                                                                            </TooltipContent>
-                                                                        </Tooltip>
-                                                                    )}
-                                                                    <dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-                                                                        {(
-                                                                            [
-                                                                                'allocated',
-                                                                                'actual',
-                                                                                'variance',
-                                                                            ] as const
-                                                                        )
-                                                                            .filter(
-                                                                                (
-                                                                                    id,
-                                                                                ) =>
-                                                                                    table
-                                                                                        .getColumn(
-                                                                                            id,
-                                                                                        )
-                                                                                        ?.getIsVisible(),
-                                                                            )
-                                                                            .map(
-                                                                                (
-                                                                                    id,
-                                                                                ) => (
-                                                                                    <div
-                                                                                        key={
-                                                                                            id
-                                                                                        }
-                                                                                        className="flex items-baseline gap-2"
-                                                                                    >
-                                                                                        <dt className="text-xs text-muted-foreground">
-                                                                                            {
-                                                                                                columnNames[
-                                                                                                    id
-                                                                                                ]
-                                                                                            }
-                                                                                        </dt>
-                                                                                        <dd
-                                                                                            className={cn(
-                                                                                                'financial-value tabular-nums',
-                                                                                                id ===
-                                                                                                    'variance' &&
-                                                                                                    varianceTextClass(
-                                                                                                        totals.variance,
-                                                                                                    ),
-                                                                                            )}
-                                                                                        >
-                                                                                            {id ===
-                                                                                                'variance' &&
-                                                                                            totals.variance ===
-                                                                                                null
-                                                                                                ? 'Non confrontabile'
-                                                                                                : money(
-                                                                                                      totals[
-                                                                                                          id
-                                                                                                      ],
-                                                                                                  )}
-                                                                                        </dd>
-                                                                                    </div>
-                                                                                ),
+                                                            >
+                                                                {column.id ===
+                                                                'description' ? (
+                                                                    <div className="flex items-center gap-3">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            className="h-auto min-h-9 max-w-full text-left whitespace-normal"
+                                                                            aria-label={`${row.getIsExpanded() ? 'Comprimi' : 'Espandi'} ${title}`}
+                                                                            aria-expanded={row.getIsExpanded()}
+                                                                            onClick={row.getToggleExpandedHandler()}
+                                                                        >
+                                                                            {row.getIsExpanded() ? (
+                                                                                <ChevronDown />
+                                                                            ) : (
+                                                                                <ChevronRight />
                                                                             )}
-                                                                    </dl>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
+                                                                            <span className="font-semibold">
+                                                                                {
+                                                                                    title
+                                                                                }{' '}
+                                                                                ·{' '}
+                                                                                {
+                                                                                    row
+                                                                                        .subRows
+                                                                                        .length
+                                                                                }
+                                                                            </span>
+                                                                        </Button>
+                                                                        {totals &&
+                                                                            totals.estimated_count >
+                                                                                0 && (
+                                                                                <Tooltip>
+                                                                                    <TooltipTrigger
+                                                                                        asChild
+                                                                                    >
+                                                                                        <span
+                                                                                            tabIndex={
+                                                                                                0
+                                                                                            }
+                                                                                            aria-label={`${totals.estimated_count} ${totals.estimated_count === 1 ? 'voce solo stima' : 'voci solo stima'}`}
+                                                                                            className="inline-flex shrink-0 text-muted-foreground"
+                                                                                        >
+                                                                                            <TriangleAlert className="size-4" />
+                                                                                        </span>
+                                                                                    </TooltipTrigger>
+                                                                                    <TooltipContent>
+                                                                                        {
+                                                                                            totals.estimated_count
+                                                                                        }{' '}
+                                                                                        {totals.estimated_count ===
+                                                                                        1
+                                                                                            ? 'voce solo stima'
+                                                                                            : 'voci solo stima'}
+                                                                                    </TooltipContent>
+                                                                                </Tooltip>
+                                                                            )}
+                                                                    </div>
+                                                                ) : totals &&
+                                                                  [
+                                                                      'allocated',
+                                                                      'actual',
+                                                                      'variance',
+                                                                  ].includes(
+                                                                      column.id,
+                                                                  ) ? (
+                                                                    column.id ===
+                                                                        'variance' &&
+                                                                    totals.variance ===
+                                                                        null ? (
+                                                                        'Non confrontabile'
+                                                                    ) : (
+                                                                        money(
+                                                                            totals[
+                                                                                column.id as
+                                                                                    | 'allocated'
+                                                                                    | 'actual'
+                                                                                    | 'variance'
+                                                                            ],
+                                                                        )
+                                                                    )
+                                                                ) : null}
+                                                            </TableCell>
+                                                        ),
+                                                    )}
                                                 </TableRow>
                                                 {row.getIsExpanded() && (
                                                     <SortableContext
