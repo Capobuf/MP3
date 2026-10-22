@@ -121,7 +121,9 @@ def healthy(config, commit):
     for attempt in range(5):
         try:
             for suffix in ('/build/release.txt?release=' + config['RELEASE'], '/up'):
-                request = Request(config['URL'].rstrip('/') + suffix, headers={'Cache-Control': 'no-cache'})
+                request = Request(config['URL'].rstrip('/') + suffix, headers={
+                    'Cache-Control': 'no-cache', 'User-Agent': 'Obake-Deployment-Check/1.0',
+                })
                 with urlopen(request, timeout=10) as response:
                     require(response.status == 200 and urlsplit(response.url).hostname == config['DOMAIN'])
                     if suffix.startswith('/build/'):
