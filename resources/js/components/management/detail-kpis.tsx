@@ -57,13 +57,6 @@ export function DetailKpis({
                             >
                                 <SummaryValue value={card.value} />
                             </CardTitle>
-                            {index === 2 &&
-                                (allocated == null || actual == null) && (
-                                    <CardDescription>
-                                        Dati incompleti: scostamento
-                                        provvisorio.
-                                    </CardDescription>
-                                )}
                         </CardHeader>
                     </Card>
                 ))}

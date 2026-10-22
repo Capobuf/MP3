@@ -1133,11 +1133,6 @@ export function ExpenseLines({
                             </div>
                         ))}
                     </dl>
-                    {(totals.allocated === null || totals.actual === null) && (
-                        <p className="text-sm text-muted-foreground">
-                            Dati incompleti: scostamento provvisorio.
-                        </p>
-                    )}
                 </>
             )}
         </section>

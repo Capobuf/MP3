@@ -157,14 +157,6 @@ export function DashboardSummary({
                                             />
                                         )}
                                     </CardTitle>
-                                    {!loading &&
-                                        metric === 'variance' &&
-                                        current.incomplete > 0 && (
-                                            <CardDescription>
-                                                Dati incompleti: scostamento
-                                                provvisorio.
-                                            </CardDescription>
-                                        )}
                                     {!loading && comparable && (
                                         <ComparisonBadge
                                             difference={Number(

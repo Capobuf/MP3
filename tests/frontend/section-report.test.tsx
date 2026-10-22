@@ -105,7 +105,7 @@ describe('Section report', () => {
         expect(options.blocks).not.toContain('linked');
         const html = render(source, { ...options, hiddenBlocks: [] });
         expect(html).toContain('Da inserire');
-        expect(html).toContain('Dati incompleti: scostamento provvisorio.');
+        expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
         expect(html).toContain('Contratto senza nome');
         expect(html).toContain('0,00');
         expect(html).toContain('-2,50');
@@ -161,6 +161,6 @@ it.each([
         expect(html).toContain(formatted);
         expect(html).not.toContain(`+${formatted}`);
         if (variance === '0.00') expect(html).not.toContain('-0,00');
-        expect(html).toContain('Dati incompleti: scostamento provvisorio.');
+        expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
     },
 );

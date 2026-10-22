@@ -121,14 +121,7 @@ function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
                 </>
             );
         case 'variance':
-            return (
-                <>
-                    {money(entry.variance)}
-                    {entry.incomplete > 0 && (
-                        <small>Dati incompleti: scostamento provvisorio.</small>
-                    )}
-                </>
-            );
+            return money(entry.variance);
         case 'description':
             return entry.description;
         case 'type':
@@ -148,14 +141,7 @@ function ReportTotals({ totals }: { totals: BudgetTotals }) {
             {metrics.map((metric) => (
                 <div key={metric} data-metric={metric}>
                     <dt>{budgetReportColumns[metric]}</dt>
-                    <dd>
-                        {amount(totals[metric], metric === 'variance')}
-                        {metric === 'variance' && totals.incomplete > 0 && (
-                            <small>
-                                Dati incompleti: scostamento provvisorio.
-                            </small>
-                        )}
-                    </dd>
+                    <dd>{amount(totals[metric], metric === 'variance')}</dd>
                 </div>
             ))}
         </dl>

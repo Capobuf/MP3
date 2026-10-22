@@ -60,9 +60,7 @@ describe('Economic variance', () => {
             const summary = html.slice(html.indexOf('Scostamento ('));
             expect(summary).toContain(money(variance));
             expect(summary).toContain(varianceTextClass(variance));
-            expect(summary.includes('Dati incompleti')).toBe(
-                allocated === null || actual === null,
-            );
+            expect(summary).not.toContain('scostamento provvisorio');
             expect(money(variance)).not.toContain('+');
             if (variance === 0) expect(money(variance)).not.toContain('-');
             if (variance < 0)
@@ -170,7 +168,7 @@ describe('Economic variance', () => {
             <DashboardSummary analytics={analytics} year={2026} />,
         );
         expect(html).toContain('In aumento: 30,00');
-        expect(html).toContain('Dati incompleti: scostamento provvisorio.');
+        expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
         expect(html).not.toContain('+30,00');
         expect(decimalInput('-1.234,56')).toBe('-1234.56');
         expect(money('-1234.56')).toContain('-1.234,56');

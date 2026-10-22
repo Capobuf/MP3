@@ -163,15 +163,7 @@ function cell(record: SectionReportData['records'][number], column: Column) {
         case 'reference_amount':
             return money(record[column]);
         case 'variance':
-            return (
-                <>
-                    {money(record.variance)}
-                    {(record.allocated_amount == null ||
-                        record.actual_amount == null) && (
-                        <small>Dati incompleti: scostamento provvisorio.</small>
-                    )}
-                </>
-            );
+            return money(record.variance);
         default:
             return record[column] ?? '—';
     }
@@ -278,15 +270,7 @@ export function SectionReport({
                               ? 'Effettivo'
                               : 'Scostamento'}
                     </dt>
-                    <dd>
-                        {money(data.totals[metric])}
-                        {metric === 'variance' &&
-                            data.totals.incomplete > 0 && (
-                                <small>
-                                    Dati incompleti: scostamento provvisorio.
-                                </small>
-                            )}
-                    </dd>
+                    <dd>{money(data.totals[metric])}</dd>
                 </div>
             ))}
         </dl>

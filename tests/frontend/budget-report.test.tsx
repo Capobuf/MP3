@@ -211,7 +211,7 @@ describe('Budget report', () => {
         expect(html).not.toContain('<script>');
         expect(html).toContain('0,00');
         expect(html).toContain('Da inserire');
-        expect(html).toContain('Dati incompleti: scostamento provvisorio.');
+        expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
         expect(html).toContain('Esclusa');
         expect(html).not.toContain('Ripartizione del Budget');
         expect(html).not.toContain('<button');
@@ -501,6 +501,6 @@ it.each([
         expect(html).toContain(formatted);
         expect(html).not.toContain(`+${formatted}`);
         if (variance === '0.00') expect(html).not.toContain('-0,00');
-        expect(html).toContain('Dati incompleti: scostamento provvisorio.');
+        expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
     },
 );

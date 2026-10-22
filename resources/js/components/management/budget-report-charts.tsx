@@ -211,12 +211,6 @@ export function BudgetReportChart({
                                                 {row.variance === null
                                                     ? 'Non confrontabile'
                                                     : money(row.variance)}
-                                                {row.incomplete > 0 && (
-                                                    <small>
-                                                        Dati incompleti:
-                                                        scostamento provvisorio.
-                                                    </small>
-                                                )}
                                             </td>
                                         )}
                                     </tr>
