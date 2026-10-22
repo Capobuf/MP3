@@ -97,6 +97,27 @@ class TransportTest(unittest.TestCase):
         self.assertEqual(result.stderr, '')
 
 
+class HealthTest(unittest.TestCase):
+    def test_identified_client_still_requires_matching_commit_and_host(self):
+        config = dict(URL='https://example.invalid', DOMAIN='example.invalid', RELEASE=COMMIT + '-42-1')
+        for body, host, accepted in [(COMMIT, config['DOMAIN'], True),
+                                     ('wrong commit', config['DOMAIN'], False),
+                                     (COMMIT, 'other.invalid', False)]:
+            def response(request, timeout):
+                self.assertEqual(request.get_header('User-agent'), 'Obake-Deployment-Check/1.0')
+                result = io.BytesIO(body.encode())
+                result.status = 200
+                result.url = 'https://' + host + '/up'
+                return result
+            with self.subTest(body=body, host=host), patch.object(release, 'urlopen', side_effect=response), \
+                    patch.object(release.time, 'sleep'):
+                if accepted:
+                    release.healthy(config, COMMIT)
+                else:
+                    with self.assertRaises(ValueError):
+                        release.healthy(config, COMMIT)
+
+
 class ReleaseTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
