@@ -1,0 +1,91 @@
+name: Production ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-zip.yml'
+      - '.env.cloudpanel.example'
+      - 'config/backup.php'
+      - 'app/Services/PlatformBackup.php'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package for CloudPanel
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_mysql, zip, xml, dom, gd, fileinfo
+          tools: composer:v2
+          coverage: none
+
+      - name: Install production PHP dependencies
+        run: |
+          composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+          composer check-platform-reqs --no-dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build frontend
+        run: |
+          cp .env.example .env
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Assemble deployment files
+        run: |
+          set -euo pipefail
+          mkdir -p dist/obake
+          tar -cf - \
+            app bootstrap config database/migrations public resources/views \
+            routes storage vendor artisan composer.json composer.lock README.md \
+            | tar -xf - -C dist/obake
+          cp .env.cloudpanel.example dist/obake/.env.example
+
+          for path in \
+            artisan vendor/autoload.php bootstrap/app.php \
+            database/migrations resources/views/app.blade.php \
+            public/index.php public/build/manifest.json \
+            storage/framework/cache storage/framework/sessions \
+            storage/framework/views storage/logs \
+            .env.example README.md; do
+            test -e "dist/obake/$path"
+          done
+
+          # The archive must never carry a real site URL or deployment credentials.
+          grep -Fxq 'APP_URL=https://example.com' dist/obake/.env.example
+          test ! -e dist/obake/.env
+          test ! -d dist/obake/node_modules
+          test ! -d dist/obake/tests
+          test ! -e dist/obake/compose.yaml
+          (cd dist/obake && php artisan --version)
+
+      # Uploading the directory yields a single ready-to-extract ZIP (not a ZIP inside a ZIP).
+      - name: Upload downloadable ZIP
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: obake-production-${{ github.run_number }}
+          path: dist/obake/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 90

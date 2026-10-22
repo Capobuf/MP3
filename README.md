@@ -4,11 +4,122 @@ Repository: [Capobuf/obake](https://github.com/Capobuf/obake).
 
 Base applicativa Laravel 13 creata con lo starter kit React ufficiale. Include React 19 con TypeScript, Inertia.js 3, Tailwind CSS 4, shadcn/ui, Vite e autenticazione Laravel Fortify.
 
-## Requisiti
+## Installazione su CloudPanel (da zero, senza Docker)
 
-- Docker Desktop con Docker Compose per l'ambiente di sviluppo consigliato
-- Composer 2 per installare inizialmente le dipendenze
-- In alternativa: PHP 8.4.27+ oppure 8.5.12+, MySQL/MariaDB, Node.js e npm
+Questa procedura usa lo **ZIP di produzione** generato da GitHub Actions. Contiene le dipendenze PHP (`vendor/`) e il frontend gia compilato (`public/build/`): **non servono Composer, Node.js, npm o Docker sul server**. Serve un nuovo sito CloudPanel con un **database MySQL vuoto**. Non e un installer web e non e una procedura di aggiornamento di un'installazione esistente.
+
+### 1. Scaricare lo ZIP
+
+1. Aprire [GitHub Actions - Production ZIP](https://github.com/Capobuf/obake/actions/workflows/production-zip.yml).
+2. Scegliere **Run workflow** sul branch `main` (oppure aprire un'esecuzione completata associata a un tag `v*`).
+3. Aprire il workflow completato con esito positivo e, nella sezione **Artifacts**, scaricare `obake-production-<numero>`. Il download e gia uno ZIP pronto da estrarre, senza ZIP annidati. GitHub puo richiedere l'accesso e conserva l'artifact per 90 giorni.
+
+**Non usare** il pulsante **Code -> Download ZIP** o gli archivi automatici **Source code** delle release: contengono i sorgenti, non il pacchetto pronto da installare.
+
+### 2. Creare il sito e il database
+
+1. In CloudPanel v2 aprire **Add Site -> Create a PHP Site**, selezionare l'applicazione **Laravel 13** e indicare dominio e utente del sito (**Site User**). Selezionare PHP **8.4.27 o successivo**, oppure **8.5.12 o successivo**. Sono necessari sia PHP-FPM sia PHP CLI aggiornati: le versioni precedenti non soddisfano i requisiti di Obake.
+2. In **Domain / Root Directory**, verificare che la directory pubblica termini con `/htdocs/NOME_DOMINIO/public`. Non esporre la directory principale di Laravel.
+3. In **Databases -> Add Database**, creare un **nuovo database vuoto**, con utente e password dedicati. Annotare nome del database, utente e password. Per installazione e ripristino globale si raccomanda MySQL 8.4.
+4. Configurare DNS e, in **SSL/TLS**, il certificato HTTPS del dominio.
+
+### 3. Caricare l'applicazione
+
+**Attenzione alla cartella di estrazione:** lo ZIP contiene gia una directory `public/`. CloudPanel puo mostrare nel File Manager la directory pubblica del sito: **se il percorso corrente termina in `/public`, salire di un livello prima di caricare o estrarre lo ZIP**. Altrimenti si ottiene `public/public/` e il sito puo continuare a mostrare **Hello World :-)**.
+
+1. Aprire il **File Manager** del sito CloudPanel e verificare il percorso corrente.
+2. Posizionarsi **esattamente in** `/home/UTENTE_SITO/htdocs/NOME_DOMINIO/`, ossia la cartella che deve contenere sia `artisan` sia `public/`. **Non estrarre in** `/home/UTENTE_SITO/htdocs/NOME_DOMINIO/public/`.
+3. Caricare lo ZIP scaricato da GitHub ed estrarlo nella cartella corretta. Non caricare o estrarre uno ZIP di nuova installazione sopra un sito gia in uso.
+4. Verificare la struttura risultante:
+
+```text
+/home/UTENTE_SITO/htdocs/NOME_DOMINIO/
+├── .env.example
+├── artisan
+├── app/
+├── bootstrap/
+├── config/
+├── database/
+├── public/
+│   ├── index.php
+│   └── build/
+├── resources/
+├── routes/
+├── storage/
+└── vendor/
+```
+
+**Percorso errato:** `.../htdocs/NOME_DOMINIO/public/public/index.php`. Se compare, il contenuto dello ZIP e stato estratto nella directory pubblica invece che nella root dell'applicazione. Correggere **l'intera posizione dell'installazione**, non spostare solo `index.php` o la seconda cartella `public`; ripristinare la struttura illustrata sopra, inclusi i file nascosti.
+
+Infine, verificare che `public/index.php` contenga il riferimento a `../vendor/autoload.php` e che `public/build/manifest.json` esista. Se e rimasto un `public/index.html` predefinito con **Hello World :-)**, rimuovere **solo quel file di esempio**. La **Root Directory** configurata in CloudPanel deve puntare a `.../htdocs/NOME_DOMINIO/public` (un solo `public`).
+
+### 4. Configurare database e indirizzo del sito
+
+Accedere via SSH **come Site User**, non come root (sostituire i valori di esempio):
+
+```sh
+ssh UTENTE_SITO@IP_SERVER
+cd ~/htdocs/NOME_DOMINIO
+cp .env.example .env
+```
+
+Non bisogna scrivere o creare manualmente alcun file: il comando copia il modello di produzione incluso nello ZIP. Aprire poi `.env` con l'editor del **File Manager** di CloudPanel e modificare **solo** i valori seguenti:
+
+```dotenv
+APP_URL=https://app.example.it
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=nome_database_creato
+DB_USERNAME=utente_database_creato
+DB_PASSWORD="password_database"
+```
+
+`APP_ENV=production` e `APP_DEBUG=false` sono gia impostati. Conservare le virgolette intorno alla password del database, soprattutto se contiene caratteri speciali. Non modificare `APP_KEY` manualmente.
+
+### 5. Inizializzare Obake
+
+Sempre nella directory del sito, eseguire i comandi nell'ordine indicato:
+
+```sh
+php8.4 -v
+php8.4 artisan key:generate --force
+php8.4 artisan migrate --force
+php8.4 artisan app:create-superuser
+php8.4 artisan optimize
+```
+
+Se e stato selezionato PHP 8.5 in CloudPanel, sostituire **`php8.4` con `php8.5`** in tutti i comandi, anche nel cron. Il comando per l'amministratore chiede interattivamente nome, email e password. **Non eseguire `db:seed` o `migrate:fresh`**: il primo crea dati di test, il secondo cancella le tabelle. Fermarsi se il database non e vuoto o una migration restituisce un errore.
+
+### 6. Attivare le operazioni pianificate
+
+In CloudPanel aprire **Cron Jobs** del sito, creare un cron **ogni minuto** ed inserire come **Command** (non includere `* * * * *`, che va nel campo di pianificazione):
+
+```sh
+cd /home/UTENTE_SITO/htdocs/NOME_DOMINIO && /usr/bin/php8.4 artisan schedule:run >> storage/logs/scheduler.log 2>&1
+```
+
+Sostituire `UTENTE_SITO` e `NOME_DOMINIO` con i valori reali, e il binario PHP se necessario. Il cron deve essere eseguito come **Site User**. E sufficiente questo unico cron per promemoria contratti, backup programmati, pulizia Undo e sincronizzazione Google Drive.
+
+### 7. Primo accesso e verifiche
+
+1. Aprire `APP_URL` nel browser ed entrare con l'amministratore appena creato.
+2. Aprire **Impostazioni Piattaforma -> Email**, configurare SMTP e inviare un'email di test. Finche SMTP non e configurato, i messaggi esterni (inviti, recupero password, promemoria) non vengono recapitati.
+3. In CloudPanel verificare i limiti PHP di upload: gli allegati richiedono almeno `upload_max_filesize=20M` e `post_max_size` superiore (es. `25M`). Per ripristinare backup dalla pagina web servono limiti piu elevati, adeguati allo ZIP caricato.
+4. Per i backup globali verificare da SSH la disponibilita di `mysqldump`, `mysql` e `zip` per il Site User, oltre allo spazio libero e ai permessi di `storage/` e `bootstrap/cache/`. Provare almeno un backup reale.
+
+**In caso di errore:** se compare **Hello World :-)**, controllare **prima** che lo ZIP non sia stato estratto in `public/`, creando il percorso errato `public/public/`. Poi verificare la Root Directory CloudPanel, l'eventuale `public/index.html` di esempio, i valori in `.env`, la versione PHP CLI/FPM e `storage/logs/laravel.log`. Non impostare permessi `777`.
+
+**Aggiornamenti futuri:** non seguire nuovamente la procedura di installazione da zero; conservare `.env` (soprattutto `APP_KEY`), database e `storage/`, e non sovrascriverli con una nuova estrazione. Lo ZIP contiene solo il modello `.env.example`, non un `.env` da sovrascrivere.
+
+**Privacy del futuro deploy CI:** non inserire il dominio, l'URL reale o il percorso assoluto CloudPanel nei workflow, nei loro input pubblici o nella documentazione. In fase di implementazione del deploy (#82), configurarli soltanto come **GitHub Actions Environment Secrets** di produzione, disponibili al solo job di deploy autorizzato. Non registrarli in log, annotazioni, riepiloghi o artifact; il workflow che crea lo ZIP non deve accedere ai secrets di produzione.
+
+Riferimenti CloudPanel: [Laravel](https://www.cloudpanel.io/docs/v2/php/applications/laravel/), [File Manager](https://www.cloudpanel.io/docs/v2/frontend-area/file-manager/), [Databases](https://www.cloudpanel.io/docs/v2/frontend-area/databases/), [Cron Jobs](https://www.cloudpanel.io/docs/v2/frontend-area/cron-jobs/).
+
+## Requisiti per lo sviluppo
+
+- Docker Desktop con Docker Compose per l'ambiente consigliato
+- Composer 2 e PHP 8.4.27+ oppure 8.5.12+
+- In alternativa a Docker: MySQL/MariaDB, Node.js e npm
 
 ## Sviluppo con Docker
 
@@ -75,25 +186,6 @@ poi usare `docker exec mp3-app` per installazione, build e verifiche.
 Non avviare un secondo progetto Compose sugli stessi dati. Il repository APT
 e la chiave da usare sono quelli del Dockerfile Sail 8.4 installato in
 `vendor/laravel/sail/runtimes/8.4/Dockerfile`.
-
-## Prima configurazione
-
-```powershell
-composer install
-Copy-Item .env.example .env
-php artisan key:generate
-```
-
-Configurare in `.env` i valori `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` e `DB_PASSWORD` con credenziali reali, quindi eseguire:
-
-```powershell
-php artisan migrate
-php artisan app:create-superuser
-npm ci
-npm run build
-```
-
-Il file `.env` non deve essere versionato e non deve contenere credenziali di produzione nel repository.
 
 ## Aggiornamento del nome prodotto
 
@@ -225,19 +317,9 @@ composer run test
 npm run build
 ```
 
-## Deployment PHP tradizionale
+## Deployment da sorgente (solo per sviluppatori)
 
-Compilare gli asset durante il deploy o in CI con `npm ci && npm run build`, quindi pubblicare anche `public/build`. In produzione non serve alcun processo Node.js permanente: il web server deve puntare alla directory `public`, mentre PHP gestisce l'applicazione.
-
-Comandi tipici lato server:
-
-```powershell
-composer install --no-dev --optimize-autoloader
-php artisan migrate --force
-php artisan optimize
-```
-
-Inertia SSR è disabilitato.
+Per l'installazione su CloudPanel utilizzare preferibilmente lo ZIP descritto all'inizio del README. Se si distribuisce il repository sorgente, occorre installare le dipendenze con Composer e compilare `public/build` con `npm ci && npm run build` prima del deploy. In produzione non sono richiesti processi Node.js permanenti e Inertia SSR e disabilitato.
 
 ## Gestione spese
 

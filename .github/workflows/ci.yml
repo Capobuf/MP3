@@ -17,7 +17,7 @@ concurrency:
 jobs:
   checks:
     name: Verify application
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     services:
       mysql:

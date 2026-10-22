@@ -644,6 +644,24 @@ class BackupTest extends TestCase
         return [['obake'], ['mp3']];
     }
 
+    public function test_production_backup_can_be_created_and_verified_without_node_lockfile(): void
+    {
+        $this->platformDump();
+        config(['backup.backup.source.files.include' => array_values(array_diff(
+            config('backup.backup.source.files.include'),
+            [base_path('package-lock.json')],
+        ))]);
+
+        $this->artisan('obake:backup')->assertSuccessful();
+        $name = $this->assertVerifiedPlatformArchive();
+        $zip = BackupArchive::open(app(BackupManager::class)->path(null, $name));
+        try {
+            $this->assertFalse($zip->locateName('package-lock.json'));
+        } finally {
+            $zip->close();
+        }
+    }
+
     #[DataProvider('commandPrefixes')]
     public function test_backup_and_restore_commands_keep_the_same_arguments_and_options(string $prefix): void
     {
