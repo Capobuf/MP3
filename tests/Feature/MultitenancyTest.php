@@ -15,7 +15,7 @@ class MultitenancyTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_only_superusers_can_access_the_platform(): void
+    public function test_company_users_cannot_access_the_platform(): void
     {
         $member = User::factory()->create();
         $superuser = $this->createSuperuser();
@@ -37,7 +37,7 @@ class MultitenancyTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->component('platform/index'));
         $this->get(route('platform.users.index'))
             ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->component('platform/users')->has('users', 2)->missing('tenants'));
+            ->assertInertia(fn (Assert $page) => $page->component('platform/users')->has('users', 2)->has('tenants', 0));
     }
 
     public function test_superuser_can_create_and_rename_a_tenant_without_changing_its_slug(): void
@@ -156,8 +156,12 @@ class MultitenancyTest extends TestCase
             'email' => 'member@example.com',
             'password' => 'Valid-password1!',
             'is_super_admin' => true,
+            'is_platform_admin' => true,
+            'is_active' => false,
         ]);
 
+        $this->assertFalse($user->is_platform_admin);
+        $this->assertTrue($user->is_active);
         $this->assertFalse($user->is_super_admin);
     }
 
@@ -168,5 +172,56 @@ class MultitenancyTest extends TestCase
         $user->save();
 
         return $user;
+    }
+
+    public function test_company_home_and_legacy_multiple_memberships_never_offer_tenant_choice(): void
+    {
+        $user = User::factory()->create();
+        $a = Tenant::create(['name' => 'A', 'slug' => 'a']);
+        $b = Tenant::create(['name' => 'B', 'slug' => 'b']);
+        $this->actingAs($user)->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('invalidMemberships', false)->where('tenants', []));
+        $user->tenants()->attach($a);
+        $this->get('/dashboard')->assertRedirect('/t/a/dashboard');
+        $this->get('/t/a/dashboard')->assertInertia(fn (Assert $page) => $page->where('auth.canManagePlatform', false)->has('auth.tenants', 1));
+        $user->tenants()->attach($b);
+        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('invalidMemberships', true)->where('tenants', [])->where('auth.tenants', []));
+        $this->get('/t/a/dashboard')->assertForbidden();
+        $this->get('/t/b/dashboard')->assertForbidden();
+        $this->assertCount(2, $user->fresh()->tenants);
+        $this->assertFalse($user->fresh()->is_platform_admin);
+    }
+
+    public function test_company_accounts_cannot_mutate_global_accounts_even_with_forged_requests(): void
+    {
+        $user = User::factory()->create();
+        $target = User::factory()->create();
+        $this->actingAs($user);
+        $path = '/platform/users/'.$target->id;
+        $this->put($path.'/tenants', ['tenant_ids' => []])->assertForbidden();
+        $this->post($path.'/promote', ['confirmed' => true])->assertForbidden();
+        $this->patch($path.'/status', ['is_active' => false])->assertForbidden();
+        $this->delete($path)->assertForbidden();
+        $this->assertModelExists($target);
+    }
+
+    public function test_platform_tenant_removal_block_and_reactivation_preserve_assignments(): void
+    {
+        $admin = $this->createSuperuser();
+        $user = User::factory()->create(['is_platform_admin' => true]);
+        $a = Tenant::create(['name' => 'A', 'slug' => 'a']);
+        $b = Tenant::create(['name' => 'B', 'slug' => 'b']);
+        $user->tenants()->attach([$a->id, $b->id]);
+        $path = '/platform/users/'.$user->id;
+        $this->actingAs($admin)->put($path.'/tenants', ['tenant_ids' => [$a->id]])->assertSessionHasNoErrors();
+        $this->actingAs($user)->get('/t/a/dashboard')->assertOk();
+        $this->get('/t/b/dashboard')->assertForbidden();
+        $this->actingAs($admin)->patch($path.'/status', ['is_active' => false])->assertSessionHasNoErrors();
+        $this->actingAs($user->fresh())->get('/platform')->assertRedirect('/login');
+        $this->actingAs($user->fresh())->get('/t/a/dashboard')->assertRedirect('/login');
+        $this->actingAs($admin)->patch($path.'/status', ['is_active' => true])->assertSessionHasNoErrors();
+        $this->actingAs($user->fresh())->get('/platform')->assertOk();
+        $this->get('/t/a/dashboard')->assertOk();
+        $this->get('/t/b/dashboard')->assertForbidden();
+        $this->assertSame([$a->id], $user->tenants()->pluck('tenants.id')->all());
     }
 }

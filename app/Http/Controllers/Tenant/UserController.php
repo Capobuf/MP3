@@ -8,7 +8,9 @@ use App\Models\User;
 use App\Services\UserInvitations;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,7 +20,7 @@ class UserController extends Controller
     {
         return Inertia::render('tenants/settings/users', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
-            'users' => $tenant->users()->orderBy('name')->get(['users.id', 'name', 'email', 'email_verified_at', 'is_super_admin']),
+            'users' => $tenant->users()->orderBy('name')->get(['users.id', 'name', 'email', 'email_verified_at', 'is_super_admin', 'is_active']),
         ]);
     }
 
@@ -26,22 +28,29 @@ class UserController extends Controller
     {
         $request->merge(['email' => Str::lower(trim((string) $request->input('email')))]);
         $data = $request->validate(['email' => ['required', 'string', 'email', 'max:255']]);
-        $user = $invitations->findOrCreate($data['email']);
+        [$user, $new, $attached] = DB::transaction(function () use ($invitations, $data, $tenant): array {
+            $user = $invitations->findOrCreate($data['email']);
+            $new = $user->wasRecentlyCreated;
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if ($user->canManagePlatform() || $user->tenants()->where('tenants.id', '!=', $tenant->id)->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => 'Questo account non può essere invitato in questo ambiente. Contatta l’amministratore della piattaforma.',
+                ]);
+            }
+            if ($user->tenants()->whereKey($tenant->id)->exists()) {
+                return [$user, $new, false];
+            }
+            $user->tenants()->sync([$tenant->id]);
 
-        if ($user->is_super_admin) {
-            Inertia::flash('toast', ['type' => 'info', 'message' => 'Questo super admin ha già accesso a tutti gli ambienti.']);
-
-            return to_route('tenant.users.index', $tenant);
-        }
-
-        $attached = $tenant->users()->syncWithoutDetaching([$user->id]);
-        if ($attached['attached'] === []) {
+            return [$user, $new, true];
+        });
+        if (! $attached) {
             Inertia::flash('toast', ['type' => 'info', 'message' => 'L’utente appartiene già a questo ambiente. Può usare “Password dimenticata?” per recuperare l’accesso.']);
 
             return to_route('tenant.users.index', $tenant);
         }
 
-        $invitations->send($user, $user->wasRecentlyCreated, $tenant);
+        $invitations->send($user, $new, $tenant);
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Accesso assegnato e email inviata al destinatario.']);
 
         return to_route('tenant.users.index', $tenant);
@@ -51,7 +60,9 @@ class UserController extends Controller
     {
         // Scoped route binding also ensures the user belongs to this tenant.
         if (! $user->is_super_admin) {
-            $tenant->users()->detach($user->id);
+            DB::transaction(function () use ($user, $tenant) {
+                User::whereKey($user->id)->lockForUpdate()->firstOrFail()->tenants()->detach($tenant->id);
+            });
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => $user->is_super_admin

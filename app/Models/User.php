@@ -24,6 +24,8 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $email
  * @property Carbon|null $email_verified_at
  * @property string $password
+ * @property bool $is_platform_admin
+ * @property bool $is_active
  * @property bool $is_super_admin
  * @property int $undo_popup_seconds
  * @property string|null $two_factor_secret
@@ -52,6 +54,8 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     /** @var array<string, mixed> */
     protected $attributes = [
         'is_super_admin' => false,
+        'is_platform_admin' => false,
+        'is_active' => true,
     ];
 
     /**
@@ -60,6 +64,11 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function tenants(): BelongsToMany
     {
         return $this->belongsToMany(Tenant::class);
+    }
+
+    public function canManagePlatform(): bool
+    {
+        return $this->is_super_admin || $this->is_platform_admin;
     }
 
     /**
@@ -73,6 +82,8 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
+            'is_platform_admin' => 'boolean',
+            'is_active' => 'boolean',
             'undo_popup_seconds' => 'integer',
             'two_factor_confirmed_at' => 'datetime',
         ];

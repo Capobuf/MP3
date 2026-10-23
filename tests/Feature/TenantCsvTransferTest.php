@@ -41,7 +41,7 @@ class TenantCsvTransferTest extends TestCase
             $source->expenses()->create(['contract_id' => $contract->id, 'title' => $title, 'year' => 2026,
                 'period_starts_on' => '2026-06-13', 'period_ends_on' => '2027-06-13', 'allocated_amount' => $amount]);
         }
-        $member = User::factory()->create();
+        $member = User::factory()->create(['is_platform_admin' => true]);
         $member->tenants()->attach([$source->id, $target->id]);
         $this->actingAs($member);
         $file = $this->csv($this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent());

@@ -13,7 +13,7 @@ class DashboardController extends Controller
     {
         $user = $request->user();
 
-        if ($user->is_super_admin) {
+        if ($user->canManagePlatform()) {
             return to_route('platform.index');
         }
 
@@ -26,7 +26,8 @@ class DashboardController extends Controller
         }
 
         return Inertia::render('dashboard', [
-            'tenants' => $tenants,
+            'tenants' => [],
+            'invalidMemberships' => $tenants->count() > 1,
         ]);
     }
 }

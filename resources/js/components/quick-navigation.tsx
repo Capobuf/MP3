@@ -123,16 +123,18 @@ export function QuickNavigation() {
             heading: 'Navigazione',
             items: getPrimaryNavItems(
                 currentTenant,
-                auth.user.is_super_admin,
+                auth.canManagePlatform,
             ).flatMap((item) => [item, ...(item.items ?? [])]),
         },
         {
             heading: 'Ambienti',
-            items: auth.tenants.map((tenant) => ({
-                title: tenant.name,
-                href: `/t/${tenant.slug}/dashboard`,
-                icon: Building2,
-            })),
+            items: (auth.canManagePlatform ? auth.tenants : []).map(
+                (tenant) => ({
+                    title: tenant.name,
+                    href: `/t/${tenant.slug}/dashboard`,
+                    icon: Building2,
+                }),
+            ),
         },
         {
             heading: 'Account',
@@ -158,7 +160,7 @@ export function QuickNavigation() {
             heading: 'Amministrazione',
             items: getAdministrativeNavItems(
                 currentTenant,
-                auth.user.is_super_admin,
+                auth.canManagePlatform,
             ),
         },
     ];

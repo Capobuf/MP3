@@ -198,6 +198,7 @@ class AttachmentTest extends TestCase
         $otherRecord = $this->owner('expenses');
         $contract = $this->owner('contracts');
         $foreign = $this->owner('expenses', $this->other);
+        $this->user->forceFill(['is_platform_admin' => true])->save();
         $this->user->tenants()->attach($this->other);
         foreach (['/t/alfa/expenses/'.$otherRecord->id.'/attachments', '/t/alfa/contracts/'.$contract->id.'/attachments', '/t/beta/expenses/'.$foreign->id.'/attachments'] as $wrong) {
             $this->getJson($wrong.'/'.$attachment->id.'/download')->assertNotFound();

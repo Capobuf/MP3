@@ -5,6 +5,8 @@ export type User = {
     avatar?: string | null;
     email_verified_at: string | null;
     is_super_admin: boolean;
+    is_platform_admin: boolean;
+    is_active: boolean;
     undo_popup_seconds: number;
     two_factor_enabled?: boolean;
     created_at: string;
@@ -19,6 +21,7 @@ export type Tenant = {
 };
 
 export type Auth = {
+    canManagePlatform: boolean;
     user: User;
     tenants: Tenant[];
 };

@@ -52,7 +52,7 @@ class TenantIdentityTest extends TestCase
         Storage::fake('backups');
         $source = Tenant::create(['name' => 'Source', 'slug' => 'source']);
         $target = Tenant::create(['name' => 'Target', 'slug' => 'target']);
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_platform_admin' => true]);
         $source->users()->attach($user);
         $this->actingAs($user);
         $logo = UploadedFile::fake()->image('logo.jpg');

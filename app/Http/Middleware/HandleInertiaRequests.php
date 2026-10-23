@@ -47,8 +47,9 @@ class HandleInertiaRequests extends Middleware
             'transferLimits' => ['xlsxMaxKb' => (int) config('transfers.xlsx_max_kb'), 'xlsxMaxRows' => (int) config('transfers.xlsx_max_rows')],
             'auth' => [
                 'user' => $user,
+                'canManagePlatform' => $user?->canManagePlatform() ?? false,
                 'tenants' => function () use ($user) {
-                    if (! $user) {
+                    if (! $user || (! $user->canManagePlatform() && $user->tenants()->count() > 1)) {
                         return [];
                     }
 

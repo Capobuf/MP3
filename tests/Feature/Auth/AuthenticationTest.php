@@ -4,9 +4,18 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
+use Laravel\Passkeys\Actions\VerifyPasskey;
+use Laravel\Passkeys\Exceptions\InvalidPasskeyException;
+use Laravel\Passkeys\Http\Controllers\PasskeyLoginController;
+use Laravel\Passkeys\Http\Requests\PasskeyVerificationRequest;
+use Laravel\Passkeys\Passkey;
+use Laravel\Passkeys\Passkeys;
 use Tests\TestCase;
+use Webauthn\PublicKeyCredential;
+use Webauthn\PublicKeyCredentialRequestOptions;
 
 class AuthenticationTest extends TestCase
 {
@@ -105,5 +114,61 @@ class AuthenticationTest extends TestCase
         ]);
 
         $response->assertTooManyRequests();
+    }
+
+    public function test_blocked_users_cannot_login_and_existing_sessions_are_invalidated(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertSessionHasErrors('email');
+        $this->assertGuest();
+        $this->actingAs($user)->get('/dashboard')->assertRedirect('/login');
+        $this->assertGuest();
+        $user->is_active = true;
+        $user->save();
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertSessionHasNoErrors();
+        $this->assertAuthenticatedAs($user);
+    }
+
+    public function test_blocking_prevents_new_and_pending_two_factor_challenges(): void
+    {
+        $user = User::factory()->withTwoFactor()->create(['is_active' => false]);
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertSessionHasErrors('email');
+        $this->assertGuest();
+        $this->withSession(['login.id' => $user->id, 'login.remember' => true])
+            ->post('/two-factor-challenge', ['recovery_code' => $user->recoveryCodes()[0]])->assertRedirect('/login');
+        $this->assertGuest();
+        $this->assertFalse(session()->has('login.id'));
+    }
+
+    public function test_verified_passkey_cannot_authenticate_a_blocked_user(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+        $passkey = new Passkey;
+        $passkey->setRelation('user', $user);
+        $request = \Mockery::mock(PasskeyVerificationRequest::class);
+        $credential = \Mockery::mock(PublicKeyCredential::class);
+        $options = PublicKeyCredentialRequestOptions::create('test-challenge');
+        $request->shouldReceive('credential')->once()->andReturn($credential);
+        $request->shouldReceive('verificationOptions')->once()->andReturn($options);
+        $verify = \Mockery::mock(VerifyPasskey::class);
+        $verify->shouldReceive('__invoke')->with($credential, $options)->once()->andReturn($passkey);
+        try {
+            app(PasskeyLoginController::class)->store($request, $verify);
+            $this->fail('Blocked passkey login was allowed.');
+        } catch (InvalidPasskeyException) {
+            $this->assertGuest();
+        }
+        $user->is_active = true;
+        $this->assertTrue(Passkeys::allowsLogin($request, $passkey));
+    }
+
+    public function test_password_reset_does_not_unblock_an_account(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+        $token = Password::createToken($user);
+        $this->post('/reset-password', ['token' => $token, 'email' => $user->email, 'password' => 'New-password123!', 'password_confirmation' => 'New-password123!'])->assertSessionHasNoErrors();
+        $this->assertFalse($user->fresh()->is_active);
+        $this->post('/login', ['email' => $user->email, 'password' => 'New-password123!'])->assertSessionHasErrors('email');
+        $this->assertGuest();
     }
 }

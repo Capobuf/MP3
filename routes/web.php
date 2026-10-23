@@ -26,7 +26,7 @@ use App\Http\Controllers\Tenant\TenantDataTransferController;
 use App\Http\Controllers\Tenant\UndoController;
 use App\Http\Controllers\Tenant\UserController as TenantUserSettingsController;
 use App\Http\Controllers\TenantDashboardController;
-use App\Http\Middleware\EnsureSuperAdmin;
+use App\Http\Middleware\EnsurePlatformAccess;
 use App\Http\Middleware\RecordUndo;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
@@ -39,7 +39,7 @@ Route::middleware('auth')->group(function () {
     Route::post('undo/restore', [UndoController::class, 'restoreAny'])->name('undo.restore');
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
-    Route::prefix('platform')->middleware(EnsureSuperAdmin::class)->name('platform.')->group(function () {
+    Route::prefix('platform')->middleware(EnsurePlatformAccess::class)->name('platform.')->group(function () {
         Route::get('/', PlatformController::class)->name('index');
         Route::get('settings/sync', [DriveSyncController::class, 'index'])->name('sync.index');
         Route::put('settings/sync/picker', [DriveSyncController::class, 'pickerSettings'])->name('sync.picker-settings');
@@ -64,6 +64,10 @@ Route::middleware('auth')->group(function () {
         Route::post('tenants', [PlatformTenantController::class, 'store'])->name('tenants.store');
         Route::patch('tenants/{tenant}', [PlatformTenantController::class, 'update'])->name('tenants.update');
         Route::post('users', [PlatformUserController::class, 'store'])->middleware('throttle:10,1')->name('users.store');
+        Route::put('users/{user}/tenants', [PlatformUserController::class, 'tenants'])->name('users.tenants');
+        Route::patch('users/{user}/status', [PlatformUserController::class, 'status'])->name('users.status');
+        Route::post('users/{user}/promote', [PlatformUserController::class, 'promote'])->name('users.promote');
+        Route::delete('users/{user}', [PlatformUserController::class, 'destroy'])->name('users.destroy');
         Route::post('tenants/{tenant}/users', [TenantUserController::class, 'store'])->name('tenants.users.store');
         Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'destroy'])->name('tenants.users.destroy');
     });

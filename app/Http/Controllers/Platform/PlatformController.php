@@ -27,12 +27,13 @@ class PlatformController extends Controller
     public function users(): Response
     {
         return Inertia::render('platform/users', [
+            'tenants' => Tenant::orderBy('name')->get(['id', 'name', 'slug']),
             'users' => User::query()
                 ->with(['tenants' => fn ($query) => $query
                     ->orderBy('name')
                     ->select('tenants.id', 'name', 'slug')])
                 ->orderBy('name')
-                ->get(['id', 'name', 'email', 'email_verified_at', 'is_super_admin']),
+                ->get(['id', 'name', 'email', 'email_verified_at', 'is_super_admin', 'is_platform_admin', 'is_active']),
         ]);
     }
 }
