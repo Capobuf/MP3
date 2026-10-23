@@ -10,7 +10,6 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use RuntimeException;
 use Spatie\Backup\BackupDestination\BackupDestination;
 use Spatie\Backup\Tasks\Cleanup\CleanupJob;
@@ -89,11 +88,16 @@ class BackupManager
     {
         $scope = $this->scope($tenant);
         $this->status($scope, 'running', 'Backup in corso.', true);
-        $name = now()->format('Y-m-d-H-i-s').'-'.Str::uuid().'.zip';
+        $base = 'obake-'.now()->timezone('Europe/Rome')->format('d-m-Y-H-i');
+        $name = $base.'.zip';
         $disk = Storage::disk('backups');
         $stage = 'preparazione archivio';
         $mask = umask(0077);
         try {
+            for ($number = 2; $disk->exists($scope.'/'.$name) || $disk->exists('.pending/'.$name)
+                || ($tenant === null && DB::table('drive_objects')->where('object_key', 'backup-'.$name)->exists()); $number++) {
+                $name = $base.'-'.$number.'.zip';
+            }
             BackupArchive::ensureMigrated();
             File::ensureDirectoryExists(storage_path('app/backup-temp'), 0700);
             $disk->makeDirectory('.pending');
@@ -188,7 +192,8 @@ class BackupManager
         $disk = Storage::disk('backups');
 
         return collect($disk->files($this->scope($tenant)))->filter(fn ($path) => str_ends_with($path, '.zip'))
-            ->sortDesc()->map(fn ($path) => ['name' => basename($path), 'size' => $disk->size($path), 'created_at' => date(DATE_ATOM, $disk->lastModified($path))])->values()->all();
+            ->map(fn ($path) => ['name' => basename($path), 'size' => $disk->size($path), 'created_at' => date(DATE_ATOM, $disk->lastModified($path))])
+            ->sortByDesc('created_at')->values()->all();
     }
 
     public function path(?Tenant $tenant, string $name): string

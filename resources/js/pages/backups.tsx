@@ -195,8 +195,21 @@ export default function Backups({
                                 chiavi segrete. Conservalo in un luogo sicuro.
                             </li>
                             <li>
-                                <strong>Ripristino.</strong> Si esegue dal
-                                server, in una destinazione vuota.
+                                <strong>Ripristino completo di Obake.</strong>{' '}
+                                Per recuperare tutti i dati, chiedi a chi
+                                gestisce il server: il ripristino si esegue dal
+                                terminale, non da questa pagina. Serve
+                                un’installazione di Obake con database e
+                                cartelle dei documenti completamente vuoti.
+                            </li>
+                            <li>
+                                <strong>
+                                    Ripristino di una singola azienda.
+                                </strong>{' '}
+                                Se hai un backup ZIP dell’azienda, crea prima
+                                un’azienda vuota in Amministrazione. Aprila, vai
+                                in Impostazioni → Backup, seleziona lo ZIP e
+                                conferma con «Ripristina backup».
                             </li>
                             <li>
                                 <strong>Salvataggi.</strong> Durante la

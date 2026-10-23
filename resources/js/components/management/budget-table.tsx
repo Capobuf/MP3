@@ -59,6 +59,7 @@ import {
     ChevronDown,
     ChevronRight,
     GripVertical,
+    Plus,
     Ellipsis,
     TriangleAlert,
     X,
@@ -1745,9 +1746,6 @@ export function BudgetTable({
                         )}
                     </FieldGroup>
                 </TableFilters>
-                <Button onClick={onAdd} disabled={busy}>
-                    Aggiungi voce
-                </Button>
                 {budget.has_missing_entries && (
                     <Button
                         variant="outline"
@@ -1766,6 +1764,15 @@ export function BudgetTable({
                         Ripristina ordine manuale
                     </Button>
                 )}
+                <Button
+                    type="button"
+                    className="w-full sm:ml-auto sm:w-auto"
+                    onClick={onAdd}
+                    disabled={busy}
+                >
+                    <Plus data-icon="inline-start" />
+                    Aggiungi voce
+                </Button>
             </div>
             {selected.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">

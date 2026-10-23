@@ -9,6 +9,7 @@ import {
     ChevronDown,
     FileText,
     FolderKanban,
+    Plus,
 } from 'lucide-react';
 import {
     InlineEdit,
@@ -133,71 +134,6 @@ export default function CatalogDetail({
                     <h2 className="font-semibold">
                         Spese collegate · {history ? 'Tutti gli anni' : year}
                     </h2>
-                    {catalog === 'projects' && (
-                        <>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        ref={addExpenseButton}
-                                        disabled={tableBusy}
-                                    >
-                                        Aggiungi
-                                        <ChevronDown data-icon="inline-end" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                    align="end"
-                                    onCloseAutoFocus={(event) => {
-                                        if (linkExpenseOpen)
-                                            event.preventDefault();
-                                    }}
-                                >
-                                    <DropdownMenuGroup>
-                                        <DropdownMenuItem
-                                            disabled={tableBusy}
-                                            onSelect={() =>
-                                                router.visit(
-                                                    `/t/${tenant.slug}/expenses/create?project_id=${record.id}&year=${year}`,
-                                                )
-                                            }
-                                        >
-                                            Nuova Spesa
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            disabled={tableBusy}
-                                            onSelect={() =>
-                                                setLinkExpenseOpen(true)
-                                            }
-                                        >
-                                            Spesa Esistente
-                                        </DropdownMenuItem>
-                                    </DropdownMenuGroup>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            <LinkProjectExpense
-                                slug={tenant.slug}
-                                project={record}
-                                open={linkExpenseOpen}
-                                onOpenChange={setLinkExpenseOpen}
-                                onCloseAutoFocus={(event) => {
-                                    event.preventDefault();
-                                    addExpenseButton.current?.focus();
-                                }}
-                            />
-                        </>
-                    )}
-                    {catalog === 'contracts' && (
-                        <Button
-                            disabled={tableBusy}
-                            onClick={() =>
-                                router.visit(
-                                    `/t/${tenant.slug}/expenses/create?contract_id=${record.id}&year=${year}`,
-                                )
-                            }
-                        >
-                            Aggiungi spesa
-                        </Button>
-                    )}
                 </div>
                 <ExpenseTable
                     key={`${tenant.id}:${catalog}:${record.id}:${year}:${history}`}
@@ -212,6 +148,59 @@ export default function CatalogDetail({
                             busy={tableBusy}
                             hideRelations={[catalog]}
                             contractMode={catalog === 'contracts'}
+                            onCreate={
+                                catalog === 'contracts'
+                                    ? () =>
+                                          router.visit(
+                                              `/t/${tenant.slug}/expenses/create?contract_id=${record.id}&year=${year}`,
+                                          )
+                                    : undefined
+                            }
+                            createAction={
+                                catalog === 'projects' ? (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                ref={addExpenseButton}
+                                                className="w-full sm:ml-auto sm:w-auto"
+                                                disabled={tableBusy}
+                                            >
+                                                <Plus data-icon="inline-start" />
+                                                Aggiungi spesa
+                                                <ChevronDown data-icon="inline-end" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            align="end"
+                                            onCloseAutoFocus={(event) => {
+                                                if (linkExpenseOpen)
+                                                    event.preventDefault();
+                                            }}
+                                        >
+                                            <DropdownMenuGroup>
+                                                <DropdownMenuItem
+                                                    disabled={tableBusy}
+                                                    onSelect={() =>
+                                                        router.visit(
+                                                            `/t/${tenant.slug}/expenses/create?project_id=${record.id}&year=${year}`,
+                                                        )
+                                                    }
+                                                >
+                                                    Nuova Spesa
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    disabled={tableBusy}
+                                                    onSelect={() =>
+                                                        setLinkExpenseOpen(true)
+                                                    }
+                                                >
+                                                    Spesa Esistente
+                                                </DropdownMenuItem>
+                                            </DropdownMenuGroup>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : undefined
+                            }
                         />
                     }
                     filters={expenseFilters}
@@ -235,6 +224,18 @@ export default function CatalogDetail({
                     projectId={catalog === 'projects' ? record.id : undefined}
                     onBusyChange={setTableBusy}
                 />
+                {catalog === 'projects' && (
+                    <LinkProjectExpense
+                        slug={tenant.slug}
+                        project={record}
+                        open={linkExpenseOpen}
+                        onOpenChange={setLinkExpenseOpen}
+                        onCloseAutoFocus={(event) => {
+                            event.preventDefault();
+                            addExpenseButton.current?.focus();
+                        }}
+                    />
+                )}
                 <div
                     onClickCapture={(event) => {
                         if (tableBusy) {

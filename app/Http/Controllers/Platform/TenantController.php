@@ -7,7 +7,7 @@ use App\Models\Tenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class TenantController extends Controller
@@ -16,16 +16,17 @@ class TenantController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'slug' => [
-                'required',
-                'string',
-                'max:255',
-                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
-                Rule::unique(Tenant::class),
-            ],
         ]);
 
-        Tenant::create($validated);
+        $base = Str::slug($validated['name']);
+        $base = $base === '' ? 'azienda' : $base;
+        $slug = rtrim(substr($base, 0, 255), '-');
+        for ($number = 2; Tenant::where('slug', $slug)->exists(); $number++) {
+            $suffix = '-'.$number;
+            $slug = rtrim(substr($base, 0, 255 - strlen($suffix)), '-').$suffix;
+        }
+
+        Tenant::create([...$validated, 'slug' => $slug]);
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant created.')]);
 

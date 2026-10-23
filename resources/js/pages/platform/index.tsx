@@ -16,7 +16,7 @@ import {
     NativeSelectOption,
 } from '@/components/ui/native-select';
 import { Form, Head, Link, useForm } from '@inertiajs/react';
-import { ArrowUpRight, Building2, Trash2 } from 'lucide-react';
+import { ArrowUpRight, Building2, Plus, Trash2 } from 'lucide-react';
 import InputError from '@/components/input-error';
 import {
     InlineEdit,
@@ -60,7 +60,7 @@ export default function Platform({
     users: Pick<User, 'id' | 'name' | 'email'>[];
 }) {
     const [creating, setCreating] = useState(false);
-    const create = useForm({ name: '', slug: '' });
+    const create = useForm({ name: '' });
 
     return (
         <>
@@ -80,15 +80,18 @@ export default function Platform({
                             }}
                         >
                             <DialogTrigger asChild>
-                                <Button>Nuova azienda</Button>
+                                <Button>
+                                    <Plus data-icon="inline-start" />
+                                    Nuova azienda
+                                </Button>
                             </DialogTrigger>
                             <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
                                 <DialogHeader>
                                     <DialogTitle>Nuova azienda</DialogTitle>
                                     <DialogDescription>
-                                        Lo slug identifica l’indirizzo
-                                        permanente dell’azienda e resta
-                                        invariato quando modifichi il nome.
+                                        Inserisci il nome dell’azienda.
+                                        L’indirizzo viene creato
+                                        automaticamente.
                                     </DialogDescription>
                                 </DialogHeader>
                                 <form
@@ -132,37 +135,6 @@ export default function Platform({
                                             />
                                             <InputError
                                                 message={create.errors.name}
-                                            />
-                                        </Field>
-                                        <Field
-                                            data-invalid={Boolean(
-                                                create.errors.slug,
-                                            )}
-                                        >
-                                            <FieldLabel htmlFor="tenant-slug">
-                                                Slug
-                                            </FieldLabel>
-                                            <Input
-                                                id="tenant-slug"
-                                                name="slug"
-                                                required
-                                                maxLength={255}
-                                                pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-                                                placeholder="acme"
-                                                value={create.data.slug}
-                                                onChange={(event) =>
-                                                    create.setData(
-                                                        'slug',
-                                                        event.target.value,
-                                                    )
-                                                }
-                                                disabled={create.processing}
-                                                aria-invalid={Boolean(
-                                                    create.errors.slug,
-                                                )}
-                                            />
-                                            <InputError
-                                                message={create.errors.slug}
                                             />
                                         </Field>
                                     </FieldGroup>
@@ -213,7 +185,10 @@ export default function Platform({
                                     );
 
                                     return (
-                                        <TableRow key={tenant.id}>
+                                        <TableRow
+                                            key={tenant.id}
+                                            className="[&>td]:align-top"
+                                        >
                                             <TableCell className="min-w-72 p-4 whitespace-normal">
                                                 <InlineEdit
                                                     value={tenant.name}
@@ -228,54 +203,12 @@ export default function Platform({
                                                 />
                                             </TableCell>
                                             <TableCell className="p-4">
-                                                /t/{tenant.slug}
+                                                <div className="py-2">
+                                                    /t/{tenant.slug}
+                                                </div>
                                             </TableCell>
                                             <TableCell className="min-w-80 p-4 whitespace-normal">
-                                                <div className="flex flex-col gap-4">
-                                                    <div className="flex flex-col gap-2">
-                                                        {tenant.users.length ===
-                                                        0 ? (
-                                                            <p className="text-sm text-muted-foreground">
-                                                                Nessun utente
-                                                                assegnato.
-                                                            </p>
-                                                        ) : (
-                                                            <div className="flex flex-col gap-2">
-                                                                {tenant.users.map(
-                                                                    (user) => (
-                                                                        <div
-                                                                            key={
-                                                                                user.id
-                                                                            }
-                                                                            className="flex items-center justify-between gap-3"
-                                                                        >
-                                                                            <div className="min-w-0">
-                                                                                <p className="truncate text-sm font-medium">
-                                                                                    {
-                                                                                        user.name
-                                                                                    }
-                                                                                </p>
-                                                                                <p className="truncate text-xs text-muted-foreground">
-                                                                                    {
-                                                                                        user.email
-                                                                                    }
-                                                                                </p>
-                                                                            </div>
-                                                                            <RemoveTenantUser
-                                                                                tenant={
-                                                                                    tenant
-                                                                                }
-                                                                                user={
-                                                                                    user
-                                                                                }
-                                                                            />
-                                                                        </div>
-                                                                    ),
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
+                                                <div className="flex flex-col gap-2">
                                                     {availableUsers.length >
                                                         0 && (
                                                         <Form
@@ -355,12 +288,54 @@ export default function Platform({
                                                             )}
                                                         </Form>
                                                     )}
+                                                    <div className="flex flex-col gap-2">
+                                                        {tenant.users.length ===
+                                                        0 ? (
+                                                            <p className="text-sm text-muted-foreground">
+                                                                Nessun utente
+                                                                assegnato.
+                                                            </p>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-2">
+                                                                {tenant.users.map(
+                                                                    (user) => (
+                                                                        <div
+                                                                            key={
+                                                                                user.id
+                                                                            }
+                                                                            className="flex items-center justify-between gap-3"
+                                                                        >
+                                                                            <div className="min-w-0">
+                                                                                <p className="truncate text-sm font-medium">
+                                                                                    {
+                                                                                        user.name
+                                                                                    }
+                                                                                </p>
+                                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                                    {
+                                                                                        user.email
+                                                                                    }
+                                                                                </p>
+                                                                            </div>
+                                                                            <RemoveTenantUser
+                                                                                tenant={
+                                                                                    tenant
+                                                                                }
+                                                                                user={
+                                                                                    user
+                                                                                }
+                                                                            />
+                                                                        </div>
+                                                                    ),
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="p-4 text-right">
                                                 <Button
                                                     asChild
-                                                    size="sm"
                                                     variant="outline"
                                                 >
                                                     <Link
