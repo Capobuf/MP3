@@ -48,7 +48,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.ci_run_id }}
-          ALLOW_MIGRATIONS: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_migrations || false }}
+          ALLOW_MIGRATIONS: ${{ github.event_name == 'workflow_run' || inputs.allow_migrations }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_ROOT: ${{ secrets.DEPLOY_ROOT }}
