@@ -66,7 +66,7 @@ class SectionSpreadsheet
                 'Importi: celle numeriche oppure testo come 1234,56, 1.234,56 o 1234.56. Massimo due decimali. Vuoto significa non specificato; zero significa 0,00.',
                 'Riferimenti: nome esatto del record esistente. Per il fornitore puoi usare anche la partita IVA. Le corrispondenze ambigue bloccano la riga.',
                 'Centri di costo: nome univoco o percorso Padre / Figlio. Separa più centri con punto e virgola. Importa prima i centri padre, poi i figli.',
-                'Progetti: usa il nome esatto di uno stato definito nelle impostazioni ambiente. Vuoto significa nessuno stato.',
+                'Progetti: usa il nome esatto di uno stato definito nelle impostazioni azienda. Vuoto significa nessuno stato.',
                 'Budget: anno già creato, tipo new-expense, contract, project o expense. Per new-expense usa descrizione e importi: verrà creata una spesa reale; per gli altri usa una sorgente esistente e lascia descrizione e importi vuoti.',
                 'Budget: expense ammette solo spese autonome presenti nell’anno; contratti e progetti devono appartenere all’anno del Budget.',
                 'Spese: scegli un solo contratto o progetto. Una riga rappresenta una spesa semplice. Le condizioni avanzate si gestiscono in Obake o si trasferiscono con il CSV tecnico.',

@@ -128,7 +128,7 @@ class ExpenseController extends Controller
             'ids' => ['required', 'array', 'min:1', 'max:50'],
             'ids.*' => ['required', 'integer', 'distinct', Rule::exists('expenses', 'id')->where('tenant_id', $tenant->id)],
         ], [
-            'ids.*.exists' => 'Una spesa non è disponibile in questo ambiente. Nessuna spesa eliminata.',
+            'ids.*.exists' => 'Una spesa non è disponibile in questa azienda. Nessuna spesa eliminata.',
         ]);
 
         DB::transaction(function () use ($tenant, $data, $files): void {
@@ -153,7 +153,7 @@ class ExpenseController extends Controller
             $rules['updates.*.'.$field] = array_map(fn ($part) => is_string($part) ? str_replace(':lines.', ':updates.*.lines.', $part) : $part, $rule);
         }
         $data = Validator::make($request->all(), $rules, [
-            '*.exists' => 'Una riga o un collegamento non appartiene a questo ambiente. Nessuna modifica salvata.',
+            '*.exists' => 'Una riga o un collegamento non appartiene a questa azienda. Nessuna modifica salvata.',
             '*.regex' => 'Importo non valido: usa un valore con massimo due decimali.',
             '*.required' => 'La descrizione e l’anno non possono essere vuoti.',
         ])->validate();

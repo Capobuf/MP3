@@ -96,7 +96,7 @@ export default function ProjectStatuses({
                     <p className="text-sm text-muted-foreground">
                         {tenant.name}
                     </p>
-                    <h1 className="page-title">Impostazioni ambiente</h1>
+                    <h1 className="page-title">Impostazioni azienda</h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
                 <Card>
@@ -104,7 +104,7 @@ export default function ProjectStatuses({
                         <CardTitle>Stati dei progetti</CardTitle>
                         <CardDescription>
                             Crea e rinomina gli stati disponibili per i progetti
-                            di questo ambiente.
+                            di questa azienda.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-5">
@@ -275,5 +275,5 @@ export default function ProjectStatuses({
     );
 }
 ProjectStatuses.layout = {
-    breadcrumbs: [{ title: 'Impostazioni ambiente', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Impostazioni azienda', href: '/dashboard' }],
 };

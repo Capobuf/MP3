@@ -117,14 +117,14 @@ export default function Backups({
         <>
             <Head
                 title={
-                    tenant ? `Backup · ${tenant.name}` : 'Backup piattaforma'
+                    tenant
+                        ? `Backup · ${tenant.name}`
+                        : 'Backup · Amministrazione'
                 }
             />
             <Alert>
                 <AlertTitle>
-                    {tenant
-                        ? 'Backup dell’ambiente'
-                        : 'Backup completo della piattaforma'}
+                    {tenant ? 'Backup dell’azienda' : 'Backup generale'}
                 </AlertTitle>
                 <AlertDescription>
                     {tenant
@@ -630,10 +630,10 @@ export default function Backups({
             {tenant && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Ripristina nell’ambiente corrente</CardTitle>
+                        <CardTitle>Ripristina nell’azienda corrente</CardTitle>
                         <CardDescription>
-                            Disponibile solo in un ambiente nuovo o vuoto. Il
-                            nome e l’indirizzo dell’ambiente di destinazione
+                            Disponibile solo in un’azienda nuova o vuota. Il
+                            nome e l’indirizzo dell’azienda di destinazione
                             vengono conservati. Identità utente o associazioni
                             in conflitto bloccano l’intera operazione.
                         </CardDescription>
@@ -641,9 +641,9 @@ export default function Backups({
                     <CardContent>
                         {!empty ? (
                             <Alert>
-                                <AlertTitle>Ambiente già popolato</AlertTitle>
+                                <AlertTitle>Azienda già popolata</AlertTitle>
                                 <AlertDescription>
-                                    Crea o seleziona un ambiente vuoto, senza
+                                    Crea o seleziona un’azienda vuota, senza
                                     impostazioni personalizzate, per
                                     ripristinare il backup.
                                 </AlertDescription>
@@ -743,7 +743,7 @@ export default function Backups({
         <div className="page-shell">
             <header>
                 <p className="text-sm text-muted-foreground">{tenant.name}</p>
-                <h1 className="page-title">Impostazioni ambiente — Backup</h1>
+                <h1 className="page-title">Impostazioni azienda — Backup</h1>
             </header>
             <TenantSettingsNav slug={tenant.slug} />
             {content}

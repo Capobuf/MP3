@@ -35,7 +35,7 @@ class EmailTemplatesTest extends TestCase
         foreach ([null, $organization] as $tenant) {
             $message = (new UserInvitation('broker-token', $tenant))->toMail($user);
             $html = (string) $message->render();
-            $this->assertStringContainsString($tenant ? 'Invito a un&#039;Organizzazione' : 'Invito alla Piattaforma', $html);
+            $this->assertStringContainsString($tenant ? 'Invito a un&#039;Azienda' : 'Invito a Obake', $html);
             $this->assertStringContainsString('Imposta la password', $html);
             $this->assertStringContainsString(e($message->actionUrl), $html);
             $this->assertStringContainsString('/reset-password/broker-token', $html);
@@ -48,7 +48,7 @@ class EmailTemplatesTest extends TestCase
                 $this->assertStringContainsString('obake-organization-icon.png', $html);
             } else {
                 $this->assertStringNotContainsString('obake-organization-icon.png', $html);
-                $this->assertStringNotContainsString('>Organizzazione</p>', $html);
+                $this->assertStringNotContainsString('>Azienda</p>', $html);
             }
         }
     }
@@ -117,7 +117,7 @@ class EmailTemplatesTest extends TestCase
         $this->assertStringContainsString($invitation->actionUrl, $newAccount->getTextBody());
         $this->assertStringNotContainsString('&amp;', $newAccount->getTextBody());
         $this->assertStringContainsString('Partner &amp; Associati', $existingAccount->getHtmlBody());
-        $this->assertStringContainsString('Apri organizzazione', $existingAccount->getHtmlBody());
+        $this->assertStringContainsString('Apri azienda', $existingAccount->getHtmlBody());
         $this->assertStringContainsString(route('tenant.dashboard', $tenant), $existingAccount->getTextBody());
         $this->assertStringNotContainsString('/reset-password/', $existingAccount->getHtmlBody());
         $this->assertStringNotContainsString('Imposta la password', $existingAccount->getHtmlBody());

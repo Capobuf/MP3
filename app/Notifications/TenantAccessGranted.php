@@ -20,9 +20,9 @@ class TenantAccessGranted extends Notification
     public function toMail(User $notifiable): MailMessage
     {
         return (new GeneralNotification(
-            title: 'Accesso all’organizzazione',
-            body: 'Ora puoi accedere a questa organizzazione con il tuo account esistente. Usa la tua password attuale. Se non la ricordi o non l’hai ancora impostata, usa “Password dimenticata?” nella pagina di accesso.',
-            actionText: 'Apri organizzazione',
+            title: 'Accesso all’azienda',
+            body: 'Ora puoi accedere a questa azienda con il tuo account esistente. Usa la tua password attuale. Se non la ricordi o non l’hai ancora impostata, usa “Password dimenticata?” nella pagina di accesso.',
+            actionText: 'Apri azienda',
             actionUrl: route('tenant.dashboard', $this->tenant),
             organizationName: $this->tenant->name,
         ))->toMail($notifiable);

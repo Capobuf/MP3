@@ -1,10 +1,10 @@
 Obake
 
-{!! filled($organizationName) ? "Invito a un'Organizzazione" : "Invito alla Piattaforma" !!}
+{!! filled($organizationName) ? "Invito a un'Azienda" : "Invito a Obake" !!}
 
 Hai ricevuto un invito per accedere a Obake.
 @if (filled($organizationName))
-Organizzazione: {!! $organizationName !!}
+Azienda: {!! $organizationName !!}
 @endif
 
 Per iniziare, imposta la password del tuo account.

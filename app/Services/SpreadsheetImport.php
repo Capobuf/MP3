@@ -141,7 +141,7 @@ class SpreadsheetImport
         if ($resource === 'projects' && ! empty($data['status'])) {
             $matches = $tenant->projectStatuses()->where(fn ($query) => $query->where('key', $data['status'])->orWhere('name', $data['status']))->get();
             if ($matches->count() !== 1) {
-                Values::invalid('status', 'Seleziona uno stato definito nelle impostazioni di questo ambiente.');
+                Values::invalid('status', 'Seleziona uno stato definito nelle impostazioni di questa azienda.');
             }
             $data['status'] = $matches->first()->key;
         }
@@ -208,7 +208,7 @@ class SpreadsheetImport
             $matches = $query->where(fn ($q) => $resource === 'vendors' ? $q->where($name, $value)->orWhere('vat_number', $value) : $q->where($name, $value))->get()->filter(fn ($record) => $record->getAttribute($name) === $value || ($resource === 'vendors' && $record->vat_number === $value));
         }
         if ($matches->count() !== 1) {
-            Values::invalid($field, $matches->isEmpty() ? "Riferimento «{$value}» inesistente in questo ambiente." : "Riferimento «{$value}» ambiguo: correggi il file.");
+            Values::invalid($field, $matches->isEmpty() ? "Riferimento «{$value}» inesistente in questa azienda." : "Riferimento «{$value}» ambiguo: correggi il file.");
         }
 
         return $matches->first()->id;

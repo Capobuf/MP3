@@ -68,7 +68,7 @@ class EmailSettingsController extends Controller
     {
         $data = $request->validate(['recipient' => ['required', 'email', 'max:255']]);
         if (! PlatformMailSetting::query()->whereKey(1)->exists()) {
-            throw ValidationException::withMessages(['recipient' => 'Salva prima la configurazione SMTP della piattaforma.']);
+            throw ValidationException::withMessages(['recipient' => 'Salva prima la configurazione SMTP di Obake.']);
         }
 
         try {

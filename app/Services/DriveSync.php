@@ -135,7 +135,7 @@ class DriveSync
     {
         $this->locked(function () use ($tenant): void {
             if (! $this->state($tenant)['enabled']) {
-                throw new RuntimeException('Sincronizzazione disabilitata dalla piattaforma per questo ambiente.');
+                throw new RuntimeException('Sincronizzazione disabilitata da Amministrazione per questa azienda.');
             }
             $this->status($tenant, 'running', 'Sincronizzazione in corso.', ['last_attempted_at' => now()]);
             $stage = 'autorizzazione Google';

@@ -17,7 +17,7 @@ class UserAccess
     {
         abort_if($user->is_super_admin, 403);
         if (! $user->is_platform_admin && count($tenantIds) > 1) {
-            throw ValidationException::withMessages(['tenant_ids' => 'Un utente aziendale può avere un solo ambiente. Gestisci le assegnazioni o conferma la promozione dalla pagina Utenti.']);
+            throw ValidationException::withMessages(['tenant_ids' => 'Un utente aziendale può avere una sola azienda. Gestisci le assegnazioni o conferma la promozione dalla pagina Utenti.']);
         }
         // Callers hold the user row lock for the entire read/validate/write operation.
         $user->tenants()->sync($tenantIds);

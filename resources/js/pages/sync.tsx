@@ -89,7 +89,7 @@ function SyncRow({
                 ) : item.enabled ? (
                     'Abilitata'
                 ) : (
-                    'Disabilitata dalla piattaforma'
+                    'Disabilitata da Amministrazione'
                 )}
             </TableCell>
             <TableCell>
@@ -186,7 +186,9 @@ export default function Sync({
     const content = (
         <>
             <Head
-                title={tenant ? `Sync · ${tenant.name}` : 'Sync piattaforma'}
+                title={
+                    tenant ? `Sync · ${tenant.name}` : 'Sync · Amministrazione'
+                }
             />
             {!tenant && (
                 <Card>
@@ -392,7 +394,7 @@ export default function Sync({
             <Card>
                 <CardHeader>
                     <CardTitle>
-                        {tenant ? 'Sincronizzazione ambiente' : 'Ambienti'}
+                        {tenant ? 'Sincronizzazione azienda' : 'Aziende'}
                     </CardTitle>
                     <CardDescription>
                         Report annuali aggiornati ogni giorno alle 03:00. Solo
@@ -403,7 +405,7 @@ export default function Sync({
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Ambiente</TableHead>
+                                <TableHead>Azienda</TableHead>
                                 <TableHead>Attivazione</TableHead>
                                 <TableHead>Cartella</TableHead>
                                 <TableHead>Ultimo esito</TableHead>
@@ -422,7 +424,7 @@ export default function Sync({
                         </TableBody>
                     </Table>
                     {tenants.length === 0 && (
-                        <p>Nessun ambiente disponibile.</p>
+                        <p>Nessuna azienda disponibile.</p>
                     )}
                 </CardContent>
             </Card>
@@ -432,7 +434,7 @@ export default function Sync({
         <div className="page-shell">
             <header>
                 <p className="text-sm text-muted-foreground">{tenant.name}</p>
-                <h1 className="page-title">Impostazioni ambiente — Sync</h1>
+                <h1 className="page-title">Impostazioni azienda — Sync</h1>
             </header>
             <TenantSettingsNav slug={tenant.slug} />
             {content}

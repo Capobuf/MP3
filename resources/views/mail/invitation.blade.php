@@ -1,10 +1,10 @@
 @extends('mail.layouts.obake', [
-    'title' => filled($organizationName) ? "Invito a un'Organizzazione" : 'Invito alla Piattaforma',
-    'preheader' => filled($organizationName) ? "Sei stato invitato a un'organizzazione su Obake." : 'Crea la password per accedere a Obake.',
+    'title' => filled($organizationName) ? "Invito a un'Azienda" : 'Invito a Obake',
+    'preheader' => filled($organizationName) ? "Sei stato invitato a un'azienda su Obake." : 'Crea la password per accedere a Obake.',
 ])
 
 @section('content')
-<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:25px;font-weight:400;color:#62656b;margin:0 0 0px;">{{ filled($organizationName) ? 'Hai ricevuto un invito per accedere a questa organizzazione su Obake.' : 'Hai ricevuto un invito per accedere a Obake.' }}</p>
+<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:15px;line-height:25px;font-weight:400;color:#62656b;margin:0 0 0px;">{{ filled($organizationName) ? 'Hai ricevuto un invito per accedere a questa azienda su Obake.' : 'Hai ricevuto un invito per accedere a Obake.' }}</p>
 @if (filled($organizationName))
     @include('mail.partials.spacer', ['height' => 24])
     @include('mail.partials.organization')

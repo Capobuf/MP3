@@ -32,7 +32,7 @@ class UserController extends Controller
             $user = $invitations->findOrCreate($validated['email'], $validated['name'] ?? null);
             if (! $user->wasRecentlyCreated) {
                 throw ValidationException::withMessages([
-                    'email' => 'Questo account esiste già. Gestiscilo dalla sua riga nella pagina Utenti; la promozione a Piattaforma richiede una conferma esplicita.',
+                    'email' => 'Questo account esiste già. Gestiscilo dalla sua riga nella pagina Utenti; l’abilitazione ad Amministrazione richiede una conferma esplicita.',
                 ]);
             }
             $user->is_platform_admin = true;
@@ -60,7 +60,7 @@ class UserController extends Controller
             $access->syncTenants($user, $data['tenant_ids']);
         });
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Ambienti aggiornati.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Aziende aggiornate.']);
 
         return back();
     }
@@ -75,7 +75,7 @@ class UserController extends Controller
             $user->is_platform_admin = true;
             $user->save();
         });
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Accesso Piattaforma abilitato.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'Accesso ad Amministrazione abilitato.']);
 
         return back();
     }

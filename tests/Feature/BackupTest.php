@@ -346,7 +346,7 @@ class BackupTest extends TestCase
             $backups->restoreTenant($target, $archive);
             $this->fail('Existing logo overwritten');
         } catch (\RuntimeException $error) {
-            $this->assertStringContainsString('ambiente nuovo o vuoto', $error->getMessage());
+            $this->assertStringContainsString('azienda nuova o vuota', $error->getMessage());
             $this->assertSame($path, $target->fresh()->logo_path);
             $this->assertSame($before, Storage::disk('attachments')->get($path));
         }

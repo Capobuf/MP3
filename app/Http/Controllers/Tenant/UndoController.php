@@ -63,7 +63,7 @@ class UndoController extends Controller
             }
             $expected = $redo ? $action->before_hash : $action->after_hash;
             abort_unless(hash_equals($expected, $history->fingerprint($history->snapshot($tenant))), 409,
-                'L’ambiente contiene modifiche successive. L’operazione è bloccata per non sovrascriverle.');
+                'L’azienda contiene modifiche successive. L’operazione è bloccata per non sovrascriverle.');
             $history->apply($action, $redo);
             $seconds = (int) ($request->user()->undo_popup_seconds ?? 10);
             $action->update([

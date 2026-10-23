@@ -88,7 +88,7 @@ class TenantCsvTransfer
     public function read(Tenant $tenant, string $path): array
     {
         if (! $this->isEmpty($tenant)) {
-            Values::invalid('tenant', 'L’importazione CSV richiede un ambiente privo di dati gestionali.');
+            Values::invalid('tenant', 'L’importazione CSV richiede un’azienda priva di dati gestionali.');
         }
         $stream = fopen($path, 'rb');
         if ($stream === false) {
@@ -443,7 +443,7 @@ class TenantCsvTransfer
     public function restore(Tenant $tenant, array $plan): void
     {
         if (! $this->isEmpty($tenant)) {
-            Values::invalid('tenant', 'L’ambiente contiene già dati gestionali.');
+            Values::invalid('tenant', 'L’azienda contiene già dati gestionali.');
         }
         if ($plan['error_count'] > 0) {
             Values::invalid('file', 'Correggi gli errori nel CSV prima di importare.');

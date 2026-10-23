@@ -46,14 +46,14 @@ export default function Platform({
 }) {
     return (
         <>
-            <Head title="Ambienti · Impostazioni Piattaforma" />
+            <Head title="Aziende · Amministrazione" />
             <PlatformSettingsLayout>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Crea ambiente</CardTitle>
+                        <CardTitle>Crea azienda</CardTitle>
                         <CardDescription>
                             Lo slug identifica l’indirizzo permanente
-                            dell’ambiente e resta invariato quando modifichi il
+                            dell’azienda e resta invariato quando modifichi il
                             nome.
                         </CardDescription>
                     </CardHeader>
@@ -93,7 +93,7 @@ export default function Platform({
                                     </div>
                                     <Button disabled={processing}>
                                         {processing && <Spinner />}
-                                        Crea ambiente
+                                        Crea azienda
                                     </Button>
                                 </>
                             )}
@@ -104,7 +104,7 @@ export default function Platform({
                 <section className="flex flex-col gap-4">
                     <div className="flex items-center gap-2">
                         <Building2 className="size-5" />
-                        <h2 className="text-xl font-semibold">Ambienti</h2>
+                        <h2 className="text-xl font-semibold">Aziende</h2>
                         <Badge variant="secondary">{tenants.length}</Badge>
                     </div>
                     <div className="grid gap-4 lg:grid-cols-2">
@@ -155,7 +155,7 @@ export default function Platform({
                                                             htmlFor={`tenant-${tenant.id}-name`}
                                                             className="sr-only"
                                                         >
-                                                            Nome ambiente
+                                                            Nome azienda
                                                         </Label>
                                                         <Input
                                                             id={`tenant-${tenant.id}-name`}
@@ -306,8 +306,8 @@ export default function Platform({
 
 Platform.layout = {
     breadcrumbs: [
-        { title: 'Impostazioni Piattaforma', href: '/platform' },
-        { title: 'Ambienti', href: '/platform' },
+        { title: 'Amministrazione', href: '/platform' },
+        { title: 'Aziende', href: '/platform' },
     ],
 };
 
@@ -353,7 +353,7 @@ function RemoveTenantUser({
                             <AlertDialogDescription>
                                 {user.name} non potrà più accedere a{' '}
                                 {tenant.name}. Il suo account resterà
-                                disponibile sulla piattaforma.
+                                disponibile su Obake.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         {Object.values(errors).map((error, index) => (

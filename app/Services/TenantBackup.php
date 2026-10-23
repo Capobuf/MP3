@@ -112,7 +112,7 @@ class TenantBackup
             $this->validate($data, $manifest);
             DB::transaction(function () use ($tenant, $zip, $manifest, $data, &$createdFiles): void {
                 $tenant = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
-                Archive::check($this->isEmpty($tenant), 'Il ripristino richiede un ambiente nuovo o vuoto, senza impostazioni personalizzate.');
+                Archive::check($this->isEmpty($tenant), 'Il ripristino richiede un’azienda nuova o vuota, senza impostazioni personalizzate.');
                 $logoPath = null;
                 if (isset($data['tenant']['logo_path'])) {
                     $logoPath = $tenant->id.'/logos/'.Str::uuid().'.'.pathinfo($data['tenant']['logo_path'], PATHINFO_EXTENSION);
@@ -188,7 +188,7 @@ class TenantBackup
                 }
                 $tenant->forceFill(['contract_reminders' => $settings, 'logo_path' => $logoPath])->saveOrFail();
                 foreach (User::whereIn('id', $members)->orderBy('id')->lockForUpdate()->get() as $member) {
-                    Archive::check($member->canManagePlatform() || ! $member->tenants()->where('tenants.id', '!=', $tenant->id)->exists(), 'Un utente aziendale è già assegnato a un altro ambiente. Correggere il profilo dalla gestione Utenti prima del ripristino.');
+                    Archive::check($member->canManagePlatform() || ! $member->tenants()->where('tenants.id', '!=', $tenant->id)->exists(), 'Un utente aziendale è già assegnato a un’altra azienda. Correggere il profilo dalla gestione Utenti prima del ripristino.');
                 }
                 $tenant->users()->sync($members);
             });

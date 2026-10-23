@@ -157,7 +157,7 @@ export default function ContractReminders({
                     <p className="text-sm text-muted-foreground">
                         {tenant.name}
                     </p>
-                    <h1 className="page-title">Impostazioni ambiente</h1>
+                    <h1 className="page-title">Impostazioni azienda</h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
                 <div className="grid min-w-0 items-start gap-6 xl:grid-cols-2">
@@ -165,10 +165,10 @@ export default function ContractReminders({
                         <CardHeader>
                             <CardTitle>Promemoria contratti</CardTitle>
                             <CardDescription>
-                                Configurazione condivisa da tutto l’ambiente.
+                                Configurazione condivisa da tutta l’azienda.
                                 Invio alle 08:00, fuso Europe/Rome, con l’SMTP
-                                della piattaforma. Gli invii falliti vengono
-                                ritentati ogni ora fino alle 23:00.
+                                di Obake. Gli invii falliti vengono ritentati
+                                ogni ora fino alle 23:00.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -287,10 +287,10 @@ export default function ContractReminders({
                                 )}
                                 <FieldSet>
                                     <FieldLegend>
-                                        Utenti dell’ambiente
+                                        Utenti dell’azienda
                                     </FieldLegend>
                                     <FieldDescription>
-                                        Gli utenti rimossi dall’ambiente non
+                                        Gli utenti rimossi dall’azienda non
                                         riceveranno più notifiche.
                                     </FieldDescription>
                                     {users.length ? (
@@ -367,7 +367,7 @@ export default function ContractReminders({
                                                 onChange={(event) =>
                                                     setEmail(event.target.value)
                                                 }
-                                                placeholder="nome@organizzazione.it"
+                                                placeholder="nome@azienda.it"
                                                 required
                                                 maxLength={254}
                                             />
@@ -633,7 +633,7 @@ export default function ContractReminders({
 }
 
 ContractReminders.layout = {
-    breadcrumbs: [{ title: 'Impostazioni ambiente', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Impostazioni azienda', href: '/dashboard' }],
 };
 
 function ReminderDaysSelect({

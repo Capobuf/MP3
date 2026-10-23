@@ -311,7 +311,7 @@ export function AttachmentsSection({
                                               .map((file) => file.original_name)
                                               .join(' · ')
                                         : 'Nessun documento'
-                                : 'Documenti di questo elemento, disponibili agli utenti autorizzati dell’ambiente.'}
+                                : 'Documenti di questo elemento, disponibili agli utenti autorizzati dell’azienda.'}
                         </CardDescription>
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">

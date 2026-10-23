@@ -66,7 +66,7 @@ class ExpenseAllocation
             }
             $target = $tenant->{$type.'s'}()->whereKey($data['target_id'] ?? 0)->where('year', $data['year'])->lockForUpdate()->first();
             if ($target === null) {
-                throw ValidationException::withMessages(['target_id' => 'Seleziona un contenitore dell’anno della spesa, appartenente a questo ambiente.']);
+                throw ValidationException::withMessages(['target_id' => 'Seleziona un contenitore dell’anno della spesa, appartenente a questa azienda.']);
             }
             if (! $conflict['split']) {
                 app(ExpenseWriter::class)->persist($expense, ['contract_id' => null, 'project_id' => null, $type.'_id' => $target->id]);

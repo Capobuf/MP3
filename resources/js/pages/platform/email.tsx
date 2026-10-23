@@ -58,12 +58,12 @@ export default function EmailSettings({
 
     return (
         <>
-            <Head title="Email · Impostazioni Piattaforma" />
+            <Head title="Email · Amministrazione" />
             <PlatformSettingsLayout>
                 <header>
                     <h2 className="text-xl font-semibold">Email</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                        Un unico server SMTP per tutti gli ambienti, inclusi
+                        Un unico server SMTP per tutte le aziende, inclusi
                         verifica email, recupero password e inviti.
                     </p>
                 </header>
@@ -71,9 +71,7 @@ export default function EmailSettings({
                 {!configured && (
                     <Alert>
                         <Info />
-                        <AlertTitle>
-                            SMTP della piattaforma non configurato
-                        </AlertTitle>
+                        <AlertTitle>SMTP di Obake non configurato</AlertTitle>
                         <AlertDescription>
                             È attiva la configurazione Laravel (mailer:{' '}
                             {fallbackMailer}). I mailer log e array non
@@ -419,7 +417,7 @@ export default function EmailSettings({
 
 EmailSettings.layout = {
     breadcrumbs: [
-        { title: 'Impostazioni Piattaforma', href: '/platform' },
+        { title: 'Amministrazione', href: '/platform' },
         { title: 'Email', href: '/platform/settings/email' },
     ],
 };

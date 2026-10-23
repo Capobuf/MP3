@@ -113,7 +113,7 @@ class AnnualContractImport
             foreach ($selections as $selection) {
                 $source = $contracts->get($selection['id']);
                 if ($source === null) {
-                    throw ValidationException::withMessages([$type.'s' => 'Elemento non disponibile nell’anno sorgente o in questo ambiente.']);
+                    throw ValidationException::withMessages([$type.'s' => 'Elemento non disponibile nell’anno sorgente o in questa azienda.']);
                 }
                 $row = $this->row($tenant, $target, $source, $type);
                 if ($row['already_imported']) {
