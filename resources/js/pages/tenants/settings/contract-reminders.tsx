@@ -157,7 +157,7 @@ export default function ContractReminders({
                     <p className="text-sm text-muted-foreground">
                         {tenant.name}
                     </p>
-                    <h1 className="page-title">Impostazioni azienda</h1>
+                    <h1 className="page-title">Impostazioni</h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
                 <div className="grid min-w-0 items-start gap-6 xl:grid-cols-2">
@@ -633,7 +633,7 @@ export default function ContractReminders({
 }
 
 ContractReminders.layout = {
-    breadcrumbs: [{ title: 'Impostazioni azienda', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Impostazioni', href: '/dashboard' }],
 };
 
 function ReminderDaysSelect({

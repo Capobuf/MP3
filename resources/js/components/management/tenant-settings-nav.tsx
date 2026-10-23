@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 export function TenantSettingsNav({ slug }: { slug: string }) {
     const { url } = usePage();
     return (
-        <nav aria-label="Impostazioni azienda" className="flex flex-wrap gap-2">
+        <nav aria-label="Impostazioni" className="flex flex-wrap gap-2">
             {[
                 ['identity', 'Identità azienda'],
                 ['project-statuses', 'Stati dei progetti'],

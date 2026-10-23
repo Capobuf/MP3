@@ -36,7 +36,7 @@ export default function TenantData({
                         {tenant.name}
                     </p>
                     <h1 className="page-title">
-                        Impostazioni azienda — Importazione ed esportazione dati
+                        Impostazioni — Importazione ed esportazione dati
                     </h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
@@ -103,5 +103,5 @@ export default function TenantData({
     );
 }
 TenantData.layout = {
-    breadcrumbs: [{ title: 'Impostazioni azienda', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Impostazioni', href: '/dashboard' }],
 };

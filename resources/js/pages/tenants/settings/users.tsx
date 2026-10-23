@@ -46,7 +46,7 @@ export default function TenantUsers({
                     <p className="text-sm text-muted-foreground">
                         {tenant.name}
                     </p>
-                    <h1 className="page-title">Impostazioni azienda</h1>
+                    <h1 className="page-title">Impostazioni</h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
                 <Card>
@@ -237,7 +237,7 @@ export default function TenantUsers({
 
 TenantUsers.layout = {
     breadcrumbs: [
-        { title: 'Impostazioni azienda', href: '/dashboard' },
+        { title: 'Impostazioni', href: '/dashboard' },
         { title: 'Utenti', href: '/dashboard' },
     ],
 };
