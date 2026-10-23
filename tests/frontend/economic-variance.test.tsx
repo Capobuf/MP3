@@ -39,6 +39,23 @@ function editorSummary(expense: Expense, draft = draftLines(expense)) {
     return html.slice(html.indexOf('<dl'));
 }
 
+function summaryField(html: string, label: string) {
+    const summary = html.match(/<dl\b[^>]*>(.*?)<\/dl>/s)![1];
+    const fields = [
+        ...summary.matchAll(
+            /<dt\b[^>]*>(.*?)<\/dt>\s*(<dd\b[^>]*>.*?<\/dd>)/gs,
+        ),
+    ];
+    const field = fields.find((match) =>
+        match[1].replace(/<[^>]*>/g, '').includes(label),
+    );
+    expect(field, `Summary field: ${label}`).toBeDefined();
+    return {
+        markup: field![2],
+        text: field![2].replace(/<[^>]*>/g, '').trim(),
+    };
+}
+
 vi.mock('@inertiajs/react', () => ({
     usePage: () => ({ props: { economicContext: { year: 2026 } } }),
 }));
@@ -79,13 +96,13 @@ describe('Economic variance', () => {
             };
             expect(draftLines(expense)).toEqual([]);
             const editor = editorSummary(expense);
-            expect(editor).toContain(
+            expect(summaryField(editor, 'Allocato').text).toBe(
                 allocated === null ? 'Da completare' : money(allocated),
             );
-            expect(editor).toContain(
+            expect(summaryField(editor, 'Effettivo').text).toBe(
                 actual === null ? 'Da completare' : money(actual),
             );
-            expect(editor.slice(editor.indexOf('Scostamento'))).toContain(
+            expect(summaryField(editor, 'Scostamento').text).toBe(
                 money(variance),
             );
             expect(editor).not.toContain('+');
@@ -99,10 +116,10 @@ describe('Economic variance', () => {
                     readOnly
                 />,
             );
-            const summary = html.slice(html.indexOf('Scostamento'));
-            expect(summary).toContain(money(variance));
-            expect(summary).toContain(varianceTextClass(variance));
-            expect(summary).not.toContain('scostamento provvisorio');
+            const summary = summaryField(html, 'Scostamento');
+            expect(summary.text).toBe(money(variance));
+            expect(summary.markup).toContain(varianceTextClass(variance));
+            expect(html).not.toContain('scostamento provvisorio');
             expect(money(variance)).not.toContain('+');
             if (variance === 0) expect(money(variance)).not.toContain('-');
             if (variance < 0)
@@ -132,9 +149,9 @@ describe('Economic variance', () => {
                 },
                 lines,
             );
-            const summary = html.slice(html.indexOf('Scostamento'));
-            expect(summary).toContain('Da completare');
-            expect(summary).not.toContain('-100,00');
+            const summary = summaryField(html, 'Scostamento');
+            expect(summary.text).toBe('Da completare');
+            expect(summary.text).not.toContain('-100,00');
         },
     );
     it('uses draft amounts and only restores direct amounts for originally empty lines', () => {
@@ -160,9 +177,7 @@ describe('Economic variance', () => {
         expect(editorSummary(expense, [])).toContain(money(-20));
         const deleted = editorSummary({ ...expense, lines: draft }, []);
         expect(deleted).toContain('Da completare');
-        expect(deleted.slice(deleted.indexOf('Scostamento'))).toContain(
-            money(0),
-        );
+        expect(summaryField(deleted, 'Scostamento').text).toBe(money(0));
         expect(deleted).not.toContain(money(80));
         expect(deleted).not.toContain(money(100));
     });

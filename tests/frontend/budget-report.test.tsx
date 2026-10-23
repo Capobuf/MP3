@@ -93,16 +93,21 @@ function table(search = '', sorted = true) {
 }
 
 describe('Budget report', () => {
-    it.each([true, false])(
-        'previews the first page number only when included=%s',
-        (numberFirstPage) => {
+    it.each([
+        [true, true],
+        [true, false],
+        [false, true],
+        [false, false],
+    ])(
+        'previews page numbering enabled=%s and first page included=%s',
+        (showPageNumbers, numberFirstPage) => {
             const html = renderToStaticMarkup(
                 <BudgetReport
                     data={{ budget: summary, filters: [] }}
                     options={{
                         ...defaultBudgetReportOptions('Nirolabel'),
                         blocks: ['kpis'],
-                        showPageNumbers: true,
+                        showPageNumbers,
                         numberFirstPage,
                     }}
                     tenantName="Nirolabel"
@@ -110,9 +115,16 @@ describe('Budget report', () => {
                     createdAt="20/10/2026"
                 />,
             );
-            expect(html).toContain(
-                `<p class="budget-report-page-number">${numberFirstPage ? '1' : ''}</p>`,
+            const footer = html.match(/<footer\b[^>]*>(.*?)<\/footer>/s)![1];
+            const pageNumber = footer.match(
+                /<p\b[^>]*\bclass="[^"]*\bbudget-report-page-number\b[^"]*"[^>]*>(.*?)<\/p>/s,
             );
+            expect(pageNumber !== null).toBe(showPageNumbers);
+            if (showPageNumbers) {
+                expect(pageNumber![1].replace(/<[^>]*>/g, '').trim()).toBe(
+                    numberFirstPage ? '1' : '',
+                );
+            }
         },
     );
     it.each([

@@ -126,7 +126,12 @@ describe('Section report', () => {
         expect(html).not.toContain('data-column="vendor"');
         expect(html).not.toContain('data-report-block="kpis"');
         expect(html).toContain('budget-report-footer-logo');
-        expect(html).toContain('class="budget-report-page-number"></p>');
+        const footer = html.match(/<footer\b[^>]*>(.*?)<\/footer>/s)![1];
+        const pageNumber = footer.match(
+            /<p\b[^>]*\bclass="[^"]*\bbudget-report-page-number\b[^"]*"[^>]*>(.*?)<\/p>/s,
+        );
+        expect(pageNumber).not.toBeNull();
+        expect(pageNumber![1].replace(/<[^>]*>/g, '').trim()).toBe('');
     });
     it('keeps custom project statuses and legacy unclassified years visible', () => {
         const source = {
