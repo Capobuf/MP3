@@ -1037,3 +1037,40 @@ Prima dell’approvazione verificare nell’app: filtri singoli e combinati, zer
 molte righe, colonne nascoste e riordinate, descrizioni lunghe, due anni, logo sì/no,
 A4 verticale/orizzontale e tema light/dark. Confrontare i totali e controllare nel
 PDF grafico, intestazioni ripetute e righe complete su tutte le pagine.
+
+### Lingua italiana
+
+Le nuove installazioni usano `APP_LOCALE=it` e `APP_FALLBACK_LOCALE=it`.
+Per un'installazione esistente, impostare entrambe le variabili nel `.env` attivo;
+con CloudPanel aggiornare anche `~/.dploy/overlays/.env`, conservando tutti gli altri
+valori e i permessi `600`. Dopo il rilascio che include `lang/it`, eseguire
+`php artisan optimize:clear` e `php artisan optimize` dalla release attiva, usando
+il binario PHP configurato per quel sito. Nel container Sail usare
+`docker compose exec laravel.test php artisan optimize:clear`.
+Verificare che `/login` abbia `lang="it"` e che una richiesta di accesso non valida
+mostri un errore italiano; il solo aggiornamento degli esempi `.env` non modifica
+un overlay già esistente.
+
+I cataloghi nativi in `lang/it` e `lang/it.json` coprono validazione, accesso,
+password, notifiche standard e pagine di errore. Il calendario usa la locale
+italiana già inclusa in DayPicker, comprese le etichette accessibili. La terminologia
+visibile resta **Azienda** e **Amministrazione**; nomi tecnici, route e dati salvati
+mantengono gli identificatori esistenti.
+
+Restano intenzionalmente nella lingua originale:
+
+- testi inseriti dagli utenti, nomi dei dispositivi, marchi e identificatori tecnici;
+- finestre native WebAuthn/browser, controllate dal dispositivo e dalla sua lingua;
+- diagnostica sconosciuta restituita dal browser/dispositivo per le passkey:
+  `resources/js/lib/passkey-error.ts` traduce i messaggi riconoscibili delle librerie
+  installate e conserva gli altri per non perdere informazioni utili;
+- log, messaggi della console sviluppatore ed eccezioni tecniche non esposte dalla UI
+  (per esempio `Search failed`, `Copy failed` e gli errori interni degli allegati);
+- output dei comandi di manutenzione di Laravel e delle dipendenze, non dei comandi
+  applicativi. Gli errori dei servizi esterni già intercettati mantengono il
+  messaggio italiano dell'applicazione; i dettagli originali rimangono nei log.
+
+Prima del merge, verificare manualmente in Docker accesso/reset password,
+profilo/sicurezza, passkey e 2FA, menu mobile e calendario. Per ripetere i test
+localizzati: `php artisan test --stop-on-failure --filter=LocalizationTest` e
+`npx vp test --run tests/frontend/localization.test.tsx`.

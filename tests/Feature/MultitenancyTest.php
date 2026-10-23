@@ -49,7 +49,8 @@ class MultitenancyTest extends TestCase
                 'name' => 'Acme S.r.l.',
                 'slug' => 'acme',
             ])
-            ->assertRedirect(route('platform.index'));
+            ->assertRedirect(route('platform.index'))
+            ->assertInertiaFlash('toast.message', 'Azienda creata correttamente.');
 
         $tenant = Tenant::query()->where('slug', 'acme')->firstOrFail();
 
@@ -58,7 +59,8 @@ class MultitenancyTest extends TestCase
                 'name' => 'Acme Group',
                 'slug' => 'changed-slug',
             ])
-            ->assertRedirect(route('platform.index'));
+            ->assertRedirect(route('platform.index'))
+            ->assertInertiaFlash('toast.message', 'Azienda aggiornata correttamente.');
 
         $this->assertSame('Acme Group', $tenant->refresh()->name);
         $this->assertSame('acme', $tenant->slug);
@@ -97,7 +99,8 @@ class MultitenancyTest extends TestCase
             ->post(route('platform.tenants.users.store', $tenant), [
                 'user_id' => $member->id,
             ])
-            ->assertRedirect(route('platform.index'));
+            ->assertRedirect(route('platform.index'))
+            ->assertInertiaFlash('toast.message', 'Accesso all’azienda assegnato.');
 
         $this->assertTrue($tenant->users()->whereKey($member->id)->exists());
         $this->actingAs($member)
@@ -106,7 +109,8 @@ class MultitenancyTest extends TestCase
 
         $this->actingAs($superuser)
             ->delete(route('platform.tenants.users.destroy', [$tenant, $member]))
-            ->assertRedirect(route('platform.index'));
+            ->assertRedirect(route('platform.index'))
+            ->assertInertiaFlash('toast.message', 'Accesso all’azienda rimosso.');
 
         $this->assertFalse($tenant->users()->whereKey($member->id)->exists());
         $this->actingAs($member)

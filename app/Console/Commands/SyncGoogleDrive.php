@@ -14,7 +14,7 @@ class SyncGoogleDrive extends Command
 
     protected $aliases = ['mp3:drive-sync'];
 
-    protected $description = 'Sincronizza i report Excel di tutti gli anni degli ambienti abilitati verso Google Drive';
+    protected $description = 'Sincronizza i report Excel di tutti gli anni delle aziende abilitate verso Google Drive';
 
     public function handle(DriveSync $sync): int
     {
@@ -22,10 +22,10 @@ class SyncGoogleDrive extends Command
         foreach (Tenant::query()->whereIn('id', DB::table('tenant_drive_syncs')->where('enabled', true)->select('tenant_id'))->orderBy('id')->cursor() as $tenant) {
             try {
                 $sync->sync($tenant);
-                $this->info('Ambiente '.$tenant->id.': sincronizzazione completata.');
+                $this->info('Azienda '.$tenant->id.': sincronizzazione completata.');
             } catch (Throwable $error) {
                 $result = self::FAILURE;
-                $this->error('Ambiente '.$tenant->id.': '.($error::class === \RuntimeException::class ? $error->getMessage() : 'Sincronizzazione fallita. Verifica database e storage.'));
+                $this->error('Azienda '.$tenant->id.': '.($error::class === \RuntimeException::class ? $error->getMessage() : 'Sincronizzazione fallita. Verifica database e storage.'));
             }
         }
 

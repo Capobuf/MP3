@@ -26,7 +26,7 @@ class TenantController extends Controller
 
         Tenant::create($validated);
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Azienda creata.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant created.')]);
 
         return to_route('platform.index');
     }
@@ -39,7 +39,7 @@ class TenantController extends Controller
 
         $tenant->update($validated);
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Azienda aggiornata.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant updated.')]);
 
         return to_route('platform.index');
     }

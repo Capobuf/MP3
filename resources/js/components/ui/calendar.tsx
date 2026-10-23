@@ -1,4 +1,5 @@
 import * as React from "react"
+import { it } from "react-day-picker/locale"
 import { cn } from "@/lib/utils"
 import {
   ChevronDownIcon,
@@ -17,6 +18,7 @@ function Calendar({
   className,
   classNames,
   showOutsideDays = true,
+  locale = it,
   captionLayout = "label",
   buttonVariant = "ghost",
   formatters,
@@ -30,6 +32,7 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      locale={locale}
       className={cn(
         "group/calendar bg-background p-3 [--cell-size:--spacing(8)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
@@ -39,7 +42,7 @@ function Calendar({
       captionLayout={captionLayout}
       formatters={{
         formatMonthDropdown: (date) =>
-          date.toLocaleString("default", { month: "short" }),
+          date.toLocaleString(locale?.code ?? "it", { month: "short" }),
         ...formatters,
       }}
       classNames={{

@@ -14,11 +14,11 @@ class CreateSuperuserCommandTest extends TestCase
     public function test_command_creates_a_superuser_with_a_hashed_password(): void
     {
         $this->artisan('app:create-superuser')
-            ->expectsQuestion('Name', 'Platform Admin')
+            ->expectsQuestion('Nome', 'Platform Admin')
             ->expectsQuestion('Email', 'ADMIN@example.com')
             ->expectsQuestion('Password', 'Valid-password1!')
-            ->expectsQuestion('Confirm password', 'Valid-password1!')
-            ->expectsOutput('Superuser created successfully.')
+            ->expectsQuestion('Conferma password', 'Valid-password1!')
+            ->expectsOutput('Amministratore globale creato correttamente.')
             ->assertSuccessful();
 
         $user = User::query()->where('email', 'admin@example.com')->firstOrFail();
@@ -33,9 +33,9 @@ class CreateSuperuserCommandTest extends TestCase
         $existing = User::factory()->create(['email' => 'member@example.com']);
 
         $this->artisan('app:create-superuser')
-            ->expectsQuestion('Name', 'Member')
+            ->expectsQuestion('Nome', 'Member')
             ->expectsQuestion('Email', 'member@example.com')
-            ->expectsOutput('An account with this email already exists. It was not modified.')
+            ->expectsOutput('Esiste già un account con questa email. Non è stata apportata alcuna modifica.')
             ->assertFailed();
 
         $this->assertFalse($existing->refresh()->is_super_admin);
@@ -44,10 +44,13 @@ class CreateSuperuserCommandTest extends TestCase
     public function test_command_rejects_invalid_input(): void
     {
         $this->artisan('app:create-superuser')
-            ->expectsQuestion('Name', '')
+            ->expectsQuestion('Nome', '')
             ->expectsQuestion('Email', 'not-an-email')
             ->expectsQuestion('Password', 'short')
-            ->expectsQuestion('Confirm password', 'different')
+            ->expectsQuestion('Conferma password', 'different')
+            ->expectsOutput('Il campo nome è obbligatorio.')
+            ->expectsOutput('Inserisci un indirizzo email valido.')
+            ->expectsOutput('La conferma della password non corrisponde.')
             ->assertFailed();
 
         $this->assertDatabaseCount('users', 0);

@@ -26,7 +26,7 @@ class TenantUserController extends Controller
             $access->syncTenants($user, $ids);
         });
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Accesso all’azienda assegnato.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant access granted.')]);
 
         return to_route('platform.index');
     }
@@ -39,7 +39,7 @@ class TenantUserController extends Controller
             $user->tenants()->detach($tenant->id);
         });
 
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Accesso all’azienda rimosso.']);
+        Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant access removed.')]);
 
         return to_route('platform.index');
     }
