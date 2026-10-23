@@ -173,6 +173,11 @@ export function ExpenseLinesCard({
                             <ExpenseLines
                                 key="editing"
                                 lines={draft}
+                                preservedAmounts={
+                                    lines.length === 0 && draft.length === 0
+                                        ? expense
+                                        : undefined
+                                }
                                 initialFocusKey={focusKey}
                                 onChange={(next) => {
                                     setDraft(next);
