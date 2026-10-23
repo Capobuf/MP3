@@ -1,7 +1,15 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
-import { AlertTriangle, MoreHorizontal, Users } from 'lucide-react';
+import {
+    AlertTriangle,
+    Ban,
+    CheckCircle2,
+    Mail,
+    MoreHorizontal,
+    Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
+import { UserAvatar } from '@/components/user-info';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -61,9 +69,7 @@ function TenantChoices({
 }) {
     return (
         <FieldSet disabled={disabled}>
-            <FieldLegend>
-                Aziende {single ? '(massimo una)' : '(facoltative)'}
-            </FieldLegend>
+            <FieldLegend>Aziende{single ? ' (massimo una)' : ''}</FieldLegend>
             <FieldGroup className="max-h-60 overflow-y-auto">
                 {tenants.length === 0 && (
                     <p className="text-sm text-muted-foreground">
@@ -171,7 +177,7 @@ export default function PlatformUsers({
                                         )}
                                     >
                                         <FieldLabel htmlFor="user-name">
-                                            Nome (facoltativo)
+                                            Nome
                                         </FieldLabel>
                                         <Input
                                             id="user-name"
@@ -198,7 +204,8 @@ export default function PlatformUsers({
                                         )}
                                     >
                                         <FieldLabel htmlFor="user-email">
-                                            Email
+                                            Email{' '}
+                                            <span aria-hidden="true">*</span>
                                         </FieldLabel>
                                         <Input
                                             id="user-email"
@@ -256,21 +263,48 @@ export default function PlatformUsers({
                         </DialogContent>
                     </Dialog>
                 </div>
-                <Card>
-                    <CardContent className="divide-y p-0">
-                        {users.map((user) => (
-                            <div
-                                key={user.id}
-                                className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
-                            >
-                                <div className="flex min-w-0 flex-col gap-2">
-                                    <p className="font-medium break-words">
-                                        {user.name}
-                                    </p>
-                                    <p className="text-sm break-words text-muted-foreground">
-                                        {user.email}
-                                    </p>
-                                    <div className="flex flex-wrap gap-2">
+                <Card className="overflow-hidden py-0">
+                    <CardContent className="p-0">
+                        <div
+                            aria-hidden="true"
+                            className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_11rem_2rem] gap-6 border-b bg-muted/40 px-5 py-3 text-xs font-medium text-muted-foreground lg:grid"
+                        >
+                            <span>Utente</span>
+                            <span>Accessi</span>
+                            <span>Stato account</span>
+                            <span />
+                        </div>
+                        <ul className="divide-y" aria-label="Utenti">
+                            {users.map((user) => (
+                                <li
+                                    key={user.id}
+                                    className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 p-4 sm:px-5 sm:py-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_11rem_2rem] lg:items-center lg:gap-6"
+                                >
+                                    <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-3">
+                                        <UserAvatar
+                                            user={user}
+                                            className="size-11 border text-sm font-medium"
+                                        />
+                                        <div className="flex min-w-0 flex-col gap-1">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <p className="font-medium [overflow-wrap:anywhere]">
+                                                    {user.name}
+                                                </p>
+                                                {user.id === auth.user.id && (
+                                                    <Badge variant="outline">
+                                                        Tu
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <p className="text-sm [overflow-wrap:anywhere] text-muted-foreground">
+                                                {user.email}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="col-start-1 flex min-w-0 flex-col items-start gap-2 lg:col-start-2 lg:row-start-1">
+                                        <p className="text-xs font-medium text-muted-foreground lg:sr-only">
+                                            Accessi
+                                        </p>
                                         <Badge variant="outline">
                                             {user.is_super_admin
                                                 ? 'Super admin'
@@ -278,6 +312,25 @@ export default function PlatformUsers({
                                                   ? 'Amministrazione'
                                                   : 'Aziendale'}
                                         </Badge>
+                                        <p className="text-sm [overflow-wrap:anywhere] text-muted-foreground">
+                                            {user.is_super_admin
+                                                ? 'Tutte le aziende'
+                                                : user.tenants.length
+                                                  ? user.tenants
+                                                        .map(
+                                                            (tenant) =>
+                                                                tenant.name,
+                                                        )
+                                                        .join(', ')
+                                                  : user.is_platform_admin
+                                                    ? 'Solo accesso ad Amministrazione'
+                                                    : 'Nessuna azienda assegnata'}
+                                        </p>
+                                    </div>
+                                    <div className="col-start-1 flex flex-col items-start gap-2 lg:col-start-3 lg:row-start-1">
+                                        <p className="text-xs font-medium text-muted-foreground lg:sr-only">
+                                            Stato account
+                                        </p>
                                         <Badge
                                             variant={
                                                 user.is_active
@@ -285,33 +338,133 @@ export default function PlatformUsers({
                                                     : 'destructive'
                                             }
                                         >
+                                            {user.is_active ? (
+                                                <CheckCircle2 aria-hidden="true" />
+                                            ) : (
+                                                <Ban aria-hidden="true" />
+                                            )}
                                             {user.is_active
                                                 ? 'Abilitato'
                                                 : 'Bloccato'}
                                         </Badge>
-                                        <Badge variant="outline">
+                                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                            {user.email_verified_at ? (
+                                                <CheckCircle2
+                                                    className="size-3.5 shrink-0"
+                                                    aria-hidden="true"
+                                                />
+                                            ) : (
+                                                <Mail
+                                                    className="size-3.5 shrink-0"
+                                                    aria-hidden="true"
+                                                />
+                                            )}
                                             {user.email_verified_at
                                                 ? 'Email verificata'
                                                 : 'Email da verificare'}
-                                        </Badge>
+                                        </p>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">
-                                        {user.is_super_admin
-                                            ? 'Tutte le aziende'
-                                            : user.tenants.length
-                                              ? user.tenants
-                                                    .map(
-                                                        (tenant) => tenant.name,
-                                                    )
-                                                    .join(', ')
-                                              : user.is_platform_admin
-                                                ? 'Solo accesso ad Amministrazione'
-                                                : 'Nessuna azienda assegnata'}
-                                    </p>
+                                    <div className="col-start-2 row-start-1 justify-self-end lg:col-start-4">
+                                        {!user.is_super_admin && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="icon"
+                                                        aria-label={`Azioni per ${user.email}`}
+                                                    >
+                                                        <MoreHorizontal />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuGroup>
+                                                        <DropdownMenuItem
+                                                            onSelect={() => {
+                                                                membership.clearErrors();
+                                                                membership.setData(
+                                                                    'tenant_ids',
+                                                                    user.tenants.map(
+                                                                        (
+                                                                            tenant,
+                                                                        ) =>
+                                                                            tenant.id,
+                                                                    ),
+                                                                );
+                                                                setEditing(
+                                                                    user,
+                                                                );
+                                                            }}
+                                                        >
+                                                            Gestisci aziende
+                                                        </DropdownMenuItem>
+                                                        {user.id !==
+                                                            auth.user.id && (
+                                                            <>
+                                                                {!user.is_platform_admin && (
+                                                                    <DropdownMenuItem
+                                                                        onSelect={() => {
+                                                                            change.clearErrors();
+                                                                            setAction(
+                                                                                {
+                                                                                    user,
+                                                                                    kind: 'promote',
+                                                                                },
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        Abilita
+                                                                        accesso
+                                                                        ad
+                                                                        Amministrazione
+                                                                    </DropdownMenuItem>
+                                                                )}
+                                                                <DropdownMenuItem
+                                                                    onSelect={() => {
+                                                                        change.clearErrors();
+                                                                        change.setData(
+                                                                            'is_active',
+                                                                            !user.is_active,
+                                                                        );
+                                                                        setAction(
+                                                                            {
+                                                                                user,
+                                                                                kind: user.is_active
+                                                                                    ? 'block'
+                                                                                    : 'activate',
+                                                                            },
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    {user.is_active
+                                                                        ? 'Blocca'
+                                                                        : 'Riattiva'}
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    variant="destructive"
+                                                                    onSelect={() => {
+                                                                        change.clearErrors();
+                                                                        setAction(
+                                                                            {
+                                                                                user,
+                                                                                kind: 'delete',
+                                                                            },
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    Elimina
+                                                                </DropdownMenuItem>
+                                                            </>
+                                                        )}
+                                                    </DropdownMenuGroup>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
+                                    </div>
+
                                     {!user.is_super_admin &&
                                         !user.is_platform_admin &&
                                         user.tenants.length > 1 && (
-                                            <Alert>
+                                            <Alert className="col-span-full">
                                                 <AlertTriangle aria-hidden="true" />
                                                 <AlertDescription>
                                                     Assegnazione da correggere:
@@ -323,91 +476,9 @@ export default function PlatformUsers({
                                                 </AlertDescription>
                                             </Alert>
                                         )}
-                                </div>
-                                {!user.is_super_admin && (
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                size="icon"
-                                                aria-label={`Azioni per ${user.email}`}
-                                            >
-                                                <MoreHorizontal />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuGroup>
-                                                <DropdownMenuItem
-                                                    onSelect={() => {
-                                                        membership.clearErrors();
-                                                        membership.setData(
-                                                            'tenant_ids',
-                                                            user.tenants.map(
-                                                                (tenant) =>
-                                                                    tenant.id,
-                                                            ),
-                                                        );
-                                                        setEditing(user);
-                                                    }}
-                                                >
-                                                    Gestisci aziende
-                                                </DropdownMenuItem>
-                                                {user.id !== auth.user.id && (
-                                                    <>
-                                                        {!user.is_platform_admin && (
-                                                            <DropdownMenuItem
-                                                                onSelect={() => {
-                                                                    change.clearErrors();
-                                                                    setAction({
-                                                                        user,
-                                                                        kind: 'promote',
-                                                                    });
-                                                                }}
-                                                            >
-                                                                Abilita accesso
-                                                                ad
-                                                                Amministrazione
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                        <DropdownMenuItem
-                                                            onSelect={() => {
-                                                                change.clearErrors();
-                                                                change.setData(
-                                                                    'is_active',
-                                                                    !user.is_active,
-                                                                );
-                                                                setAction({
-                                                                    user,
-                                                                    kind: user.is_active
-                                                                        ? 'block'
-                                                                        : 'activate',
-                                                                });
-                                                            }}
-                                                        >
-                                                            {user.is_active
-                                                                ? 'Blocca'
-                                                                : 'Riattiva'}
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            variant="destructive"
-                                                            onSelect={() => {
-                                                                change.clearErrors();
-                                                                setAction({
-                                                                    user,
-                                                                    kind: 'delete',
-                                                                });
-                                                            }}
-                                                        >
-                                                            Elimina
-                                                        </DropdownMenuItem>
-                                                    </>
-                                                )}
-                                            </DropdownMenuGroup>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                )}
-                            </div>
-                        ))}
+                                </li>
+                            ))}
+                        </ul>
                     </CardContent>
                 </Card>
                 <Dialog

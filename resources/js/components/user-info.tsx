@@ -4,12 +4,14 @@ import type { User } from '@/types';
 
 export function UserAvatar({
     user,
+    className,
 }: {
     user: { name: string; avatar?: string | null };
+    className?: string;
 }) {
     const getInitials = useInitials();
     return (
-        <Avatar>
+        <Avatar className={className}>
             <AvatarImage
                 src={user.avatar ?? undefined}
                 alt={user.name}

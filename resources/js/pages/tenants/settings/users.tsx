@@ -65,7 +65,8 @@ export default function TenantUsers({
                                         data-disabled={processing}
                                     >
                                         <FieldLabel htmlFor="invite-email">
-                                            Email
+                                            Email{' '}
+                                            <span aria-hidden="true">*</span>
                                         </FieldLabel>
                                         <Input
                                             id="invite-email"

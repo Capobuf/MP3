@@ -40,6 +40,17 @@ class MultitenancyTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->component('platform/users')->has('users', 2)->has('tenants', 0));
     }
 
+    public function test_users_list_includes_avatar_urls_without_exposing_storage_paths(): void
+    {
+        $superuser = $this->createSuperuser();
+        $superuser->forceFill(['avatar_path' => 'avatars/test.jpg'])->save();
+
+        $this->actingAs($superuser)->get(route('platform.users.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('users.0.avatar', $superuser->avatar)
+                ->missing('users.0.avatar_path'));
+    }
+
     public function test_superuser_can_create_and_rename_a_tenant_without_changing_its_slug(): void
     {
         $superuser = $this->createSuperuser();
