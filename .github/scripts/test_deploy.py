@@ -247,6 +247,24 @@ class ReleaseTest(unittest.TestCase):
             release.deploy(self.config)
         self.assertEqual((self.base / 'current').resolve(), self.base)
 
+    def test_enabled_migrations_run_in_maintenance_before_release_activation(self):
+        self.prepared()
+        self.package({'database/migrations/new.php': 'new'})
+        self.config['MIGRATE'] = True
+        def run(command, cwd=None):
+            if 'migrate' in command:
+                self.assertEqual((self.base / 'current').resolve(), self.base)
+                self.assertIn('--force', command)
+                self.assertIn('--no-interaction', command)
+        self.mocks[3].side_effect = run
+        release.deploy(self.config)
+        commands = [call.args[0] for call in self.mocks[3].call_args_list]
+        positions = [next(i for i, command in enumerate(commands) if step in command and '-l' not in command)
+                     for step in ('down', 'migrate', 'optimize', 'reload', 'up')]
+        self.assertEqual(positions, sorted(positions))
+        self.assertEqual((self.base / 'current').resolve(), self.base / 'releases' / self.config['RELEASE'])
+        self.mocks[-2].assert_called_once()
+
     def test_failure_after_migration_does_not_roll_back_schema_or_code(self):
         self.prepared()
         self.package({'database/migrations/new.php': 'new'})
