@@ -8,17 +8,17 @@ export default function Dashboard({
 }) {
     return (
         <>
-            <Head title="Accesso ambiente" />
+            <Head title="Accesso azienda" />
             <div className="page-shell">
                 <h1 className="page-title">
                     {invalidMemberships
                         ? 'Assegnazione da correggere'
-                        : 'Nessun ambiente assegnato'}
+                        : 'Nessuna azienda assegnata'}
                 </h1>
                 <p className="text-sm text-muted-foreground">
                     {invalidMemberships
-                        ? 'Il tuo account aziendale risulta associato a più ambienti. Contatta un amministratore della piattaforma per correggere il profilo o le assegnazioni.'
-                        : 'Il tuo account è abilitato, ma non è associato a un ambiente. Contatta un amministratore.'}
+                        ? 'Il tuo account aziendale risulta associato a più aziende. Contatta un amministratore di Obake per correggere il profilo o le assegnazioni.'
+                        : 'Il tuo account è abilitato, ma non è associato a un’azienda. Contatta un amministratore.'}
                 </p>
             </div>
         </>
@@ -26,5 +26,5 @@ export default function Dashboard({
 }
 
 Dashboard.layout = {
-    breadcrumbs: [{ title: 'Il mio ambiente', href: dashboard() }],
+    breadcrumbs: [{ title: 'La mia azienda', href: dashboard() }],
 };

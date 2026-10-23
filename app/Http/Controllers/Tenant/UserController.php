@@ -34,7 +34,7 @@ class UserController extends Controller
             $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             if ($user->canManagePlatform() || $user->tenants()->where('tenants.id', '!=', $tenant->id)->exists()) {
                 throw ValidationException::withMessages([
-                    'email' => 'Questo account non può essere invitato in questo ambiente. Contatta l’amministratore della piattaforma.',
+                    'email' => 'Questo account non può essere invitato in questa azienda. Contatta l’amministratore di Obake.',
                 ]);
             }
             if ($user->tenants()->whereKey($tenant->id)->exists()) {
@@ -45,7 +45,7 @@ class UserController extends Controller
             return [$user, $new, true];
         });
         if (! $attached) {
-            Inertia::flash('toast', ['type' => 'info', 'message' => 'L’utente appartiene già a questo ambiente. Può usare “Password dimenticata?” per recuperare l’accesso.']);
+            Inertia::flash('toast', ['type' => 'info', 'message' => 'L’utente appartiene già a questa azienda. Può usare “Password dimenticata?” per recuperare l’accesso.']);
 
             return to_route('tenant.users.index', $tenant);
         }
@@ -66,8 +66,8 @@ class UserController extends Controller
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => $user->is_super_admin
-            ? 'Il super admin conserva l’accesso a tutti gli ambienti.'
-            : 'Accesso all’ambiente rimosso.']);
+            ? 'Il super admin conserva l’accesso a tutte le aziende.'
+            : 'Accesso all’azienda rimosso.']);
 
         return $request->user()->is($user) && ! $user->is_super_admin
             ? to_route('dashboard')

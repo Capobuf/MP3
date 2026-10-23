@@ -129,7 +129,7 @@ class BudgetController extends Controller
         }
         $source = $tenant->{$type.'s'}()->whereKey($data['source_id'])->lockForUpdate()->first();
         if ($source === null) {
-            throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La sorgente non appartiene a questo ambiente o è stata eliminata.']);
+            throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La sorgente non appartiene a questa azienda o è stata eliminata.']);
         }
         AnnualBudget::validateSource($tenant, $year, $source);
         $existing = $year->entries()->where($type.'_id', $source->id)->first();

@@ -446,7 +446,7 @@ export function DataImport({
                     {format === 'xlsx' ? 'righe' : 'record'}.{' '}
                     {format === 'xlsx'
                         ? 'Compila il foglio Dati. Correggi eventuali errori nel file e caricalo nuovamente.'
-                        : 'L’ambiente destinatario deve essere vuoto.'}
+                        : 'L’azienda destinataria deve essere vuota.'}
                 </p>
                 {file && (
                     <p className="text-sm break-all">
@@ -471,7 +471,7 @@ export function DataImport({
                     {preview.meta && (
                         <p className="text-sm">
                             Origine: {preview.meta.name} ({preview.meta.slug}).
-                            Il nome dell’ambiente destinatario sarà conservato.
+                            Il nome dell’azienda destinataria sarà conservato.
                         </p>
                     )}
                     <div className="flex flex-wrap gap-2">

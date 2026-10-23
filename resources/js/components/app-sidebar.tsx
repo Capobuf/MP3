@@ -27,8 +27,8 @@ export function AppSidebar() {
     const homeLabel = currentTenant
         ? `Vai alla home di ${currentTenant.name}`
         : auth.canManagePlatform
-          ? 'Vai a Impostazioni Piattaforma'
-          : 'Il mio ambiente';
+          ? 'Vai ad Amministrazione'
+          : 'La mia azienda';
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -65,7 +65,7 @@ export function AppSidebar() {
                 {currentTenant && (
                     <NavMain
                         items={getAdministrativeNavItems(currentTenant, false)}
-                        label="Amministrazione"
+                        label="Azienda"
                     />
                 )}
             </SidebarContent>

@@ -4,7 +4,7 @@ import type { PropsWithChildren } from 'react';
 import { Button } from '@/components/ui/button';
 
 const sections = [
-    { title: 'Ambienti', href: '/platform', icon: Building2 },
+    { title: 'Aziende', href: '/platform', icon: Building2 },
     { title: 'Utenti', href: '/platform/settings/users', icon: Users },
     { title: 'Email', href: '/platform/settings/email', icon: Mail },
     { title: 'Sync', href: '/platform/settings/sync', icon: RefreshCw },
@@ -20,16 +20,13 @@ export default function PlatformSettingsLayout({
     return (
         <div className="page-shell">
             <header>
-                <h1 className="page-title">Impostazioni Piattaforma</h1>
+                <h1 className="page-title">Amministrazione</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    Gestisci ambienti, utenti e configurazioni condivise della
-                    piattaforma.
+                    Gestisci aziende, utenti e configurazioni condivise di
+                    Obake.
                 </p>
             </header>
-            <nav
-                aria-label="Impostazioni Piattaforma"
-                className="flex flex-wrap gap-2"
-            >
+            <nav aria-label="Amministrazione" className="flex flex-wrap gap-2">
                 {sections.map(({ title, href, icon: Icon }) => (
                     <Button
                         key={href}

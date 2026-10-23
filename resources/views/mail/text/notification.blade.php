@@ -5,7 +5,7 @@ Obake
 {!! $body !!}
 
 @if (filled($organizationName ?? null))
-Organizzazione: {!! $organizationName !!}
+Azienda: {!! $organizationName !!}
 @endif
 @if (filled($actionText ?? null) && filled($actionUrl ?? null))
 {!! $actionText !!}: {!! $actionUrl !!}

@@ -65,7 +65,7 @@ class ExpenseRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'budget_year_id.exists' => 'Il Budget di partenza non è disponibile per questo ambiente e anno. Conserva l’anno del Budget.',
+            'budget_year_id.exists' => 'Il Budget di partenza non è disponibile per questa azienda e quest’anno. Conserva l’anno del Budget.',
             'lines.*.description.required' => 'Inserisci la descrizione della riga.',
             'lines.*.type.in' => 'Seleziona allocato o effettivo.',
             'lines.*.unit_price.required' => 'Inserisci il prezzo unitario della riga.',
@@ -75,11 +75,11 @@ class ExpenseRequest extends FormRequest
             'lines.*.period_starts_on.required_with' => 'Indica anche la data iniziale della condizione economica.',
             'lines.*.period_ends_on.required_with' => 'Indica anche la data finale della condizione economica.',
             'lines.*.period_ends_on.after_or_equal' => 'La data finale deve essere uguale o successiva alla data iniziale.',
-            '*.exists' => 'Il collegamento selezionato non appartiene a questo ambiente.',
+            '*.exists' => 'Il collegamento selezionato non appartiene a questa azienda.',
             '*.regex' => 'Inserisci un importo con al massimo due decimali (es. 1250.50).',
             'title.required' => 'Inserisci la descrizione della spesa.',
             'year.required' => 'Seleziona l’anno di imputazione.',
-            'tenant_id.prohibited' => 'L’ambiente è determinato dal server.',
+            'tenant_id.prohibited' => 'L’azienda è determinata dal server.',
         ];
     }
 }

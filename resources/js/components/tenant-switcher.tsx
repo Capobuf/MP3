@@ -26,7 +26,7 @@ export function TenantSwitcher() {
                 title={
                     currentTenant?.name ??
                     auth.tenants[0]?.name ??
-                    'Nessun ambiente assegnato'
+                    'Nessuna azienda assegnata'
                 }
             >
                 <Building2 className="size-4 shrink-0" aria-hidden="true" />
@@ -34,8 +34,8 @@ export function TenantSwitcher() {
                     {currentTenant?.name ??
                         auth.tenants[0]?.name ??
                         (auth.canManagePlatform
-                            ? 'Piattaforma'
-                            : 'Nessun ambiente assegnato')}
+                            ? 'Amministrazione'
+                            : 'Nessuna azienda assegnata')}
                 </span>
             </div>
         );
@@ -51,8 +51,8 @@ export function TenantSwitcher() {
                             className="h-12 rounded-xl border border-sidebar-border bg-card p-2 shadow-xs group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent"
                             aria-label={
                                 currentTenant
-                                    ? `Cambia ambiente: ${currentTenant.name}`
-                                    : 'Seleziona ambiente'
+                                    ? `Cambia azienda: ${currentTenant.name}`
+                                    : 'Seleziona azienda'
                             }
                         >
                             <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent">
@@ -63,8 +63,7 @@ export function TenantSwitcher() {
                             </div>
                             <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                                 <span className="truncate text-base font-medium">
-                                    {currentTenant?.name ??
-                                        'Seleziona ambiente'}
+                                    {currentTenant?.name ?? 'Seleziona azienda'}
                                 </span>
                             </div>
                             <ChevronsUpDown
@@ -78,10 +77,10 @@ export function TenantSwitcher() {
                         align="start"
                         side={isMobile ? 'bottom' : 'right'}
                     >
-                        <DropdownMenuLabel>Ambienti</DropdownMenuLabel>
+                        <DropdownMenuLabel>Aziende</DropdownMenuLabel>
                         {auth.tenants.length === 0 ? (
                             <DropdownMenuItem disabled>
-                                Nessun ambiente disponibile
+                                Nessuna azienda disponibile
                             </DropdownMenuItem>
                         ) : (
                             auth.tenants.map((tenant) => (
@@ -118,7 +117,7 @@ export function TenantSwitcher() {
                                         onClick={() => setOpenMobile(false)}
                                     >
                                         <Settings aria-hidden="true" />
-                                        Impostazioni Piattaforma
+                                        Amministrazione
                                     </Link>
                                 </DropdownMenuItem>
                             </>

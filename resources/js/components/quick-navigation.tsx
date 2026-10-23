@@ -127,7 +127,7 @@ export function QuickNavigation() {
             ).flatMap((item) => [item, ...(item.items ?? [])]),
         },
         {
-            heading: 'Ambienti',
+            heading: 'Aziende',
             items: (auth.canManagePlatform ? auth.tenants : []).map(
                 (tenant) => ({
                     title: tenant.name,
@@ -202,7 +202,7 @@ export function QuickNavigation() {
                 open={open}
                 onOpenChange={setOpen}
                 title="Ricerca rapida"
-                description="Cerca tra le pagine e i dati dell’ambiente corrente, in tutti gli anni."
+                description="Cerca tra le pagine e i dati dell’azienda corrente, in tutti gli anni."
             >
                 <CommandInput
                     value={query}

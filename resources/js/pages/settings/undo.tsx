@@ -62,7 +62,7 @@ export default function UndoSettings() {
                 )}
             </Form>
             <p className="text-sm text-muted-foreground">
-                La cronologia conserva fino a 50 operazioni per ambiente per 24
+                La cronologia conserva fino a 50 operazioni per azienda per 24
                 ore. Nei campi di testo Ctrl+Z continua ad annullare la
                 digitazione. Se altri utenti hanno modificato i dati,
                 l’annullamento viene bloccato per preservare i loro

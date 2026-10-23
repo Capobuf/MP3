@@ -18,9 +18,7 @@ export function getPrimaryNavItems(
     if (!tenant) {
         return [
             {
-                title: canManagePlatform
-                    ? 'Impostazioni Piattaforma'
-                    : 'Il mio ambiente',
+                title: canManagePlatform ? 'Amministrazione' : 'La mia azienda',
                 href: canManagePlatform ? '/platform' : '/dashboard',
                 icon: canManagePlatform ? Settings : LayoutGrid,
             },
@@ -79,7 +77,7 @@ export function getAdministrativeNavItems(
         ...(tenant
             ? [
                   {
-                      title: 'Impostazioni ambiente',
+                      title: 'Impostazioni azienda',
                       href: `/t/${tenant.slug}/settings`,
                       icon: Settings,
                   },
@@ -88,7 +86,7 @@ export function getAdministrativeNavItems(
         ...(canManagePlatform
             ? [
                   {
-                      title: 'Impostazioni Piattaforma',
+                      title: 'Amministrazione',
                       href: '/platform',
                       icon: Settings,
                   },

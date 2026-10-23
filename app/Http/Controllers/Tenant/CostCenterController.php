@@ -39,7 +39,7 @@ class CostCenterController extends Controller
             'parent_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)->whereNull('parent_id')],
         ], [
             'name.required' => 'Inserisci il nome del Centro di Costo.',
-            'parent_id.exists' => 'Seleziona un centro padre di primo livello di questo ambiente.',
+            'parent_id.exists' => 'Seleziona un centro padre di primo livello di questa azienda.',
         ]);
         if (! empty($data['parent_id']) && $record !== null &&
             ((int) $data['parent_id'] === $record->id || $record->children()->exists())) {

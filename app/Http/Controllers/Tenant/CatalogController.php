@@ -169,7 +169,7 @@ class CatalogController extends Controller
 
         $messages = [
             'name.required' => 'Inserisci il nome.',
-            '*.exists' => 'Il collegamento selezionato non appartiene a questo ambiente.',
+            '*.exists' => 'Il collegamento selezionato non appartiene a questa azienda.',
             '*.regex' => 'Inserisci un importo con massimo due decimali.',
             'ends_on.after_or_equal' => 'La data finale deve essere uguale o successiva alla data iniziale.',
             'email.email' => 'Inserisci un indirizzo email valido.',

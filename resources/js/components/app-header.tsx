@@ -68,7 +68,7 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
         : '/platform';
     const homeLabel = currentTenant
         ? `Vai alla home di ${currentTenant.name}`
-        : 'Vai a Impostazioni Piattaforma';
+        : 'Vai ad Amministrazione';
     const { isCurrentUrl, whenCurrentUrl } = useCurrentUrl();
 
     return (

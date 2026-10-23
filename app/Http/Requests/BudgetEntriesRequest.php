@@ -38,6 +38,6 @@ class BudgetEntriesRequest extends FormRequest
     /** @return array<string, string> */
     public function messages(): array
     {
-        return ['*.exists' => 'Il collegamento non appartiene a questo ambiente.', '*.regex' => 'Inserisci un importo con massimo due decimali.'];
+        return ['*.exists' => 'Il collegamento non appartiene a questa azienda.', '*.regex' => 'Inserisci un importo con massimo due decimali.'];
     }
 }

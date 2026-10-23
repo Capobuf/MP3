@@ -62,12 +62,12 @@ function TenantChoices({
     return (
         <FieldSet disabled={disabled}>
             <FieldLegend>
-                Ambienti {single ? '(massimo uno)' : '(facoltativi)'}
+                Aziende {single ? '(massimo una)' : '(facoltative)'}
             </FieldLegend>
             <FieldGroup className="max-h-60 overflow-y-auto">
                 {tenants.length === 0 && (
                     <p className="text-sm text-muted-foreground">
-                        Nessun ambiente disponibile.
+                        Nessuna azienda disponibile.
                     </p>
                 )}
                 {tenants.map((tenant) => (
@@ -117,7 +117,7 @@ export default function PlatformUsers({
     const change = useForm({ is_active: true, confirmed: true });
     const actionLabel =
         action?.kind === 'promote'
-            ? 'Abilita accesso Piattaforma'
+            ? 'Abilita accesso ad Amministrazione'
             : action?.kind === 'delete'
               ? 'Elimina account'
               : action?.kind === 'block'
@@ -126,7 +126,7 @@ export default function PlatformUsers({
 
     return (
         <>
-            <Head title="Utenti · Impostazioni Piattaforma" />
+            <Head title="Utenti · Amministrazione" />
             <PlatformSettingsLayout>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -147,9 +147,9 @@ export default function PlatformUsers({
                             <DialogHeader>
                                 <DialogTitle>Invita utente</DialogTitle>
                                 <DialogDescription className="break-words">
-                                    Invita un amministratore della piattaforma.
-                                    Potrà accedere alle impostazioni di Obake e
-                                    agli ambienti selezionati.
+                                    Invita un amministratore di Obake. Potrà
+                                    accedere alle impostazioni di Obake e alle
+                                    aziende selezionate.
                                 </DialogDescription>
                             </DialogHeader>
                             <form
@@ -242,9 +242,9 @@ export default function PlatformUsers({
                                 </FieldGroup>
                                 <p className="text-sm text-muted-foreground">
                                     L'invito invia un link per impostare la
-                                    password. Gli amministratori della
-                                    piattaforma possono modificare le
-                                    assegnazioni degli ambienti.
+                                    password. Gli amministratori di Obake
+                                    possono modificare le assegnazioni delle
+                                    aziende.
                                 </p>
                                 <DialogFooter>
                                     <Button disabled={invite.processing}>
@@ -275,7 +275,7 @@ export default function PlatformUsers({
                                             {user.is_super_admin
                                                 ? 'Super admin'
                                                 : user.is_platform_admin
-                                                  ? 'Piattaforma'
+                                                  ? 'Amministrazione'
                                                   : 'Aziendale'}
                                         </Badge>
                                         <Badge
@@ -297,7 +297,7 @@ export default function PlatformUsers({
                                     </div>
                                     <p className="text-sm text-muted-foreground">
                                         {user.is_super_admin
-                                            ? 'Tutti gli ambienti'
+                                            ? 'Tutte le aziende'
                                             : user.tenants.length
                                               ? user.tenants
                                                     .map(
@@ -305,8 +305,8 @@ export default function PlatformUsers({
                                                     )
                                                     .join(', ')
                                               : user.is_platform_admin
-                                                ? 'Solo accesso Piattaforma'
-                                                : 'Nessun ambiente assegnato'}
+                                                ? 'Solo accesso ad Amministrazione'
+                                                : 'Nessuna azienda assegnata'}
                                     </p>
                                     {!user.is_super_admin &&
                                         !user.is_platform_admin &&
@@ -315,11 +315,11 @@ export default function PlatformUsers({
                                                 <AlertTriangle aria-hidden="true" />
                                                 <AlertDescription>
                                                     Assegnazione da correggere:
-                                                    accesso agli ambienti
+                                                    accesso alle aziende
                                                     sospeso. Mantieni al massimo
-                                                    un ambiente oppure conferma
-                                                    l’abilitazione a
-                                                    Piattaforma.
+                                                    un’azienda oppure conferma
+                                                    l’abilitazione ad
+                                                    Amministrazione.
                                                 </AlertDescription>
                                             </Alert>
                                         )}
@@ -350,7 +350,7 @@ export default function PlatformUsers({
                                                         setEditing(user);
                                                     }}
                                                 >
-                                                    Gestisci ambienti
+                                                    Gestisci aziende
                                                 </DropdownMenuItem>
                                                 {user.id !== auth.user.id && (
                                                     <>
@@ -365,7 +365,8 @@ export default function PlatformUsers({
                                                                 }}
                                                             >
                                                                 Abilita accesso
-                                                                Piattaforma
+                                                                ad
+                                                                Amministrazione
                                                             </DropdownMenuItem>
                                                         )}
                                                         <DropdownMenuItem
@@ -417,12 +418,12 @@ export default function PlatformUsers({
                 >
                     <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle>Gestisci ambienti</DialogTitle>
+                            <DialogTitle>Gestisci aziende</DialogTitle>
                             <DialogDescription className="break-words">
                                 {editing?.email}.{' '}
                                 {editing?.is_platform_admin
-                                    ? 'Scegli gli ambienti assegnati. L’accesso Piattaforma rimane abilitato.'
-                                    : 'Scegli al massimo un ambiente. Se ne scegli un altro, sostituirà quello attuale.'}
+                                    ? 'Scegli le aziende assegnate. L’accesso ad Amministrazione rimane abilitato.'
+                                    : 'Scegli al massimo un’azienda. Se ne scegli un’altra, sostituirà quella attuale.'}
                             </DialogDescription>
                         </DialogHeader>
                         <form
@@ -453,7 +454,7 @@ export default function PlatformUsers({
                             <DialogFooter>
                                 <Button disabled={membership.processing}>
                                     {membership.processing && <Spinner />}Salva
-                                    ambienti
+                                    aziende
                                 </Button>
                             </DialogFooter>
                         </form>
@@ -471,11 +472,11 @@ export default function PlatformUsers({
                             <AlertDialogDescription className="break-words">
                                 {action?.user.email}.{' '}
                                 {action?.kind === 'promote'
-                                    ? 'Confermi l’accesso alle impostazioni globali di Obake, inclusa la gestione di utenti e assegnazioni degli ambienti? Gli ambienti attuali e lo stato di blocco saranno conservati.'
+                                    ? 'Confermi l’accesso alle impostazioni globali di Obake, inclusa la gestione di utenti e assegnazioni delle aziende? Le aziende attuali e lo stato di blocco saranno conservati.'
                                     : action?.kind === 'delete'
                                       ? 'L’eliminazione è definitiva e consentita solo se non ci sono dati storici collegati. Le credenziali e le assegnazioni saranno rimosse.'
                                       : action?.kind === 'block'
-                                        ? 'L’utente perderà l’accesso alla piattaforma e a tutti gli ambienti, anche dalle sessioni aperte. Dati e assegnazioni saranno conservati.'
+                                        ? 'L’utente perderà l’accesso ad Amministrazione e a tutte le aziende, anche dalle sessioni aperte. Dati e assegnazioni saranno conservati.'
                                         : 'L’utente potrà accedere nuovamente secondo il profilo e le assegnazioni attuali.'}
                             </AlertDialogDescription>
                         </AlertDialogHeader>

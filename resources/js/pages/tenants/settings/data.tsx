@@ -36,8 +36,7 @@ export default function TenantData({
                         {tenant.name}
                     </p>
                     <h1 className="page-title">
-                        Impostazioni ambiente — Importazione ed esportazione
-                        dati
+                        Impostazioni azienda — Importazione ed esportazione dati
                     </h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
@@ -52,7 +51,7 @@ export default function TenantData({
                 </Alert>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Esporta dati del tenant</CardTitle>
+                        <CardTitle>Esporta dati dell’azienda</CardTitle>
                         <CardDescription>
                             Un singolo CSV tecnico versionato per trasferire
                             fornitori, contratti, progetti, spese, righe
@@ -71,9 +70,9 @@ export default function TenantData({
                 </Card>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Importa dati nel tenant</CardTitle>
+                        <CardTitle>Importa dati nell’azienda</CardTitle>
                         <CardDescription>
-                            Seleziona un ambiente vuoto dalla gestione ambienti.
+                            Seleziona un’azienda vuota dalla gestione aziende.
                             Valida il CSV, controlla i conteggi e conferma
                             esplicitamente il trasferimento.
                         </CardDescription>
@@ -81,12 +80,12 @@ export default function TenantData({
                     <CardContent className="flex flex-col gap-4">
                         {!empty && (
                             <Alert variant="destructive">
-                                <AlertTitle>Ambiente già popolato</AlertTitle>
+                                <AlertTitle>Azienda già popolata</AlertTitle>
                                 <AlertDescription>
-                                    L’importazione è disponibile soltanto in un
-                                    ambiente privo di dati gestionali. Crea o
-                                    seleziona un ambiente vuoto dalla
-                                    piattaforma.
+                                    L’importazione è disponibile soltanto in
+                                    un’azienda priva di dati gestionali. Crea o
+                                    seleziona un’azienda vuota da
+                                    Amministrazione.
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -104,5 +103,5 @@ export default function TenantData({
     );
 }
 TenantData.layout = {
-    breadcrumbs: [{ title: 'Impostazioni ambiente', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Impostazioni azienda', href: '/dashboard' }],
 };

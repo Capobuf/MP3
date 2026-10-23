@@ -88,18 +88,18 @@ class GoogleDrive
         $settings = PlatformDriveSetting::query()->find(1);
         try {
             if (! $settings?->token || ! $settings->account_id) {
-                throw new RuntimeException('Collega un account Google dalla pagina Sync della piattaforma.');
+                throw new RuntimeException('Collega un account Google dalla pagina Sync di Amministrazione.');
             }
             $client = $this->client();
             $client->setAccessToken($settings->token);
             if ($client->isAccessTokenExpired()) {
                 $refresh = $settings->token['refresh_token'] ?? null;
                 if (! $refresh) {
-                    throw new RuntimeException('Refresh token mancante: ricollega Google dalla piattaforma.');
+                    throw new RuntimeException('Refresh token mancante: ricollega Google da Amministrazione.');
                 }
                 $token = $client->fetchAccessTokenWithRefreshToken($refresh);
                 if (isset($token['error']) || empty($token['access_token'])) {
-                    throw new RuntimeException('Token Google scaduto o revocato: ricollega l’account dalla piattaforma.');
+                    throw new RuntimeException('Token Google scaduto o revocato: ricollega l’account da Amministrazione.');
                 }
                 $settings->token = [...$token, 'refresh_token' => $token['refresh_token'] ?? $refresh];
                 $settings->save();

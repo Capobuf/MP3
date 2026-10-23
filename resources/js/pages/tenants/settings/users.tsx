@@ -44,15 +44,15 @@ export default function TenantUsers({
                     <p className="text-sm text-muted-foreground">
                         {tenant.name}
                     </p>
-                    <h1 className="page-title">Impostazioni ambiente</h1>
+                    <h1 className="page-title">Impostazioni azienda</h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
                 <Card>
                     <CardHeader>
                         <CardTitle>Invita utente</CardTitle>
                         <CardDescription>
-                            Assegna l’accesso completo a questo ambiente. I
-                            nuovi utenti riceveranno un link per impostare la
+                            Assegna l’accesso completo a questa azienda. I nuovi
+                            utenti riceveranno un link per impostare la
                             password; chi ha già un account manterrà la propria.
                         </CardDescription>
                     </CardHeader>
@@ -89,11 +89,11 @@ export default function TenantUsers({
                 </Card>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Utenti dell’ambiente</CardTitle>
+                        <CardTitle>Utenti dell’azienda</CardTitle>
                         <CardDescription>
-                            La rimozione revoca solo l’accesso a questo
-                            ambiente. I super admin hanno sempre accesso a tutti
-                            gli ambienti.
+                            La rimozione revoca solo l’accesso a questa azienda.
+                            I super admin hanno sempre accesso a tutte le
+                            aziende.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4">
@@ -161,12 +161,12 @@ export default function TenantUsers({
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>
-                                Rimuovi accesso all’ambiente
+                                Rimuovi accesso all’azienda
                             </AlertDialogTitle>
                             <AlertDialogDescription>
                                 Rimuovere l’accesso di {removing?.email} a{' '}
-                                {tenant.name}? L’account e gli altri ambienti
-                                assegnati saranno conservati. Se rimuovi il tuo
+                                {tenant.name}? L’account e le altre aziende
+                                assegnate saranno conservati. Se rimuovi il tuo
                                 accesso, tornerai alla pagina del tuo account.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
@@ -204,7 +204,7 @@ export default function TenantUsers({
 
 TenantUsers.layout = {
     breadcrumbs: [
-        { title: 'Impostazioni ambiente', href: '/dashboard' },
+        { title: 'Impostazioni azienda', href: '/dashboard' },
         { title: 'Utenti', href: '/dashboard' },
     ],
 };

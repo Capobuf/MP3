@@ -99,7 +99,7 @@ class BackupManager
             $disk->makeDirectory('.pending');
             $path = $disk->path('.pending/'.$name);
             if ($tenant === null) {
-                $stage = 'dump MySQL e file della piattaforma';
+                $stage = 'dump MySQL e file di Obake';
                 app(PlatformBackup::class)->create($name);
             } else {
                 app(TenantBackup::class)->create($tenant, $path);
