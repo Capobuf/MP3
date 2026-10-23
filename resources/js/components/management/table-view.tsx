@@ -224,22 +224,26 @@ export function TableFilters({
 export function TableColumnSettings({
     children,
     disabled = false,
+    iconOnly = false,
 }: {
     children: ReactNode;
     disabled?: boolean;
+    iconOnly?: boolean;
 }) {
     return (
         <Popover>
             <PopoverTrigger asChild>
                 <Button
                     type="button"
-                    variant="outline"
+                    variant={iconOnly ? 'ghost' : 'outline'}
+                    size={iconOnly ? 'icon' : 'default'}
+                    className={iconOnly ? 'size-8' : undefined}
                     disabled={disabled}
                     aria-label="Colonne"
                     title="Colonne"
                 >
                     <Settings2 data-icon="inline-start" />
-                    Colonne
+                    {!iconOnly && 'Colonne'}
                 </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -259,14 +263,16 @@ export function TableColumnSettings({
 export function TableViewSettings<T>({
     view,
     disabled = false,
+    iconOnly = false,
 }: {
     view: TableView<T>;
     disabled?: boolean;
+    iconOnly?: boolean;
 }) {
     'use no memo'; // TanStack v8 exposes mutable table and column instances.
 
     return (
-        <TableColumnSettings disabled={disabled}>
+        <TableColumnSettings disabled={disabled} iconOnly={iconOnly}>
             <TableColumnOrder
                 disabled={disabled}
                 columns={view.table.getAllLeafColumns().map((column) => ({
@@ -296,16 +302,25 @@ export function TableViewSettings<T>({
 export function TableViewHeader<T>({
     view,
     disabled = false,
+    settingsColumn = 'actions',
 }: {
     view: TableView<T>;
     disabled?: boolean;
+    settingsColumn?: string | null;
 }) {
     'use no memo'; // TanStack v8 exposes mutable table and column instances.
+
+    const columns = view.table.getVisibleLeafColumns();
+    const controlsColumn =
+        settingsColumn === null
+            ? undefined
+            : (columns.find((column) => column.id === settingsColumn)?.id ??
+              columns.at(-1)?.id);
 
     return (
         <TableHeader className="bg-muted [&_th]:font-semibold">
             <TableRow>
-                {view.table.getVisibleLeafColumns().map((column) => {
+                {columns.map((column) => {
                     const definition = view.columns.find(
                         (item) => item.id === column.id,
                     )!;
@@ -322,30 +337,48 @@ export function TableViewHeader<T>({
                                       : undefined
                             }
                         >
-                            {column.getCanSort() ? (
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={disabled}
-                                    onClick={column.getToggleSortingHandler()}
-                                    className={cn(
-                                        definition.className?.includes(
-                                            'text-right',
-                                        ) && 'ml-auto',
-                                    )}
-                                    title={`Ordina per ${definition.label}`}
-                                >
-                                    {definition.label}
-                                    {direction === 'asc' ? (
-                                        <ArrowUp data-icon="inline-end" />
-                                    ) : direction === 'desc' ? (
-                                        <ArrowDown data-icon="inline-end" />
-                                    ) : null}
-                                </Button>
-                            ) : (
-                                (definition.header ?? definition.label)
-                            )}
+                            <div
+                                className={cn(
+                                    'flex items-center gap-1',
+                                    definition.className?.includes(
+                                        'text-right',
+                                    ) && 'justify-end',
+                                )}
+                            >
+                                {column.getCanSort() ? (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={disabled}
+                                        onClick={column.getToggleSortingHandler()}
+                                        className={cn(
+                                            definition.className?.includes(
+                                                'text-right',
+                                            ) && 'ml-auto',
+                                        )}
+                                        title={`Ordina per ${definition.label}`}
+                                    >
+                                        {definition.label}
+                                        {direction === 'asc' ? (
+                                            <ArrowUp data-icon="inline-end" />
+                                        ) : direction === 'desc' ? (
+                                            <ArrowDown data-icon="inline-end" />
+                                        ) : null}
+                                    </Button>
+                                ) : (
+                                    (definition.header ?? definition.label)
+                                )}
+                                {column.id === controlsColumn && (
+                                    <span className="ml-auto shrink-0">
+                                        <TableViewSettings
+                                            view={view}
+                                            disabled={disabled}
+                                            iconOnly
+                                        />
+                                    </span>
+                                )}
+                            </div>
                         </TableHead>
                     );
                 })}

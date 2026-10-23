@@ -10,7 +10,6 @@ import {
     FileText,
     FolderKanban,
 } from 'lucide-react';
-import { RecordMoreActions } from '@/components/management/record-more-actions';
 import {
     InlineEdit,
     saveInlineRecord,
@@ -362,18 +361,12 @@ export default function CatalogDetail({
                     disabled={tableBusy}
                 />
             ) : (
-                <>
-                    <RecordMoreActions
-                        href={`${path}/${record.id}/edit`}
-                        disabled={tableBusy}
-                    />
-                    <DeleteRecord
-                        url={`${path}/${record.id}`}
-                        redirect={path}
-                        label={record.display_name ?? record.name ?? ''}
-                        disabled={tableBusy}
-                    />
-                </>
+                <DeleteRecord
+                    url={`${path}/${record.id}`}
+                    redirect={path}
+                    label={record.display_name ?? record.name ?? ''}
+                    disabled={tableBusy}
+                />
             )}
             <SpreadsheetActions
                 slug={tenant.slug}

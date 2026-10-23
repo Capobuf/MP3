@@ -207,7 +207,10 @@ export default function ContractSchedule({
                                     href={href}
                                 />
                                 <Table>
-                                    <TableViewHeader view={view} />
+                                    <TableViewHeader
+                                        view={view}
+                                        settingsColumn={null}
+                                    />
                                     <TableBody>
                                         {view.table
                                             .getRowModel()

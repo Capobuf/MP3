@@ -21,7 +21,6 @@ import {
     TableFilters,
     TableViewHeader,
     TableViewCells,
-    TableViewSettings,
 } from '@/components/management/table-view';
 import { DeleteRecord } from '@/components/management/delete-record';
 import { CostCenterTags } from '@/components/management/cost-center-tags';
@@ -388,10 +387,6 @@ export default function CatalogPage({
                                     </Button>
                                 </form>
                             </TableFilters>
-                            <TableViewSettings
-                                view={view}
-                                disabled={deleting !== null}
-                            />
                         </div>
                         {records.data.length === 0 ? (
                             <Empty className="border">
@@ -864,8 +859,7 @@ export default function CatalogPage({
                                                                                 <Link
                                                                                     href={`${path}/${record.id}/edit`}
                                                                                 >
-                                                                                    Gestisci
-                                                                                    collegamenti
+                                                                                    Modifica
                                                                                 </Link>
                                                                             </DropdownMenuItem>
                                                                             <DropdownMenuSeparator />

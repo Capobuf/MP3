@@ -16,7 +16,7 @@ export function ContractExpiryChart({
 }) {
     return (
         <AnalyticsCard
-            title="Scadenze contrattuali"
+            title="Scadenze Contrattuali"
             controls={
                 <Button variant="outline" size="sm" asChild>
                     <Link

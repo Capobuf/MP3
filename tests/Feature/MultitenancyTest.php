@@ -77,6 +77,23 @@ class MultitenancyTest extends TestCase
         $this->assertSame('acme', $tenant->slug);
     }
 
+    public function test_superuser_can_rename_a_tenant_inline_and_invalid_names_are_rejected(): void
+    {
+        $tenant = Tenant::create(['name' => 'Acme', 'slug' => 'acme']);
+        $this->actingAs($this->createSuperuser())
+            ->patchJson(route('platform.tenants.update', $tenant), ['name' => 'Acme Group', 'slug' => 'changed-slug'])
+            ->assertOk()->assertJsonPath('message', 'Azienda aggiornata correttamente.');
+
+        $this->assertSame('Acme Group', $tenant->refresh()->name);
+        $this->assertSame('acme', $tenant->slug);
+
+        foreach (['', str_repeat('a', 256)] as $name) {
+            $this->patchJson(route('platform.tenants.update', $tenant), ['name' => $name])
+                ->assertUnprocessable()->assertJsonValidationErrors('name');
+            $this->assertSame('Acme Group', $tenant->refresh()->name);
+        }
+    }
+
     public function test_superuser_can_invite_a_standard_unverified_user_with_an_unknown_password(): void
     {
         Notification::fake();

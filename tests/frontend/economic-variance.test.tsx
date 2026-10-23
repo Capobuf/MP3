@@ -85,7 +85,7 @@ describe('Economic variance', () => {
             expect(editor).toContain(
                 actual === null ? 'Da completare' : money(actual),
             );
-            expect(editor.slice(editor.indexOf('Scostamento ('))).toContain(
+            expect(editor.slice(editor.indexOf('Scostamento'))).toContain(
                 money(variance),
             );
             expect(editor).not.toContain('+');
@@ -99,7 +99,7 @@ describe('Economic variance', () => {
                     readOnly
                 />,
             );
-            const summary = html.slice(html.indexOf('Scostamento ('));
+            const summary = html.slice(html.indexOf('Scostamento'));
             expect(summary).toContain(money(variance));
             expect(summary).toContain(varianceTextClass(variance));
             expect(summary).not.toContain('scostamento provvisorio');
@@ -132,7 +132,7 @@ describe('Economic variance', () => {
                 },
                 lines,
             );
-            const summary = html.slice(html.indexOf('Scostamento ('));
+            const summary = html.slice(html.indexOf('Scostamento'));
             expect(summary).toContain('Da completare');
             expect(summary).not.toContain('-100,00');
         },
@@ -160,7 +160,7 @@ describe('Economic variance', () => {
         expect(editorSummary(expense, [])).toContain(money(-20));
         const deleted = editorSummary({ ...expense, lines: draft }, []);
         expect(deleted).toContain('Da completare');
-        expect(deleted.slice(deleted.indexOf('Scostamento ('))).toContain(
+        expect(deleted.slice(deleted.indexOf('Scostamento'))).toContain(
             money(0),
         );
         expect(deleted).not.toContain(money(80));

@@ -69,12 +69,7 @@ type CommentPage = {
     current_page: number;
     last_page: number;
 };
-type Resource =
-    | 'expenses'
-    | 'contracts'
-    | 'projects'
-    | 'vendors'
-    | 'cost-centers';
+type Resource = 'expenses' | 'contracts' | 'projects' | 'vendors';
 const dateTime = new Intl.DateTimeFormat('it-IT', {
     dateStyle: 'medium',
     timeStyle: 'short',

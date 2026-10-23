@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Platform;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -31,13 +32,17 @@ class TenantController extends Controller
         return to_route('platform.index');
     }
 
-    public function update(Request $request, Tenant $tenant): RedirectResponse
+    public function update(Request $request, Tenant $tenant): JsonResponse|RedirectResponse
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
         ]);
 
         $tenant->update($validated);
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => __('Tenant updated.')]);
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Tenant updated.')]);
 

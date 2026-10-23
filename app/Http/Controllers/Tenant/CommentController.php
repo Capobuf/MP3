@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CommentRequest;
 use App\Models\Contract;
-use App\Models\CostCenter;
 use App\Models\Expense;
 use App\Models\Project;
 use App\Models\Tenant;
@@ -20,11 +19,10 @@ use RyanChandler\Comments\Models\Comment;
 
 class CommentController extends Controller
 {
-    private function owner(Tenant $tenant, string $resource, int $record, bool $lock = false): Contract|CostCenter|Expense|Project|Vendor
+    private function owner(Tenant $tenant, string $resource, int $record, bool $lock = false): Contract|Expense|Project|Vendor
     {
         $query = match ($resource) {
             'contracts' => $tenant->contracts(),
-            'cost-centers' => $tenant->costCenters(),
             'expenses' => $tenant->expenses(),
             'projects' => $tenant->projects(),
             'vendors' => $tenant->vendors(),

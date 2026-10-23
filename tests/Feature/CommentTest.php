@@ -39,8 +39,19 @@ class CommentTest extends TestCase
             'contracts' => $tenant->contracts()->create(['name' => 'Contratto', 'vendor_id' => $vendor->id]),
             'projects' => $tenant->projects()->create(['name' => 'Progetto']),
             'vendors' => $tenant->vendors()->create(['name' => 'Fornitore indipendente']),
-            'cost-centers' => $tenant->costCenters()->create(['name' => 'Centro']),
         ];
+    }
+
+    public function test_cost_centers_do_not_expose_comment_endpoints(): void
+    {
+        $center = $this->tenant->costCenters()->create(['name' => 'Centro']);
+        $path = '/t/alfa/cost-centers/'.$center->id.'/comments';
+        $this->actingAs($this->author);
+
+        $this->getJson($path)->assertNotFound();
+        $this->postJson($path, ['content' => $this->content()])->assertNotFound();
+        $this->patchJson($path.'/1', ['content' => $this->content()])->assertNotFound();
+        $this->deleteJson($path.'/1')->assertNotFound();
     }
 
     public function test_all_record_types_support_crud_and_comments_remain_after_record_undo(): void

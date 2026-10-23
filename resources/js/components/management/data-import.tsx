@@ -18,7 +18,6 @@ import {
     TableFilters,
     TableViewCells,
     TableViewHeader,
-    TableViewSettings,
     useTableView,
 } from './table-view';
 import { Table, TableBody, TableRow, TableCell } from '@/components/ui/table';
@@ -114,7 +113,6 @@ function ImportCountsTable({
                         onChange={(event) => setSearch(event.target.value)}
                     />
                 </TableFilters>
-                <TableViewSettings view={view} disabled={disabled} />
             </div>
             <div className="min-w-0 overflow-hidden rounded-lg border">
                 <Table>
@@ -247,7 +245,6 @@ function ImportRecordsTable({
                         )}
                     </div>
                 </TableFilters>
-                <TableViewSettings view={view} disabled={disabled} />
             </div>
             <div className="min-w-0 overflow-hidden rounded-lg border">
                 <Table>

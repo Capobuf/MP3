@@ -43,9 +43,23 @@ describe('Backup status', () => {
                 expect(html).not.toContain('2026-10-19 01:15:00');
                 expect(html).not.toContain('Ultima operazione');
             } else {
-                expect(html).toContain('Ultima operazione');
                 expect(html).toContain('2026-10-19 01:15:00 UTC');
             }
+            if (status === 'success') {
+                expect(html).toContain('Ultimo backup riuscito');
+                expect(html).toContain('bg-finance-saving/10');
+                expect(html).toContain('lucide-check');
+            } else if (status === 'failed') {
+                expect(html).toContain('Backup non riuscito');
+                expect(html).toContain('bg-destructive/10');
+                expect(html).toContain('lucide-x');
+            } else if (status === 'running') {
+                expect(html).toContain('Backup in corso');
+            }
+            if (status !== 'success')
+                expect(html).not.toContain('bg-finance-saving/10');
+            if (status !== 'failed')
+                expect(html).not.toContain('bg-destructive/10');
         },
     );
 });

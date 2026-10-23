@@ -1,11 +1,10 @@
 import { Link, usePage } from '@inertiajs/react';
-import { Building2, Check, ChevronsUpDown, Settings } from 'lucide-react';
+import { Building2, Check, ChevronsUpDown } from 'lucide-react';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -30,7 +29,7 @@ export function TenantSwitcher() {
                 }
             >
                 <Building2 className="size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate group-data-[collapsible=icon]:hidden">
+                <span className="truncate text-[15px] group-data-[collapsible=icon]:hidden">
                     {currentTenant?.name ??
                         auth.tenants[0]?.name ??
                         (auth.canManagePlatform
@@ -48,21 +47,21 @@ export function TenantSwitcher() {
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="h-12 rounded-xl border border-sidebar-border bg-card p-2 shadow-xs group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent"
+                            className="h-11 rounded-lg border border-sidebar-border bg-card p-2 shadow-xs group-data-[collapsible=icon]:border-0 hover:bg-sidebar-accent"
                             aria-label={
                                 currentTenant
                                     ? `Cambia azienda: ${currentTenant.name}`
                                     : 'Seleziona azienda'
                             }
                         >
-                            <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent">
+                            <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-accent">
                                 <Building2
                                     className="size-4"
                                     aria-hidden="true"
                                 />
                             </div>
                             <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
-                                <span className="truncate text-base font-medium">
+                                <span className="truncate text-[15px] font-medium">
                                     {currentTenant?.name ?? 'Seleziona azienda'}
                                 </span>
                             </div>
@@ -107,20 +106,6 @@ export function TenantSwitcher() {
                                     </Link>
                                 </DropdownMenuItem>
                             ))
-                        )}
-                        {auth.canManagePlatform && (
-                            <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild>
-                                    <Link
-                                        href="/platform"
-                                        onClick={() => setOpenMobile(false)}
-                                    >
-                                        <Settings aria-hidden="true" />
-                                        Amministrazione
-                                    </Link>
-                                </DropdownMenuItem>
-                            </>
                         )}
                     </DropdownMenuContent>
                 </DropdownMenu>

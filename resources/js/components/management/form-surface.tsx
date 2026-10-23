@@ -21,7 +21,9 @@ export function FormSurface({
                 <CardTitle>
                     <h1 className="page-title">{title}</h1>
                 </CardTitle>
-                <CardDescription>{description}</CardDescription>
+                {description && (
+                    <CardDescription>{description}</CardDescription>
+                )}
             </CardHeader>
             <CardContent className="min-w-0 p-0">{children}</CardContent>
         </Card>

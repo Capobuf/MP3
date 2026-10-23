@@ -121,9 +121,24 @@ export function Reconciliation({
     return (
         <dl className="mt-4 grid gap-2 border-t pt-3 text-sm sm:grid-cols-3">
             {[
-                ['Importi positivi', values[`${metric}_positive`]],
-                ['Rettifiche negative', values[`${metric}_negative`]],
-                ['Totale netto', values[metric]],
+                [
+                    metric === 'actual'
+                        ? 'Effettivo positivo'
+                        : 'Allocato positivo',
+                    values[`${metric}_positive`],
+                ],
+                [
+                    metric === 'actual'
+                        ? 'Effettivo negativo'
+                        : 'Allocato negativo',
+                    values[`${metric}_negative`],
+                ],
+                [
+                    metric === 'actual'
+                        ? 'Totale effettivo'
+                        : 'Totale allocato',
+                    values[metric],
+                ],
             ].map(([label, value]) => (
                 <div key={label}>
                     <dt className="text-muted-foreground">{label}</dt>

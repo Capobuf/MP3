@@ -29,7 +29,7 @@ export function AnnualComparisonChart({
         }));
     return (
         <AnalyticsCard
-            title="Confronto economico annuale"
+            title="Confronto Annuale"
             controls={
                 selected !== null && (
                     <ChartReset onReset={() => setSelected(null)} />

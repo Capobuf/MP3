@@ -1,6 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
-import { CalendarDays, ChevronsUpDown } from 'lucide-react';
+import { CalendarDays, ChevronsUpDown, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { NewBudgetYearDialog } from '@/components/management/new-budget-year-dialog';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -35,6 +36,7 @@ export function EconomicYearSwitcher() {
     const { props, url } = usePage();
     const { economicContext: context, currentTenant: tenant } = props;
     const [open, setOpen] = useState(false);
+    const [newYear, setNewYear] = useState(false);
     const [draft, setDraft] = useState('');
     const [error, setError] = useState('');
     const { pending } = usePageRefresh(url.split('?')[0]);
@@ -121,21 +123,36 @@ export function EconomicYearSwitcher() {
                     <DropdownMenuGroup>
                         <DropdownMenuItem
                             disabled={pending}
+                            onSelect={() => setNewYear(true)}
+                        >
+                            <Plus aria-hidden="true" />
+                            Nuovo anno di Budget
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            disabled={pending}
                             onSelect={() => {
                                 setDraft(String(context.year));
                                 setError('');
                                 setOpen(true);
                             }}
                         >
-                            Vai a un altro anno…
+                            <CalendarDays aria-hidden="true" />
+                            Seleziona anno…
                         </DropdownMenuItem>
                     </DropdownMenuGroup>
                 </DropdownMenuContent>
             </DropdownMenu>
+            {newYear && (
+                <NewBudgetYearDialog
+                    slug={tenant.slug}
+                    year={Math.min(2100, context.year + 1)}
+                    onClose={() => setNewYear(false)}
+                />
+            )}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Vai a un altro anno</DialogTitle>
+                        <DialogTitle>Seleziona anno di lavoro</DialogTitle>
                         <DialogDescription>
                             Scegli un anno dal 2000 al 2100, anche senza dati.
                         </DialogDescription>

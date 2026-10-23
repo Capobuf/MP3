@@ -8,11 +8,13 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Message;
 use Illuminate\Support\ConfigurationUrlParser;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Throwable;
 
 class EmailSettingsController extends Controller
@@ -35,6 +37,7 @@ class EmailSettingsController extends Controller
             ],
             'hasPassword' => filled($settings ? $settings->password : ($smtp['password'] ?? null)),
             'status' => session('email_status'),
+            'sendError' => session('email_error'),
         ]);
     }
 
@@ -68,7 +71,9 @@ class EmailSettingsController extends Controller
     {
         $data = $request->validate(['recipient' => ['required', 'email', 'max:255']]);
         if (! PlatformMailSetting::query()->whereKey(1)->exists()) {
-            throw ValidationException::withMessages(['recipient' => 'Salva prima la configurazione SMTP di Obake.']);
+            return to_route('platform.email.edit')->with('email_error', [
+                'message' => 'Salva la configurazione SMTP prima della prova.',
+            ]);
         }
 
         try {
@@ -78,12 +83,51 @@ class EmailSettingsController extends Controller
             if ($sent === null) {
                 throw new \RuntimeException('Message was not sent.');
             }
-        } catch (Throwable) {
-            // Transport messages may contain credentials, URLs or server debug output.
-            throw ValidationException::withMessages(['recipient' => 'Invio non riuscito. Verifica host, porta, sicurezza e credenziali SMTP, poi riprova.']);
+        } catch (Throwable $exception) {
+            $message = $this->smtpErrorMessage($exception);
+            $reference = (string) Str::uuid();
+            $code = $exception instanceof TransportExceptionInterface ? $exception->getCode() : 0;
+
+            // Only allowlisted diagnostics: raw exceptions and SMTP debug may contain credentials.
+            Log::warning('Prova email SMTP non riuscita.', [
+                'reference' => $reference,
+                'message' => $message,
+                'exception_class' => $exception::class,
+                'smtp_code' => $code >= 400 && $code <= 599 ? $code : null,
+            ]);
+
+            return to_route('platform.email.edit')->with('email_error', [
+                'message' => $message,
+                'reference' => $reference,
+            ]);
         }
 
         return to_route('platform.email.edit')->with('email_status', 'Messaggio accettato dal trasporto SMTP. Il recapito nella casella non è garantito: controlla anche la posta indesiderata.');
+    }
+
+    private function smtpErrorMessage(Throwable $exception): string
+    {
+        if (! $exception instanceof TransportExceptionInterface) {
+            return 'Invio non completato. Riprova; se il problema persiste, comunica il riferimento all’assistenza.';
+        }
+
+        $detail = strtolower($exception->getMessage());
+        $code = $exception->getCode();
+
+        return match (true) {
+            str_starts_with($detail, 'failed to authenticate'),
+            str_starts_with($detail, 'failed to find an authenticator'),
+            in_array($code, [530, 534, 535], true) => 'Autenticazione SMTP non riuscita. Verifica nome utente, password e autorizzazione all’invio SMTP presso il provider.',
+            Str::contains($detail, ['unable to connect with starttls', 'certificate verify failed', 'ssl operation failed', 'tls required']) => 'Connessione sicura non riuscita. Verifica sicurezza, porta e certificato del server SMTP.',
+            str_contains($detail, 'timed out') => 'Il server SMTP non ha risposto in tempo. Verifica server, porta e raggiungibilità, poi riprova.',
+            str_starts_with($detail, 'connection could not be established'),
+            str_starts_with($detail, 'connection to '),
+            str_starts_with($detail, 'unable to read from connection'),
+            str_starts_with($detail, 'unable to write bytes') => 'Connessione SMTP non riuscita o interrotta. Verifica server, porta e accesso di rete.',
+            $code >= 400 && $code <= 499 => "Il server SMTP ha restituito un errore temporaneo ($code). Riprova più tardi o verifica i limiti del provider.",
+            $code >= 500 && $code <= 599 => "Il server SMTP ha rifiutato la richiesta ($code). Verifica mittente, destinatario e permessi di invio.",
+            default => 'Invio SMTP non riuscito. Verifica la configurazione o comunica il riferimento all’assistenza.',
+        };
     }
 
     /** @return array<string, mixed> */
