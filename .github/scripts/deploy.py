@@ -22,6 +22,10 @@ def api(path):
     return json.loads(result.stdout)
 
 
+def require_current_main(repository, commit):
+    require(api(f'repos/{repository}/commits/main')['sha'] == commit)
+
+
 def artifact(repository, run_id, commit):
     require(re.fullmatch(r'[0-9]+', run_id))
     run = api(f'repos/{repository}/actions/runs/{run_id}')
@@ -29,6 +33,7 @@ def artifact(repository, run_id, commit):
     require(run['event'] in ('push', 'workflow_dispatch') and run['head_sha'] == commit)
     require(run['status'] == 'completed' and run['conclusion'] == 'success')
     require(run['head_repository']['full_name'] == repository)
+    require_current_main(repository, commit)
     items = api(f'repos/{repository}/actions/runs/{run_id}/artifacts?per_page=100')
     matches = [item for item in items['artifacts'] if item['name'] == f"obake-production-{run['run_number']}"]
     require(len(matches) == 1 and not matches[0]['expired'])
@@ -111,6 +116,7 @@ def main():
             with archive.open('rb') as source:
                 subprocess.run(command + [shlex.join(['python3', '-c', writer])], stdin=source,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=180)
+            require_current_main(repository, commit)
             require(remote(command, config, 'deploy') == {'status': 'OK'})
         finally:
             require(remote(command, config, 'cleanup') == {'status': 'OK'})
