@@ -111,11 +111,11 @@ Sostituire `UTENTE_SITO` e `NOME_DOMINIO` con i valori reali, e il binario PHP s
 
 ### Aggiornare un sito esistente con GitHub Actions
 
-La **CI** su `main` esegue i controlli e, soltanto dopo il loro successo, richiama **Production ZIP** per pubblicare `obake-production-<numero run CI>`. Lo ZIP contiene il commit in `.release-commit` e `public/build/release.txt`. Il workflow **Deploy** richiede un avvio manuale e riutilizza esattamente quell'artifact: verifica run, branch, commit e digest SHA-256. Non compila sul server e non usa automaticamente l'ultimo ZIP disponibile. Gli ZIP prodotti separatamente dal workflow Production ZIP non sono accettati dal deploy.
+La **CI** su `main` esegue i controlli e, soltanto dopo il loro successo, richiama **Production ZIP** per pubblicare `obake-production-<numero run CI>`. Lo ZIP contiene il commit in `.release-commit` e `public/build/release.txt`. Il workflow **Deploy** parte automaticamente quando la CI di `main` termina con successo e riutilizza esattamente quell'artifact: verifica run, branch, commit e digest SHA-256. Le CI delle pull request, dei fork o fallite non pubblicano. Se `main` avanza prima dell'avvio o durante il trasferimento, la vecchia run non viene installata; il nuovo commit richiede la propria CI riuscita. Non compila sul server e non usa automaticamente l'ultimo ZIP disponibile. Gli ZIP prodotti separatamente dal workflow Production ZIP non sono accettati dal deploy.
 
 #### Prima configurazione
 
-Usare il **Site User**, una chiave SSH dedicata e una chiave host verificata. Nell'Environment **`Cloudpanel`**, limitato al branch `main` e protetto da approvazione manuale, configurare questi **Environment Secrets**:
+Usare il **Site User**, una chiave SSH dedicata e una chiave host verificata. Nell'Environment **`Cloudpanel`**, limitato al branch `main`, senza revisori obbligatori né timer di attesa per consentire gli aggiornamenti automatici, configurare questi **Environment Secrets**:
 
 | Secret               | Valore                                                                              |
 | -------------------- | ----------------------------------------------------------------------------------- |
@@ -150,13 +150,15 @@ Il deploy riutilizza la struttura e l'overlay predisposti per dploy, ma non eseg
 
 Dopo il passaggio, eseguire i comandi Artisan da `<DEPLOY_ROOT>/current`. Anche un eventuale cron dello scheduler deve usare `<DEPLOY_ROOT>/current/artisan`; il codice conservato nella cartella iniziale serve come ripristino del primo rilascio e non viene aggiornato.
 
-#### Avviare un aggiornamento
+#### Aggiornamenti automatici da main
 
-1. Attendere che la CI dell'attuale commit `main` sia conclusa con successo, incluso il job **Production package**.
-2. Aprire **Actions → Deploy → Run workflow**, selezionare `main` e inserire in `ci_run_id` il numero nell'URL della run CI (`actions/runs/<numero>`), non il numero nel nome dell'artifact.
-3. Lasciare `allow_migrations` disattivato salvo autorizzazione delle nuove migration incluse nel rilascio. Il deploy si ferma se trova nuove migration senza questo consenso; rifiuta modifiche o rimozioni di migration già presenti.
-4. Approvare il job dell'Environment `Cloudpanel`. Se nel frattempo `main` è cambiato rispetto alla run selezionata, usare una CI del nuovo commit.
-5. Verificare `ARTIFACT=OK`, `SSH=OK`, `TARGET=OK`, `DEPLOY=OK` e `HTTP=OK`. Il controllo HTTP verifica sia `/up` sia il commit pubblicato in `build/release.txt`.
+1. Integrare la modifica in `main`: la CI verifica l'applicazione e crea il Production ZIP.
+2. Dopo il successo della CI, il workflow **Deploy** parte automaticamente. Non occorre premere **Run workflow** o approvare l'Environment.
+3. Verificare `ARTIFACT=OK`, `SSH=OK`, `TARGET=OK`, `DEPLOY=OK` e `HTTP=OK`. Il controllo HTTP verifica sia `/up` sia il commit pubblicato in `build/release.txt`.
+
+Le migration restano disabilitate nel percorso automatico. Se il pacchetto ne aggiunge, il rilascio si ferma conservando la versione attiva. Dopo averne autorizzato l'esecuzione, usare **Actions → Deploy → Run workflow**, selezionare `main`, inserire in `ci_run_id` il numero nell'URL della CI riuscita (`actions/runs/<numero>`) e attivare `allow_migrations`. Non usare il numero nel nome dell'artifact. Modifiche o rimozioni di migration già presenti sono sempre rifiutate.
+
+L'avvio manuale rimane disponibile anche per ritentare un rilascio senza migration. La CI selezionata deve corrispondere all'attuale commit `main`; non permette di distribuire una versione precedente. La rimozione dei revisori dell'Environment rende automatico anche l'accesso ai secret per i workflow autorizzati su `main`: il controllo delle modifiche prima del merge resta quindi essenziale.
 
 Lo ZIP viene estratto in una nuova release. `.env`, `storage` e `public/storage` vengono collegati ai dati già presenti; le cache Laravel vengono generate sul server. Il collegamento `current` cambia solo dopo i controlli, poi viene ricaricato PHP-FPM. Le eventuali migration autorizzate vengono eseguite in manutenzione, ripristinando l'accesso anche in caso di errore.
 

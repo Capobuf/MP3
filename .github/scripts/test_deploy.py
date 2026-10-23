@@ -36,11 +36,24 @@ class ArtifactTest(unittest.TestCase):
 
     def select(self, run=None, artifacts=None):
         with patch.object(deploy, 'api', side_effect=[self.run if run is None else run,
+                                                     {'sha': COMMIT},
                                                      {'artifacts': [self.artifact] if artifacts is None else artifacts}]):
             return deploy.artifact('owner/repository', '42', COMMIT)
 
     def test_accepts_exact_successful_main_run(self):
         self.assertEqual(self.select()['id'], 99)
+
+    def test_rejects_run_after_main_has_advanced_before_downloading_artifact(self):
+        with patch.object(deploy, 'api', side_effect=[self.run, {'sha': 'c' * 40}]) as api:
+            with self.assertRaises(ValueError):
+                deploy.artifact('owner/repository', '42', COMMIT)
+            self.assertEqual(api.call_count, 2)
+
+    def test_current_main_guard_detects_subsequent_push(self):
+        with patch.object(deploy, 'api', side_effect=[{'sha': COMMIT}, {'sha': 'c' * 40}]):
+            deploy.require_current_main('owner/repository', COMMIT)
+            with self.assertRaises(ValueError):
+                deploy.require_current_main('owner/repository', COMMIT)
 
     def test_rejects_untrusted_runs(self):
         for key, value in [('head_sha', 'c' * 40), ('event', 'pull_request'), ('head_branch', 'feature'),
