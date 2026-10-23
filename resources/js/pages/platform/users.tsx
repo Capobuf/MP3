@@ -1,15 +1,8 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
-import {
-    AlertTriangle,
-    Ban,
-    CheckCircle2,
-    Mail,
-    MoreHorizontal,
-    Users,
-} from 'lucide-react';
+import { AlertTriangle, MoreHorizontal, Users } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
-import { UserAvatar } from '@/components/user-info';
+import { UserAccountStatus, UserAvatar } from '@/components/user-info';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     AlertDialog,
@@ -331,38 +324,7 @@ export default function PlatformUsers({
                                         <p className="text-xs font-medium text-muted-foreground lg:sr-only">
                                             Stato account
                                         </p>
-                                        <Badge
-                                            variant={
-                                                user.is_active
-                                                    ? 'secondary'
-                                                    : 'destructive'
-                                            }
-                                        >
-                                            {user.is_active ? (
-                                                <CheckCircle2 aria-hidden="true" />
-                                            ) : (
-                                                <Ban aria-hidden="true" />
-                                            )}
-                                            {user.is_active
-                                                ? 'Abilitato'
-                                                : 'Bloccato'}
-                                        </Badge>
-                                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                            {user.email_verified_at ? (
-                                                <CheckCircle2
-                                                    className="size-3.5 shrink-0"
-                                                    aria-hidden="true"
-                                                />
-                                            ) : (
-                                                <Mail
-                                                    className="size-3.5 shrink-0"
-                                                    aria-hidden="true"
-                                                />
-                                            )}
-                                            {user.email_verified_at
-                                                ? 'Email verificata'
-                                                : 'Email da verificare'}
-                                        </p>
+                                        <UserAccountStatus user={user} />
                                     </div>
                                     <div className="col-start-2 row-start-1 justify-self-end lg:col-start-4">
                                         {!user.is_super_admin && (

@@ -105,11 +105,12 @@ class UserInvitationsTest extends TestCase
         $own = $this->tenant();
         $other = $this->tenant('beta');
         $member = $this->member($own);
+        $member->forceFill(['avatar_path' => 'avatars/company-member.jpg'])->save();
         $this->get('/t/alfa/settings/users')->assertRedirect('/login');
         $this->post('/t/alfa/settings/users', ['email' => 'new@example.com'])->assertRedirect('/login');
         $this->actingAs($member)->get('/t/beta/settings/users')->assertForbidden();
         $this->post('/t/beta/settings/users', ['email' => 'new@example.com'])->assertForbidden();
-        $this->get('/t/alfa/settings/users')->assertInertia(fn (Assert $page) => $page->component('tenants/settings/users')->has('users', 1));
+        $this->get('/t/alfa/settings/users')->assertInertia(fn (Assert $page) => $page->component('tenants/settings/users')->has('users', 1)->where('users.0.avatar', $member->avatar)->missing('users.0.avatar_path'));
         $this->post('/t/alfa/settings/users', ['email' => ' New@Example.com ', 'tenant_id' => $other->id, 'is_platform_admin' => true, 'is_super_admin' => true, 'name' => 'Injected'])
             ->assertSessionHasNoErrors()->assertRedirect('/t/alfa/settings/users');
         $new = User::where('email', 'new@example.com')->sole();

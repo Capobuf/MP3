@@ -1,3 +1,5 @@
+import { Ban, CheckCircle2, Mail } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
 import type { User } from '@/types';
@@ -40,6 +42,38 @@ export function UserInfo({
                     </span>
                 )}
             </div>
+        </>
+    );
+}
+
+export function UserAccountStatus({
+    user,
+}: {
+    user: Pick<User, 'is_active' | 'email_verified_at'>;
+}) {
+    return (
+        <>
+            <Badge variant={user.is_active ? 'secondary' : 'destructive'}>
+                {user.is_active ? (
+                    <CheckCircle2 aria-hidden="true" />
+                ) : (
+                    <Ban aria-hidden="true" />
+                )}
+                {user.is_active ? 'Abilitato' : 'Bloccato'}
+            </Badge>
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {user.email_verified_at ? (
+                    <CheckCircle2
+                        className="size-3.5 shrink-0"
+                        aria-hidden="true"
+                    />
+                ) : (
+                    <Mail className="size-3.5 shrink-0" aria-hidden="true" />
+                )}
+                {user.email_verified_at
+                    ? 'Email verificata'
+                    : 'Email da verificare'}
+            </p>
         </>
     );
 }
