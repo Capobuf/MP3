@@ -38,7 +38,7 @@ class SendContractReminders extends Command
                 $this->info($tenant->name.': '.$schedule->send($tenant).' email inviate.');
             } catch (Throwable $exception) {
                 report($exception);
-                $this->error('Invio non completato per ambiente '.$tenant->id.'. Consultare i log e riprovare oggi.');
+                $this->error('Invio non completato per azienda '.$tenant->id.'. Consultare i log e riprovare oggi.');
                 $failed = true;
             }
         }

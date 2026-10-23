@@ -295,7 +295,7 @@ class DriveSyncTest extends TestCase
             $mock->shouldReceive('sync')->once()->withArgs(fn ($tenant) => $tenant->id === $first->id)->andThrow(new RuntimeException('Errore esplicito'));
             $mock->shouldReceive('sync')->once()->withArgs(fn ($tenant) => $tenant->id === $second->id);
         });
-        $this->artisan($command)->expectsOutput('Ambiente '.$first->id.': Errore esplicito')->assertFailed();
+        $this->artisan($command)->expectsOutput('Azienda '.$first->id.': Errore esplicito')->assertFailed();
         $event = collect(app(Schedule::class)->events())->first(fn ($event) => str_contains($event->command ?? '', 'obake:drive-sync'));
         $this->assertSame('0 3 * * *', $event->expression);
         $this->assertSame('Europe/Rome', $event->timezone);

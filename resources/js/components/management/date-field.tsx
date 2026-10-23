@@ -1,5 +1,5 @@
 import { format, parseISO } from 'date-fns';
-import { it } from 'date-fns/locale';
+import { it } from 'react-day-picker/locale';
 import { CalendarIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import type { AriaAttributes } from 'react';

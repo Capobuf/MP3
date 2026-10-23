@@ -77,7 +77,7 @@ export function getAdministrativeNavItems(
         ...(tenant
             ? [
                   {
-                      title: 'Impostazioni azienda',
+                      title: 'Impostazioni',
                       href: `/t/${tenant.slug}/settings`,
                       icon: Settings,
                   },

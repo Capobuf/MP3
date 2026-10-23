@@ -33,7 +33,7 @@ class PlatformController extends Controller
                     ->orderBy('name')
                     ->select('tenants.id', 'name', 'slug')])
                 ->orderBy('name')
-                ->get(['id', 'name', 'email', 'email_verified_at', 'is_super_admin', 'is_platform_admin', 'is_active']),
+                ->get(['id', 'name', 'email', 'email_verified_at', 'avatar_path', 'is_super_admin', 'is_platform_admin', 'is_active']),
         ]);
     }
 }

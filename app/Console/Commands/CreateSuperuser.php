@@ -13,21 +13,21 @@ class CreateSuperuser extends Command
 {
     protected $signature = 'app:create-superuser';
 
-    protected $description = 'Create a global superuser account';
+    protected $description = 'Crea un account amministratore globale';
 
     public function handle(): int
     {
-        $name = trim((string) $this->ask('Name'));
+        $name = trim((string) $this->ask('Nome'));
         $email = Str::lower(trim((string) $this->ask('Email')));
 
         if (User::query()->whereRaw('lower(email) = ?', [$email])->exists()) {
-            $this->error('An account with this email already exists. It was not modified.');
+            $this->error('Esiste già un account con questa email. Non è stata apportata alcuna modifica.');
 
             return self::FAILURE;
         }
 
         $password = (string) $this->secret('Password');
-        $passwordConfirmation = (string) $this->secret('Confirm password');
+        $passwordConfirmation = (string) $this->secret('Conferma password');
 
         $validator = Validator::make([
             'name' => $name,
@@ -56,7 +56,7 @@ class CreateSuperuser extends Command
         $user->is_super_admin = true;
         $user->save();
 
-        $this->info('Superuser created successfully.');
+        $this->info('Amministratore globale creato correttamente.');
 
         return self::SUCCESS;
     }

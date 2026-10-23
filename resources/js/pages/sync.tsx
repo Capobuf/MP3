@@ -434,7 +434,7 @@ export default function Sync({
         <div className="page-shell">
             <header>
                 <p className="text-sm text-muted-foreground">{tenant.name}</p>
-                <h1 className="page-title">Impostazioni azienda — Sync</h1>
+                <h1 className="page-title">Impostazioni — Sync</h1>
             </header>
             <TenantSettingsNav slug={tenant.slug} />
             {content}

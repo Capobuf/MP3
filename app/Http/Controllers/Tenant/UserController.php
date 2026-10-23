@@ -20,7 +20,7 @@ class UserController extends Controller
     {
         return Inertia::render('tenants/settings/users', [
             'tenant' => $tenant->only('id', 'name', 'slug'),
-            'users' => $tenant->users()->orderBy('name')->get(['users.id', 'name', 'email', 'email_verified_at', 'is_super_admin', 'is_active']),
+            'users' => $tenant->users()->orderBy('name')->get(['users.id', 'name', 'email', 'email_verified_at', 'avatar_path', 'is_super_admin', 'is_active']),
         ]);
     }
 

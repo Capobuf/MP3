@@ -36,7 +36,7 @@ export default function Identity({
                     <p className="text-sm text-muted-foreground">
                         {tenant.name}
                     </p>
-                    <h1 className="page-title">Impostazioni azienda</h1>
+                    <h1 className="page-title">Impostazioni</h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
                 <Card>
@@ -135,5 +135,5 @@ export default function Identity({
     );
 }
 Identity.layout = {
-    breadcrumbs: [{ title: 'Impostazioni azienda', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Impostazioni', href: '/dashboard' }],
 };
