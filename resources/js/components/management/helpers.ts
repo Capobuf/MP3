@@ -109,28 +109,6 @@ async function requestJson<T>(
     return readJson<T>(response);
 }
 
-export function matchesExpenseFilters(
-    record: import('./types').RecordData,
-    filters: import('./types').Filters,
-): boolean {
-    return (
-        record.year === filters.year &&
-        (!filters.search ||
-            !!record.title
-                ?.toLocaleLowerCase()
-                .includes(filters.search.toLocaleLowerCase())) &&
-        (['vendor_id', 'contract_id', 'project_id'] as const).every((key) => {
-            const value = filters[key];
-            return (
-                !value ||
-                (value === 'none'
-                    ? record[key] == null
-                    : String(record[key]) === value)
-            );
-        })
-    );
-}
-
 export async function uploadAttachment<T>(url: string, file: File): Promise<T> {
     const finish = beginMutation();
     try {
