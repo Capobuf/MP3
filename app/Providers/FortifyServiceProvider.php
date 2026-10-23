@@ -11,10 +11,12 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 use Laravel\Passkeys\Contracts\PasskeyUser;
+use Laravel\Passkeys\Exceptions\InvalidPasskeyException;
 use Laravel\Passkeys\Passkeys;
 
 class FortifyServiceProvider extends ServiceProvider
@@ -45,10 +47,23 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::authenticateUsing(function (Request $request) {
             $user = User::where('email', $request->input('email'))->first();
 
-            return $user?->is_active && Hash::check($request->input('password'), $user->password)
-                ? $user : null;
+            if (! $user || ! Hash::check($request->input('password'), $user->password)) {
+                return null;
+            }
+
+            if (! $user->is_active) {
+                throw ValidationException::withMessages(['email' => __('auth.suspended')]);
+            }
+
+            return $user;
         });
-        Passkeys::authorizeLoginUsing(fn (Request $request, PasskeyUser $user) => $user instanceof User && $user->is_active);
+        Passkeys::authorizeLoginUsing(function (Request $request, PasskeyUser $user) {
+            if ($user instanceof User && ! $user->is_active) {
+                throw InvalidPasskeyException::make(__('auth.suspended'));
+            }
+
+            return $user instanceof User;
+        });
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
     }
 

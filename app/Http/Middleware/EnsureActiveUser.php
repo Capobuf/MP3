@@ -21,7 +21,7 @@ class EnsureActiveUser
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return redirect()->route('login')->withErrors(['email' => 'Accesso bloccato. Contatta un amministratore di Obake.']);
+            return redirect()->route('login')->withErrors(['email' => __('auth.suspended')]);
         }
 
         return $next($request);

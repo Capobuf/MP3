@@ -17,7 +17,12 @@ export function AppSidebarHeader({
     return (
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-card px-3 sm:px-4 md:px-6 2xl:px-8">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-                <SidebarTrigger className="-ml-1 shrink-0" />
+                <SidebarTrigger
+                    variant="outline"
+                    className="-ml-1 size-9 shrink-0"
+                    title="Riduci o espandi il menu"
+                    aria-label="Riduci o espandi il menu"
+                />
                 <div className="hidden min-w-0 overflow-hidden md:block [&_[aria-current=page]]:truncate [&_a]:truncate [&_li]:min-w-0 [&_ol]:flex-nowrap">
                     <Breadcrumbs breadcrumbs={breadcrumbs} />
                 </div>

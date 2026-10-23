@@ -6,7 +6,7 @@ import type {
     GroupId,
 } from '@/components/management/analytics-types';
 import { AnnualComparisonChart } from '@/components/management/annual-comparison-chart';
-import { CompletenessChart } from '@/components/management/completeness-chart';
+import { AllocatedUsage } from '@/components/management/allocated-usage';
 import { ContractExpiryChart } from '@/components/management/contract-expiry-chart';
 import { DashboardFilters } from '@/components/management/dashboard-filters';
 import { DashboardSummary } from '@/components/management/dashboard-summary';
@@ -43,42 +43,35 @@ export default function TenantDashboard(
     };
     return (
         <>
-            <Head title={`Panoramica economica · ${tenant.name}`} />
+            <Head title={`Panoramica · ${tenant.name}`} />
             <div
                 className="page-shell dashboard-enter"
                 aria-busy={refresh.pending}
             >
-                <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                        <p className="text-sm font-medium text-muted-foreground">
-                            {tenant.name} · {year}
-                        </p>
-                        <h1 className="mt-1 page-title">
-                            Panoramica economica
-                        </h1>
-                        <p
-                            className="mt-2 min-h-5 text-sm text-muted-foreground"
-                            role="status"
-                        >
-                            {refresh.visible ? 'Aggiornamento…' : ''}
-                        </p>
+                <header>
+                    <p className="text-sm font-medium text-muted-foreground">
+                        {tenant.name} · {year}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <h1 className="mr-auto page-title">Panoramica</h1>
+                        <DashboardFilters
+                            key={JSON.stringify([tenant.slug, filters])}
+                            {...props}
+                            path={path}
+                        />
                     </div>
+                    <p
+                        className="mt-2 min-h-5 text-sm text-muted-foreground"
+                        role="status"
+                    >
+                        {refresh.visible ? 'Aggiornamento…' : ''}
+                    </p>
                 </header>
-                <div className="flex flex-wrap items-center gap-2">
-                    <DashboardFilters
-                        key={JSON.stringify([tenant.slug, filters])}
-                        {...props}
-                        path={path}
-                    />
-                </div>
                 <DashboardSummary analytics={analytics} year={year} />
                 <section
                     className="flex min-w-0 flex-col gap-4"
-                    aria-labelledby="economic-trend"
+                    aria-label="Confronto annuale"
                 >
-                    <h2 id="economic-trend" className="text-lg font-semibold">
-                        Andamento economico
-                    </h2>
                     <div className="grid min-w-0 gap-4 xl:grid-cols-3">
                         <div className="min-w-0 xl:col-span-2">
                             <AnnualComparisonChart
@@ -87,10 +80,7 @@ export default function TenantDashboard(
                                 year={year}
                             />
                         </div>
-                        <CompletenessChart
-                            key={`${chartKey}:completeness`}
-                            rows={analytics.current.completeness}
-                        />
+                        <AllocatedUsage values={analytics.current} />
                     </div>
                 </section>
                 <section
@@ -98,12 +88,12 @@ export default function TenantDashboard(
                     aria-labelledby="vendors"
                 >
                     <h2 id="vendors" className="text-lg font-semibold">
-                        Fornitori e distribuzione
+                        Fornitori
                     </h2>
                     <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                         <DistributionChart
                             key={`${chartKey}:vendors-distribution`}
-                            title="Distribuzione percentuale per fornitore"
+                            title="Distribuzione"
                             rows={analytics.vendors}
                             values={analytics.current}
                             vendorConcentration
@@ -111,7 +101,7 @@ export default function TenantDashboard(
                         />
                         <EconomicChart
                             key={`${chartKey}:vendors-ranking`}
-                            title="Classifica fornitori"
+                            title="Classifica"
                             rows={analytics.vendors}
                             getHref={(id) => recordHref('vendor_id', id)}
                         />
@@ -140,13 +130,13 @@ export default function TenantDashboard(
                     <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                         <EconomicChart
                             key={`${chartKey}:projects`}
-                            title="Allocato ed effettivo per progetto"
+                            title="Progetti"
                             rows={analytics.projects}
                             getHref={(id) => recordHref('project_id', id)}
                         />
                         <DistributionChart
                             key={`${chartKey}:project-statuses`}
-                            title="Distribuzione per stato del progetto"
+                            title="Distribuzione"
                             rows={analytics.projectStatuses}
                             showReconciliation={false}
                             values={analytics.current}
@@ -155,7 +145,7 @@ export default function TenantDashboard(
                     <div className="grid min-w-0 gap-4 xl:grid-cols-2">
                         <EconomicChart
                             key={`${chartKey}:contracts`}
-                            title="Spese per contratto"
+                            title="Spese per Contratto"
                             rows={analytics.contracts}
                             getHref={(id) => recordHref('contract_id', id)}
                         />
@@ -172,7 +162,7 @@ export default function TenantDashboard(
                     aria-labelledby="critical"
                 >
                     <h2 id="critical" className="text-lg font-semibold">
-                        Scostamenti e criticità
+                        Scostamenti
                     </h2>
                     <VarianceChart
                         key={`${chartKey}:variances`}
@@ -185,5 +175,5 @@ export default function TenantDashboard(
     );
 }
 TenantDashboard.layout = {
-    breadcrumbs: [{ title: 'Panoramica economica', href: '/dashboard' }],
+    breadcrumbs: [{ title: 'Panoramica', href: '/dashboard' }],
 };

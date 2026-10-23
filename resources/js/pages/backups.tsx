@@ -1,5 +1,15 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { Download, LoaderCircle, Trash2 } from 'lucide-react';
+import {
+    Archive,
+    Check,
+    CloudUpload,
+    Download,
+    Info,
+    LoaderCircle,
+    Save,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { useState } from 'react';
 import { TenantSettingsNav } from '@/components/management/tenant-settings-nav';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -24,12 +34,14 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import {
     Field,
+    FieldDescription,
     FieldError,
     FieldGroup,
     FieldLabel,
 } from '@/components/ui/field';
 import { Empty, EmptyHeader, EmptyDescription } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 import {
     NativeSelect,
     NativeSelectOption,
@@ -43,6 +55,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import PlatformSettingsLayout from '@/layouts/platform/settings-layout';
+import { cn } from '@/lib/utils';
 import type { Tenant } from '@/types';
 
 type Settings = {
@@ -122,79 +135,132 @@ export default function Backups({
                         : 'Backup · Amministrazione'
                 }
             />
-            <Alert>
+            <header className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h2 className="text-xl font-semibold">Backup</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Crea e gestisci gli archivi di sicurezza.
+                    </p>
+                </div>
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        create.post(path, { preserveScroll: true });
+                    }}
+                    aria-busy={create.processing}
+                >
+                    <Button type="submit" disabled={busy}>
+                        {create.processing ? (
+                            <LoaderCircle
+                                className="animate-spin"
+                                data-icon="inline-start"
+                            />
+                        ) : (
+                            <Archive data-icon="inline-start" />
+                        )}
+                        {create.processing
+                            ? 'Creazione e verifica…'
+                            : 'Crea backup'}
+                    </Button>
+                </form>
+            </header>
+            <FieldError>{create.errors.backup}</FieldError>
+            <Alert role="note">
+                <Info aria-hidden="true" />
                 <AlertTitle>
-                    {tenant ? 'Backup dell’azienda' : 'Backup generale'}
+                    {tenant
+                        ? 'Backup dell’azienda'
+                        : 'Prima di creare un backup'}
                 </AlertTitle>
                 <AlertDescription>
-                    {tenant
-                        ? 'Lo ZIP conserva dati di tutti gli anni, impostazioni, commenti, allegati e associazioni utente. Gli account globali esistenti restano invariati; i nuovi account accedono tramite recupero password.'
-                        : 'Lo ZIP contiene database, documenti, codice, configurazione e chiavi segrete. Conservalo in un luogo sicuro. Il ripristino globale si esegue dal server su una destinazione vuota.'}
+                    {tenant ? (
+                        <>
+                            <p>
+                                Lo ZIP conserva dati di tutti gli anni,
+                                impostazioni, commenti, allegati e associazioni
+                                utente. Gli account globali esistenti restano
+                                invariati; i nuovi account accedono tramite
+                                recupero password.
+                            </p>
+                            <p>
+                                Durante la creazione i salvataggi sono
+                                temporaneamente sospesi.
+                            </p>
+                        </>
+                    ) : (
+                        <ul className="grid gap-2">
+                            <li>
+                                <strong>Contenuto.</strong> Lo ZIP include
+                                database, documenti, codice, configurazione e
+                                chiavi segrete. Conservalo in un luogo sicuro.
+                            </li>
+                            <li>
+                                <strong>Ripristino.</strong> Si esegue dal
+                                server, in una destinazione vuota.
+                            </li>
+                            <li>
+                                <strong>Salvataggi.</strong> Durante la
+                                creazione non è possibile salvare modifiche.
+                            </li>
+                        </ul>
+                    )}
                 </AlertDescription>
             </Alert>
             {settings.last_message && (
                 <Alert
-                    variant={
-                        settings.last_status === 'failed'
-                            ? 'destructive'
-                            : 'default'
+                    role={
+                        settings.last_status === 'failed' ? 'alert' : 'status'
                     }
+                    className={cn(
+                        settings.last_status === 'success' &&
+                            'border-finance-saving/30 bg-finance-saving/10 text-finance-saving',
+                        settings.last_status === 'failed' &&
+                            'border-destructive/30 bg-destructive/10 text-destructive',
+                    )}
                 >
+                    {settings.last_status === 'success' && (
+                        <Check aria-hidden="true" />
+                    )}
+                    {settings.last_status === 'failed' && (
+                        <X aria-hidden="true" />
+                    )}
+                    {settings.last_status === 'running' && (
+                        <LoaderCircle
+                            className="animate-spin"
+                            aria-hidden="true"
+                        />
+                    )}
+                    {settings.last_status === 'deferred' && (
+                        <Info aria-hidden="true" />
+                    )}
                     <AlertTitle>
                         {settings.last_status === 'deferred'
                             ? 'Backup pianificato rinviato'
-                            : 'Ultima operazione'}
+                            : settings.last_status === 'success'
+                              ? 'Ultimo backup riuscito'
+                              : settings.last_status === 'failed'
+                                ? 'Backup non riuscito'
+                                : settings.last_status === 'running'
+                                  ? 'Backup in corso'
+                                  : 'Ultima operazione'}
                         {settings.last_status !== 'deferred' &&
                         settings.last_started_at
                             ? ` · ${settings.last_started_at} UTC`
                             : ''}
                     </AlertTitle>
-                    <AlertDescription>{settings.last_message}</AlertDescription>
+                    <AlertDescription className="text-inherit">
+                        {settings.last_message}
+                    </AlertDescription>
                 </Alert>
             )}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Crea backup</CardTitle>
-                    <CardDescription>
-                        Durante l’operazione i salvataggi sono temporaneamente
-                        sospesi. Il download sarà disponibile dopo la verifica
-                        dell’archivio.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <form
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            create.post(path, { preserveScroll: true });
-                        }}
-                    >
-                        <FieldGroup>
-                            {create.errors.backup && (
-                                <FieldError>{create.errors.backup}</FieldError>
-                            )}
-                            <Button type="submit" disabled={busy}>
-                                {create.processing && (
-                                    <LoaderCircle
-                                        className="animate-spin"
-                                        data-icon="inline-start"
-                                    />
-                                )}
-                                {create.processing
-                                    ? 'Creazione e verifica…'
-                                    : 'Crea backup ZIP'}
-                            </Button>
-                        </FieldGroup>
-                    </form>
-                </CardContent>
-            </Card>
             {!tenant && (
                 <Card>
                     <CardHeader>
                         <CardTitle>Programmazione</CardTitle>
                         <CardDescription>
-                            Orario Europe/Rome. I backup meno recenti vengono
-                            eliminati automaticamente; l’ultimo archivio viene
-                            sempre conservato.
+                            Orario italiano (Europe/Rome). Rotazione automatica
+                            degli archivi meno recenti, conservando sempre
+                            l’ultimo backup.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -205,102 +271,115 @@ export default function Backups({
                             }}
                         >
                             <FieldGroup>
-                                <Field
-                                    data-invalid={!!schedule.errors.frequency}
-                                >
-                                    <FieldLabel htmlFor="backup-frequency">
-                                        Frequenza
-                                    </FieldLabel>
-                                    <NativeSelect
-                                        id="backup-frequency"
-                                        value={schedule.data.frequency}
-                                        onChange={(event) =>
-                                            schedule.setData(
-                                                'frequency',
-                                                event.target.value,
-                                            )
-                                        }
-                                        aria-invalid={
+                                <FieldGroup className="grid gap-4 md:grid-cols-3">
+                                    <Field
+                                        data-invalid={
                                             !!schedule.errors.frequency
                                         }
                                     >
-                                        <NativeSelectOption value="disabled">
-                                            Disabilitata
-                                        </NativeSelectOption>
-                                        <NativeSelectOption value="daily">
-                                            Giornaliera
-                                        </NativeSelectOption>
-                                        <NativeSelectOption value="weekly">
-                                            Settimanale
-                                        </NativeSelectOption>
-                                    </NativeSelect>
-                                    <FieldError>
-                                        {schedule.errors.frequency}
-                                    </FieldError>
-                                </Field>
-                                <Field data-invalid={!!schedule.errors.time}>
-                                    <FieldLabel htmlFor="backup-time">
-                                        Orario
-                                    </FieldLabel>
-                                    <Input
-                                        id="backup-time"
-                                        type="time"
-                                        required
-                                        value={schedule.data.time}
-                                        onChange={(event) =>
-                                            schedule.setData(
-                                                'time',
-                                                event.target.value,
-                                            )
-                                        }
-                                        aria-invalid={!!schedule.errors.time}
-                                    />
-                                    <FieldError>
-                                        {schedule.errors.time}
-                                    </FieldError>
-                                </Field>
-                                {schedule.data.frequency === 'weekly' && (
-                                    <Field
-                                        data-invalid={!!schedule.errors.weekday}
-                                    >
-                                        <FieldLabel htmlFor="backup-weekday">
-                                            Giorno
+                                        <FieldLabel htmlFor="backup-frequency">
+                                            Frequenza
                                         </FieldLabel>
                                         <NativeSelect
-                                            id="backup-weekday"
-                                            value={schedule.data.weekday}
+                                            id="backup-frequency"
+                                            value={schedule.data.frequency}
                                             onChange={(event) =>
                                                 schedule.setData(
-                                                    'weekday',
-                                                    Number(event.target.value),
+                                                    'frequency',
+                                                    event.target.value,
                                                 )
                                             }
                                             aria-invalid={
+                                                !!schedule.errors.frequency
+                                            }
+                                        >
+                                            <NativeSelectOption value="disabled">
+                                                Disabilitata
+                                            </NativeSelectOption>
+                                            <NativeSelectOption value="daily">
+                                                Giornaliera
+                                            </NativeSelectOption>
+                                            <NativeSelectOption value="weekly">
+                                                Settimanale
+                                            </NativeSelectOption>
+                                        </NativeSelect>
+                                        <FieldError>
+                                            {schedule.errors.frequency}
+                                        </FieldError>
+                                    </Field>
+                                    <Field
+                                        data-invalid={!!schedule.errors.time}
+                                    >
+                                        <FieldLabel htmlFor="backup-time">
+                                            Orario
+                                        </FieldLabel>
+                                        <Input
+                                            id="backup-time"
+                                            type="time"
+                                            required
+                                            value={schedule.data.time}
+                                            onChange={(event) =>
+                                                schedule.setData(
+                                                    'time',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            aria-invalid={
+                                                !!schedule.errors.time
+                                            }
+                                        />
+                                        <FieldError>
+                                            {schedule.errors.time}
+                                        </FieldError>
+                                    </Field>
+                                    {schedule.data.frequency === 'weekly' && (
+                                        <Field
+                                            data-invalid={
                                                 !!schedule.errors.weekday
                                             }
                                         >
-                                            {[
-                                                'Domenica',
-                                                'Lunedì',
-                                                'Martedì',
-                                                'Mercoledì',
-                                                'Giovedì',
-                                                'Venerdì',
-                                                'Sabato',
-                                            ].map((day, index) => (
-                                                <NativeSelectOption
-                                                    key={day}
-                                                    value={index}
-                                                >
-                                                    {day}
-                                                </NativeSelectOption>
-                                            ))}
-                                        </NativeSelect>
-                                        <FieldError>
-                                            {schedule.errors.weekday}
-                                        </FieldError>
-                                    </Field>
-                                )}
+                                            <FieldLabel htmlFor="backup-weekday">
+                                                Giorno
+                                            </FieldLabel>
+                                            <NativeSelect
+                                                id="backup-weekday"
+                                                value={schedule.data.weekday}
+                                                onChange={(event) =>
+                                                    schedule.setData(
+                                                        'weekday',
+                                                        Number(
+                                                            event.target.value,
+                                                        ),
+                                                    )
+                                                }
+                                                aria-invalid={
+                                                    !!schedule.errors.weekday
+                                                }
+                                            >
+                                                {[
+                                                    'Domenica',
+                                                    'Lunedì',
+                                                    'Martedì',
+                                                    'Mercoledì',
+                                                    'Giovedì',
+                                                    'Venerdì',
+                                                    'Sabato',
+                                                ].map((day, index) => (
+                                                    <NativeSelectOption
+                                                        key={day}
+                                                        value={index}
+                                                    >
+                                                        {day}
+                                                    </NativeSelectOption>
+                                                ))}
+                                            </NativeSelect>
+                                            <FieldError>
+                                                {schedule.errors.weekday}
+                                            </FieldError>
+                                        </Field>
+                                    )}
+                                </FieldGroup>
+                                <Separator />
                                 <Field orientation="horizontal">
                                     <Checkbox
                                         id="backup-drive"
@@ -314,35 +393,48 @@ export default function Backups({
                                         }
                                     />
                                     <FieldLabel htmlFor="backup-drive">
-                                        Copia i nuovi backup globali su Google
-                                        Drive
+                                        Copia automatica su Google Drive
                                     </FieldLabel>
                                 </Field>
-                                <p className="text-sm text-muted-foreground">
-                                    La copia remota usa l’account configurato in{' '}
+                                <FieldDescription>
+                                    I nuovi backup usano l’account configurato
+                                    in{' '}
                                     <Link
                                         href="/platform/settings/sync"
                                         className="text-primary hover:opacity-80"
                                     >
                                         Sync
                                     </Link>
-                                    . Include dati, configurazione e chiavi
-                                    segrete. L’esito è separato dal backup
-                                    locale; i file remoti non vengono eliminati
+                                    . Le copie remote non vengono eliminate
                                     dalla rotazione locale.
-                                </p>
+                                </FieldDescription>
                                 <FieldError>
                                     {schedule.errors.drive_enabled}
                                 </FieldError>
-                                <Button
-                                    type="submit"
-                                    disabled={busy || schedule.processing}
-                                >
-                                    Salva programmazione
-                                </Button>
-                                {schedule.recentlySuccessful && (
-                                    <p role="status">Programmazione salvata.</p>
-                                )}
+                                <div className="flex flex-wrap items-center justify-end gap-3">
+                                    {schedule.recentlySuccessful && (
+                                        <p
+                                            role="status"
+                                            className="text-sm text-muted-foreground"
+                                        >
+                                            Programmazione salvata.
+                                        </p>
+                                    )}
+                                    <Button
+                                        type="submit"
+                                        disabled={busy || schedule.processing}
+                                    >
+                                        {schedule.processing ? (
+                                            <LoaderCircle
+                                                className="animate-spin"
+                                                data-icon="inline-start"
+                                            />
+                                        ) : (
+                                            <Save data-icon="inline-start" />
+                                        )}
+                                        Salva
+                                    </Button>
+                                </div>
                             </FieldGroup>
                         </form>
                     </CardContent>
@@ -375,9 +467,6 @@ export default function Backups({
             <Card>
                 <CardHeader>
                     <CardTitle>Archivi disponibili</CardTitle>
-                    <CardDescription>
-                        Download privati riservati agli utenti autorizzati.
-                    </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                     {selection.length > 1 && (
@@ -429,7 +518,10 @@ export default function Backups({
                                         />
                                     </TableHead>
                                     <TableHead>Archivio</TableHead>
-                                    <TableHead>Dimensione</TableHead>
+                                    <TableHead>Data (ora italiana)</TableHead>
+                                    <TableHead className="text-right">
+                                        Dimensione
+                                    </TableHead>
                                     <TableHead>
                                         <span className="sr-only">Azioni</span>
                                     </TableHead>
@@ -495,7 +587,18 @@ export default function Backups({
                                                         </p>
                                                     ))}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            <time dateTime={archive.created_at}>
+                                                {new Date(
+                                                    archive.created_at,
+                                                ).toLocaleString('it-IT', {
+                                                    dateStyle: 'short',
+                                                    timeStyle: 'short',
+                                                    timeZone: 'Europe/Rome',
+                                                })}
+                                            </time>
+                                        </TableCell>
+                                        <TableCell className="text-right whitespace-nowrap tabular-nums">
                                             {(
                                                 archive.size /
                                                 1024 /
@@ -506,10 +609,11 @@ export default function Backups({
                                             MB
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex gap-2">
+                                            <div className="flex justify-end gap-2">
                                                 <Button
                                                     asChild
                                                     variant="outline"
+                                                    size="sm"
                                                 >
                                                     <a
                                                         href={`${path}/${archive.name}`}
@@ -526,6 +630,7 @@ export default function Backups({
                                                     drive?.backup_enabled && (
                                                         <Button
                                                             variant="outline"
+                                                            size="sm"
                                                             disabled={busy}
                                                             onClick={() => {
                                                                 copy.transform(
@@ -542,6 +647,7 @@ export default function Backups({
                                                                 );
                                                             }}
                                                         >
+                                                            <CloudUpload data-icon="inline-start" />
                                                             Copia su Drive
                                                             <span className="sr-only">
                                                                 {' '}

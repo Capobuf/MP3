@@ -4,12 +4,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { ArrowUpRight, Ellipsis } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import {
-    useTableView,
-    TableViewHeader,
-    TableViewCells,
-    TableViewSettings,
-} from './table-view';
+import { useTableView, TableViewHeader, TableViewCells } from './table-view';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -356,10 +351,11 @@ export function ExpenseTable({
             className="@container/expense-table flex min-w-0 flex-col gap-3"
             aria-busy={busy || loading}
         >
-            <div className="flex flex-wrap items-center gap-2">
-                <TableViewSettings view={view} disabled={busy || loading} />
-                {toolbar}
-            </div>
+            {toolbar && (
+                <div className="flex flex-wrap items-center gap-2">
+                    {toolbar}
+                </div>
+            )}
             {selected.length > 0 && (
                 <div
                     className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-accent px-4 py-3 text-sm"

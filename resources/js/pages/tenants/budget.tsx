@@ -1,10 +1,10 @@
 import { AnnualContractImport } from '@/components/management/annual-contract-import';
 import { DetailHero } from '@/components/management/detail-hero';
 import { SpreadsheetActions } from '@/components/management/spreadsheet-actions';
-import { changeEconomicYear } from '@/lib/economic-year';
+import { NewBudgetYearDialog } from '@/components/management/new-budget-year-dialog';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { ChartNoAxesCombined, Ellipsis, Plus, RefreshCw } from 'lucide-react';
+import { ChartNoAxesCombined, Import, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { BudgetSankey } from '@/components/management/budget-sankey';
 import {
@@ -27,13 +27,7 @@ import type {
 } from '@/components/management/budget-types';
 import type { RecordData } from '@/components/management/types';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogDescription,
-} from '@/components/ui/dialog';
+
 import {
     Sheet,
     SheetContent,
@@ -41,15 +35,7 @@ import {
     SheetTitle,
     SheetDescription,
 } from '@/components/ui/sheet';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuGroup,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Field, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+
 import {
     Empty,
     EmptyHeader,
@@ -61,20 +47,15 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { useDelayedBusy } from '@/hooks/use-delayed-busy';
 import { usePageRefresh } from '@/hooks/use-page-refresh';
-import { useUnsavedNavigation } from '@/hooks/use-unsaved-navigation';
 
 function BudgetHeader({
     props,
     busy,
-    onNewYear,
-    onCopy,
     onPrintReport,
     getExportFilters,
 }: {
     props: BudgetProps;
     busy: boolean;
-    onNewYear: (year: number) => void;
-    onCopy?: () => void;
     onPrintReport?: () => void;
     getExportFilters?: () => object | undefined;
 }) {
@@ -95,45 +76,6 @@ function BudgetHeader({
                             </>
                         )}
                     </span>
-                    <Button
-                        variant="outline"
-                        onClick={() =>
-                            onNewYear(
-                                props.budgetYear
-                                    ? Math.min(2100, props.selectedYear + 1)
-                                    : props.selectedYear,
-                            )
-                        }
-                    >
-                        <Plus data-icon="inline-start" />
-                        Nuovo anno
-                    </Button>
-                    {onCopy && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={busy}
-                                >
-                                    Gestisci anno{' '}
-                                    <Ellipsis data-icon="inline-end" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuGroup>
-                                    <DropdownMenuItem
-                                        disabled={busy}
-                                        onSelect={() => {
-                                            onCopy?.();
-                                        }}
-                                    >
-                                        Importa dall’anno precedente
-                                    </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
                     <SpreadsheetActions
                         slug={props.tenant.slug}
                         onPrintReport={onPrintReport}
@@ -158,13 +100,11 @@ function BudgetWorkspace({
     props,
     year,
     initial,
-    onNewYear,
     pending,
 }: {
     props: BudgetProps;
     year: BudgetYear;
     initial: BudgetSnapshot;
-    onNewYear: (year: number) => void;
     pending: boolean;
 }) {
     const [budget, setBudget] = useState(initial);
@@ -281,10 +221,8 @@ function BudgetWorkspace({
             <BudgetHeader
                 props={props}
                 busy={busy || loading || pending}
-                onNewYear={onNewYear}
                 onPrintReport={() => budgetTable.current?.printReport()}
                 getExportFilters={() => budgetTable.current?.exportFilters()}
-                onCopy={() => setImporting(true)}
             />
             <section aria-label="Riepilogo budget">
                 <DashboardSummary
@@ -295,7 +233,16 @@ function BudgetWorkspace({
             </section>
             <BudgetSankey budget={budget} />
             <div className="flex flex-wrap items-center justify-end gap-3">
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || loading || pending}
+                        onClick={() => setImporting(true)}
+                    >
+                        <Import data-icon="inline-start" />
+                        Importa dall’anno precedente
+                    </Button>
                     <Button
                         variant="outline"
                         size="sm"
@@ -420,45 +367,8 @@ function BudgetWorkspace({
 
 export default function Budget(props: BudgetProps) {
     const [newYear, setNewYear] = useState(false);
-    const [draftYear, setDraftYear] = useState(String(props.selectedYear));
-    const [creating, setCreating] = useState(false);
-    const [yearError, setYearError] = useState('');
-    const navigation = useUnsavedNavigation(false, creating);
     const path = `/t/${props.tenant.slug}/budget`;
     const refresh = usePageRefresh(path);
-    function selectYear(year: number) {
-        changeEconomicYear(year);
-    }
-    function createDialog(year: number) {
-        setDraftYear(String(year));
-        setYearError('');
-        setNewYear(true);
-    }
-    async function createYear(event: React.SubmitEvent<HTMLFormElement>) {
-        event.preventDefault();
-        if (creating) return;
-        setCreating(true);
-        setYearError('');
-        try {
-            const result = await api<{ year: BudgetYear }>(
-                `${path}/years`,
-                'POST',
-                { year: draftYear },
-            );
-            setNewYear(false);
-            toast.success('Anno di Budget creato.');
-            navigation.allow();
-            selectYear(result.year.year);
-        } catch (failure) {
-            setYearError(
-                failure instanceof Error
-                    ? failure.message
-                    : 'Creazione non riuscita.',
-            );
-        } finally {
-            setCreating(false);
-        }
-    }
     return (
         <>
             <Head
@@ -469,11 +379,7 @@ export default function Budget(props: BudgetProps) {
                 aria-busy={refresh.pending}
             >
                 {(!props.budgetYear || !props.budget) && (
-                    <BudgetHeader
-                        props={props}
-                        busy={refresh.pending}
-                        onNewYear={createDialog}
-                    />
+                    <BudgetHeader props={props} busy={refresh.pending} />
                 )}
                 {props.budgetYear && props.budget ? (
                     <BudgetWorkspace
@@ -481,7 +387,6 @@ export default function Budget(props: BudgetProps) {
                         props={props}
                         year={props.budgetYear}
                         initial={props.budget}
-                        onNewYear={createDialog}
                         pending={refresh.pending}
                     />
                 ) : (
@@ -497,70 +402,20 @@ export default function Budget(props: BudgetProps) {
                             </EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>
-                            <Button
-                                onClick={() => createDialog(props.selectedYear)}
-                            >
+                            <Button onClick={() => setNewYear(true)}>
                                 Crea Budget {props.selectedYear}
                             </Button>
                         </EmptyContent>
                     </Empty>
                 )}
             </div>
-            <Dialog
-                open={newYear}
-                onOpenChange={(open) => {
-                    if (!creating) setNewYear(open);
-                }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Nuovo anno di Budget</DialogTitle>
-                        <DialogDescription>
-                            L’anno nasce vuoto, pronto per la pianificazione.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form
-                        onSubmit={(event) => {
-                            void createYear(event);
-                        }}
-                        className="flex flex-col gap-4"
-                    >
-                        <Field data-invalid={!!yearError}>
-                            <FieldLabel htmlFor="budget-new-year">
-                                Anno
-                            </FieldLabel>
-                            <Input
-                                id="budget-new-year"
-                                type="number"
-                                min={2000}
-                                max={2100}
-                                value={draftYear}
-                                required
-                                disabled={creating}
-                                aria-invalid={!!yearError}
-                                aria-describedby={
-                                    yearError ? 'budget-year-error' : undefined
-                                }
-                                onChange={(event) =>
-                                    setDraftYear(event.target.value)
-                                }
-                            />
-                            {yearError && (
-                                <p
-                                    id="budget-year-error"
-                                    role="alert"
-                                    className="text-sm text-destructive"
-                                >
-                                    {yearError}
-                                </p>
-                            )}
-                        </Field>
-                        <Button disabled={creating} type="submit">
-                            {creating ? 'Creazione…' : 'Crea anno'}
-                        </Button>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            {newYear && (
+                <NewBudgetYearDialog
+                    slug={props.tenant.slug}
+                    year={props.selectedYear}
+                    onClose={() => setNewYear(false)}
+                />
+            )}
         </>
     );
 }

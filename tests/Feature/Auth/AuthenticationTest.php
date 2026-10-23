@@ -102,6 +102,17 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_invalid_credentials_do_not_reveal_account_suspension(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+
+        foreach ([$user->email, 'missing@example.test'] as $email) {
+            $this->post('/login', ['email' => $email, 'password' => 'wrong-password'])
+                ->assertSessionHasErrors(['email' => 'Email o password non corrette.']);
+            $this->assertGuest();
+        }
+    }
+
     public function test_users_are_rate_limited()
     {
         $user = User::factory()->create();
@@ -119,9 +130,11 @@ class AuthenticationTest extends TestCase
     public function test_blocked_users_cannot_login_and_existing_sessions_are_invalidated(): void
     {
         $user = User::factory()->create(['is_active' => false]);
-        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertSessionHasErrors('email');
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])
+            ->assertSessionHasErrors(['email' => 'L’account è sospeso.']);
         $this->assertGuest();
-        $this->actingAs($user)->get('/dashboard')->assertRedirect('/login');
+        $this->actingAs($user)->get('/dashboard')->assertRedirect('/login')
+            ->assertSessionHasErrors(['email' => 'L’account è sospeso.']);
         $this->assertGuest();
         $user->is_active = true;
         $user->save();
@@ -132,10 +145,12 @@ class AuthenticationTest extends TestCase
     public function test_blocking_prevents_new_and_pending_two_factor_challenges(): void
     {
         $user = User::factory()->withTwoFactor()->create(['is_active' => false]);
-        $this->post('/login', ['email' => $user->email, 'password' => 'password'])->assertSessionHasErrors('email');
+        $this->post('/login', ['email' => $user->email, 'password' => 'password'])
+            ->assertSessionHasErrors(['email' => 'L’account è sospeso.']);
         $this->assertGuest();
         $this->withSession(['login.id' => $user->id, 'login.remember' => true])
-            ->post('/two-factor-challenge', ['recovery_code' => $user->recoveryCodes()[0]])->assertRedirect('/login');
+            ->post('/two-factor-challenge', ['recovery_code' => $user->recoveryCodes()[0]])->assertRedirect('/login')
+            ->assertSessionHasErrors(['email' => 'L’account è sospeso.']);
         $this->assertGuest();
         $this->assertFalse(session()->has('login.id'));
     }
@@ -155,7 +170,8 @@ class AuthenticationTest extends TestCase
         try {
             app(PasskeyLoginController::class)->store($request, $verify);
             $this->fail('Blocked passkey login was allowed.');
-        } catch (InvalidPasskeyException) {
+        } catch (InvalidPasskeyException $exception) {
+            $this->assertSame(['credential' => ['L’account è sospeso.']], $exception->errors());
             $this->assertGuest();
         }
         $user->is_active = true;

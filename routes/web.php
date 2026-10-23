@@ -128,7 +128,7 @@ Route::middleware('auth')->group(function () {
             Route::get('{attachment}/view', [AttachmentController::class, 'view'])->whereNumber('attachment')->name('attachments.view');
             Route::delete('{attachment}', [AttachmentController::class, 'destroy'])->whereNumber('attachment')->name('attachments.destroy');
         });
-        Route::prefix('{resource}/{record}/comments')->where(['resource' => 'contracts|cost-centers|expenses|projects|vendors', 'record' => '[0-9]+'])->withoutMiddleware(RecordUndo::class)->group(function () {
+        Route::prefix('{resource}/{record}/comments')->where(['resource' => 'contracts|expenses|projects|vendors', 'record' => '[0-9]+'])->withoutMiddleware(RecordUndo::class)->group(function () {
             Route::get('/', [CommentController::class, 'index'])->name('comments.index');
             Route::post('/', [CommentController::class, 'store'])->name('comments.store');
             Route::patch('{comment}', [CommentController::class, 'update'])->whereNumber('comment')->name('comments.update');

@@ -7,6 +7,7 @@ import {
     DashboardFilters,
 } from '../../resources/js/components/management/dashboard-filters';
 import { RecordSelect } from '../../resources/js/components/management/record-select';
+import { ExpenseLines } from '../../resources/js/components/management/expense-lines';
 
 const navigate = vi.hoisted(() => vi.fn());
 
@@ -36,6 +37,54 @@ const options = {
 beforeEach(() => vi.clearAllMocks());
 
 describe('Record relation selectors', () => {
+    it.each([
+        ['contractContext', 'contracts'],
+        ['projectContext', 'projects'],
+    ] as const)('shows the prefilled selector for %s', (context, catalog) => {
+        const related = { id: 202, name: 'Collegamento di partenza' };
+        const html = renderToStaticMarkup(
+            <EntityForm
+                tenant={tenant}
+                kind="expenses"
+                options={options}
+                {...{ [context]: related }}
+                onClose={() => {}}
+                onSaved={() => {}}
+            />,
+        );
+        const selectors = vi
+            .mocked(RecordSelect)
+            .mock.calls.map(([props]) => props);
+        expect(selectors.map(({ catalog }) => catalog)).toEqual([
+            'vendors',
+            catalog,
+        ]);
+        const selector = selectors.find((item) => item.catalog === catalog)!;
+        expect(selector.value).toBe('202');
+        expect(selector.disabled).toBe(false);
+        expect(selector.options).toContainEqual(related);
+        expect(html).not.toContain('Rimuovi prima il collegamento');
+    });
+
+    it.each([false, true])(
+        'keeps column settings accessible (readOnly=%s)',
+        (readOnly) => {
+            const html = renderToStaticMarkup(
+                <ExpenseLines
+                    lines={[]}
+                    onChange={() => {}}
+                    readOnly={readOnly}
+                />,
+            );
+            const header = html.slice(
+                html.indexOf('<thead'),
+                html.indexOf('</thead>'),
+            );
+            expect(html.match(/aria-label="Colonne"/g)).toHaveLength(1);
+            expect(header).toContain('aria-label="Colonne"');
+        },
+    );
+
     it.each([
         ['expenses', undefined, ['vendors', 'contracts', 'projects']],
         ['expenses', { id: 1 }, ['vendors', 'contracts', 'projects']],

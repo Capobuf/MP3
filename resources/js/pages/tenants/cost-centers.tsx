@@ -1,13 +1,5 @@
 import { DetailHero } from '@/components/management/detail-hero';
 import {
-    Sheet,
-    SheetContent,
-    SheetDescription,
-    SheetHeader,
-    SheetTitle,
-} from '@/components/ui/sheet';
-import { CommentsSection } from '@/components/management/comments-section';
-import {
     InlineEdit,
     saveInlineRecord,
 } from '@/components/management/inline-edit';
@@ -20,7 +12,6 @@ import {
     TableFilters,
     TableViewCells,
     TableViewHeader,
-    TableViewSettings,
 } from '@/components/management/table-view';
 import { toast } from 'sonner';
 import { api } from '@/components/management/helpers';
@@ -74,8 +65,6 @@ export default function CostCenters({
 }) {
     'use no memo'; // TanStack v8 exposes mutable table and column instances.
 
-    const [commenting, setCommenting] = useState<CostCenter | null>(null);
-    const [commentsBusy, setCommentsBusy] = useState(false);
     const [search, setSearch] = useState(filters.search ?? '');
     const [deleting, setDeleting] = useState<CostCenter | null>(null);
     const [deleteChildren, setDeleteChildren] = useState(false);
@@ -227,13 +216,8 @@ export default function CostCenters({
                                         <Link
                                             href={`${path}/${center.id}/edit`}
                                         >
-                                            Altri dati e collegamenti
+                                            Modifica
                                         </Link>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        onSelect={() => setCommenting(center)}
-                                    >
-                                        Commenti
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -345,7 +329,6 @@ export default function CostCenters({
                                     </Button>
                                 )}
                             </TableFilters>
-                            <TableViewSettings view={view} disabled={busy} />
                         </div>
                         {records.data.length ? (
                             <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
@@ -401,41 +384,6 @@ export default function CostCenters({
                 </Card>
                 <Pagination page={records} />
             </div>
-            <Sheet
-                open={commenting !== null}
-                onOpenChange={(open) => {
-                    if (!open && !commentsBusy) setCommenting(null);
-                }}
-            >
-                <SheetContent
-                    closeDisabled={commentsBusy}
-                    className="w-full overflow-y-auto sm:max-w-2xl"
-                    onEscapeKeyDown={(event) => {
-                        if (commentsBusy) event.preventDefault();
-                    }}
-                    onInteractOutside={(event) => {
-                        if (commentsBusy) event.preventDefault();
-                    }}
-                >
-                    <SheetHeader>
-                        <SheetTitle>Commenti · {commenting?.name}</SheetTitle>
-                        <SheetDescription>
-                            Commenti del centro di costo.
-                        </SheetDescription>
-                    </SheetHeader>
-                    <div className="min-w-0 px-4 pb-6">
-                        {commenting && (
-                            <CommentsSection
-                                key={commenting.id}
-                                tenant={tenant}
-                                resource="cost-centers"
-                                recordId={commenting.id}
-                                onBusyChange={setCommentsBusy}
-                            />
-                        )}
-                    </div>
-                </SheetContent>
-            </Sheet>
             <AlertDialog
                 open={deleting !== null}
                 onOpenChange={(open) => {

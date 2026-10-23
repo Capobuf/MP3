@@ -1,3 +1,4 @@
+import { budgetSummaryColumns } from './budget-summary-columns';
 import { BudgetPrintDialog } from './budget-print-dialog';
 import { captureBudgetReport } from './budget-report';
 import type { BudgetReportData } from './budget-report';
@@ -1425,6 +1426,7 @@ export function BudgetTable({
         .filter((entry) => selection[String(entry.id)])
         .map((entry) => entry.id);
     const visibleColumns = table.getVisibleLeafColumns();
+    const summaryColumns = budgetSummaryColumns(visibleColumns);
     const entryIds = table
         .getFilteredRowModel()
         .flatRows.map((row) => row.original.id)
@@ -1475,9 +1477,10 @@ export function BudgetTable({
     function footer(label: string, totals: typeof budget.totals) {
         return (
             <TableRow>
-                {visibleColumns.map((column) => (
+                {summaryColumns.map((column) => (
                     <TableCell
                         key={column.id}
+                        colSpan={column.colSpan}
                         className={cn(
                             ['allocated', 'actual', 'variance'].includes(
                                 column.id,
@@ -1525,7 +1528,7 @@ export function BudgetTable({
         );
     }
     const columnSettings = (
-        <TableColumnSettings disabled={busy}>
+        <TableColumnSettings disabled={busy} iconOnly>
             <TableColumnOrder
                 disabled={busy}
                 columns={preferences.order.map((id) => ({
@@ -1742,7 +1745,6 @@ export function BudgetTable({
                         )}
                     </FieldGroup>
                 </TableFilters>
-                {columnSettings}
                 <Button onClick={onAdd} disabled={busy}>
                     Aggiungi voce
                 </Button>
@@ -1908,7 +1910,10 @@ export function BudgetTable({
                                                     ) && 'justify-end',
                                                 )}
                                             >
-                                                {header.column.getCanSort() ? (
+                                                {header.column.id ===
+                                                'actions' ? (
+                                                    columnSettings
+                                                ) : header.column.getCanSort() ? (
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
@@ -1995,10 +2000,13 @@ export function BudgetTable({
                                         return (
                                             <Fragment key={row.id}>
                                                 <TableRow className="border-y bg-muted/60">
-                                                    {visibleColumns.map(
+                                                    {summaryColumns.map(
                                                         (column) => (
                                                             <TableCell
                                                                 key={column.id}
+                                                                colSpan={
+                                                                    column.colSpan
+                                                                }
                                                                 className={cn(
                                                                     column.id ===
                                                                         'description' &&
@@ -2030,16 +2038,11 @@ export function BudgetTable({
                                                                         <Button
                                                                             size="sm"
                                                                             variant="ghost"
-                                                                            className="h-auto min-h-9 max-w-full text-left whitespace-normal"
+                                                                            className="h-auto min-h-9 max-w-full px-0 text-left whitespace-normal"
                                                                             aria-label={`${row.getIsExpanded() ? 'Comprimi' : 'Espandi'} ${title}`}
                                                                             aria-expanded={row.getIsExpanded()}
                                                                             onClick={row.getToggleExpandedHandler()}
                                                                         >
-                                                                            {row.getIsExpanded() ? (
-                                                                                <ChevronDown />
-                                                                            ) : (
-                                                                                <ChevronRight />
-                                                                            )}
                                                                             <span className="font-semibold">
                                                                                 {
                                                                                     title
@@ -2051,6 +2054,11 @@ export function BudgetTable({
                                                                                         .length
                                                                                 }
                                                                             </span>
+                                                                            {row.getIsExpanded() ? (
+                                                                                <ChevronDown />
+                                                                            ) : (
+                                                                                <ChevronRight />
+                                                                            )}
                                                                         </Button>
                                                                         {totals &&
                                                                             totals.estimated_count >

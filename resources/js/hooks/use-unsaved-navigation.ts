@@ -24,7 +24,8 @@ export function useUnsavedNavigation(enabled: boolean, blocked = false) {
         if (!pending) return;
         allow();
         setPending(null);
-        router.visit(pending.url, pending);
+        // Discard also resets local state when resuming a same-page reload.
+        router.visit(pending.url, { ...pending, preserveState: false });
     }
     return { pending, allow, confirm, cancel: () => setPending(null) };
 }

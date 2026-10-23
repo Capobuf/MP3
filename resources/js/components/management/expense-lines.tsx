@@ -21,7 +21,6 @@ import {
     TableFilters,
     TableViewHeader,
     TableViewCells,
-    TableViewSettings,
 } from './table-view';
 
 export type DraftLine = ExpenseLine & { key: string; yearEdited?: boolean };
@@ -192,9 +191,7 @@ export function ExpenseLines({
                           header: (
                               <Checkbox
                                   aria-label={
-                                      contractMode
-                                          ? 'Seleziona tutte le condizioni visibili'
-                                          : 'Seleziona tutte le righe visibili'
+                                      'Seleziona tutte le righe visibili'
                                   }
                                   disabled={disabled || !visible.length}
                                   checked={
@@ -374,23 +371,13 @@ export function ExpenseLines({
     return (
         <section
             className="flex min-w-0 flex-col gap-3"
-            aria-label={
-                readOnly
-                    ? 'Dettaglio spesa'
-                    : contractMode
-                      ? 'Condizioni economiche'
-                      : 'Righe economiche della spesa'
-            }
+            aria-label={readOnly ? 'Dettaglio spesa' : 'Righe della spesa'}
         >
-            {(showHeading || !readOnly) && (
+            {showHeading && (
                 <div className="flex flex-wrap items-center gap-2">
                     {showHeading && (
                         <h2 className="mr-auto font-semibold">
-                            {readOnly
-                                ? 'Righe economiche'
-                                : contractMode
-                                  ? 'Condizioni economiche'
-                                  : 'Righe economiche'}
+                            Righe della spesa
                         </h2>
                     )}
                     {showHeading && readOnly && (
@@ -398,56 +385,25 @@ export function ExpenseLines({
                             {visible.length} di {lines.length}
                         </Badge>
                     )}
-                    {!readOnly && (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="ml-auto"
-                            disabled={disabled || lines.length >= 500}
-                            onClick={add}
-                        >
-                            <Plus data-icon="inline-start" />{' '}
-                            {contractMode
-                                ? 'Aggiungi condizione economica'
-                                : 'Aggiungi riga'}
-                        </Button>
-                    )}
                 </div>
             )}
             <div className="flex flex-wrap items-center gap-2">
                 <TableFilters
-                    title={
-                        contractMode
-                            ? 'Filtri condizioni economiche'
-                            : 'Filtri righe economiche'
-                    }
+                    title="Filtri righe economiche"
                     count={(search ? 1 : 0) + (filter !== 'all' ? 1 : 0)}
                     disabled={disabled}
                 >
                     <div className="flex flex-col gap-3">
                         <Input
-                            aria-label={
-                                contractMode
-                                    ? 'Cerca nelle condizioni economiche'
-                                    : 'Cerca nelle descrizioni delle righe'
-                            }
-                            placeholder={
-                                contractMode
-                                    ? 'Cerca nelle condizioni…'
-                                    : 'Cerca nelle righe…'
-                            }
+                            aria-label="Cerca nelle descrizioni delle righe"
+                            placeholder="Cerca nelle righe…"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                             disabled={disabled}
                             className="min-w-40 flex-1"
                         />
                         <NativeSelect
-                            aria-label={
-                                contractMode
-                                    ? 'Filtra condizioni per tipo'
-                                    : 'Filtra righe per tipo'
-                            }
+                            aria-label="Filtra righe per tipo"
                             value={filter}
                             disabled={disabled}
                             onChange={(event) => setFilter(event.target.value)}
@@ -474,7 +430,6 @@ export function ExpenseLines({
                         )}
                     </div>
                 </TableFilters>
-                <TableViewSettings view={view} disabled={disabled} />
                 {sorted && (
                     <Button
                         type="button"
@@ -486,18 +441,21 @@ export function ExpenseLines({
                         Ripristina ordine manuale
                     </Button>
                 )}
+                {!readOnly && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        className="ml-auto"
+                        disabled={disabled || lines.length >= 500}
+                        onClick={add}
+                    >
+                        <Plus data-icon="inline-start" /> Aggiungi riga
+                    </Button>
+                )}
             </div>
             {readOnly && filtered && (
                 <p className="text-xs text-muted-foreground">
                     {visible.length} di {lines.length} righe visibili
-                </p>
-            )}
-            {!readOnly && showHeading && (
-                <p className="text-sm text-muted-foreground">
-                    {visible.length} di {lines.length}{' '}
-                    {contractMode ? 'condizioni economiche' : 'righe'}. Modifica
-                    i campi direttamente nella tabella e usa le frecce per
-                    riordinare. Le modifiche saranno salvate con la spesa.
                 </p>
             )}
             {hiddenErrors && (
@@ -516,34 +474,23 @@ export function ExpenseLines({
             {filtered &&
                 Object.keys(errors).some((key) => key.startsWith('lines.')) && (
                     <p role="alert" className="text-sm text-destructive">
-                        {contractMode
-                            ? 'Ci sono condizioni economiche da correggere.'
-                            : 'Ci sono righe da correggere.'}{' '}
+                        Ci sono righe da correggere.{' '}
                         <Button
                             type="button"
                             variant="link"
                             onClick={resetFilters}
                         >
-                            {contractMode
-                                ? 'Mostra tutte le condizioni'
-                                : 'Mostra tutte le righe'}
+                            Mostra tutte le righe
                         </Button>
                     </p>
                 )}
             {!readOnly && selectedLines.length > 0 && (
                 <div
                     className="flex flex-wrap items-center gap-2 rounded-md bg-muted p-2 text-sm"
-                    aria-label={
-                        contractMode
-                            ? 'Operazioni sulle condizioni selezionate'
-                            : 'Operazioni sulle righe selezionate'
-                    }
+                    aria-label="Operazioni sulle righe selezionate"
                 >
                     <span className="mr-auto" role="status">
-                        {selectedLines.length}{' '}
-                        {contractMode
-                            ? 'condizioni selezionate'
-                            : 'righe selezionate'}
+                        {selectedLines.length} righe selezionate
                         {selectedLines.length > visibleSelected
                             ? ` (${selectedLines.length - visibleSelected} nascoste dai filtri)`
                             : ''}
@@ -633,16 +580,10 @@ export function ExpenseLines({
                                     className="py-6 text-center text-muted-foreground"
                                 >
                                     {lines.length
-                                        ? contractMode
-                                            ? 'Nessuna condizione corrisponde ai filtri.'
-                                            : 'Nessuna riga corrisponde ai filtri.'
+                                        ? 'Nessuna riga corrisponde ai filtri.'
                                         : readOnly
-                                          ? contractMode
-                                              ? 'Non sono presenti condizioni economiche.'
-                                              : 'Non sono presenti righe dettagliate.'
-                                          : contractMode
-                                            ? 'Aggiungi una condizione economica per inserire un importo.'
-                                            : 'Nessuna riga. Aggiungi una riga per inserire un importo.'}
+                                          ? 'Non sono presenti righe dettagliate.'
+                                          : 'Nessuna riga. Aggiungi una riga per inserire un importo.'}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -653,7 +594,7 @@ export function ExpenseLines({
                                 const cents = lineCents(line);
                                 const fieldError = (field: string) =>
                                     errors[`lines.${index}.${field}`]?.[0];
-                                const label = `${contractMode ? 'condizione economica' : 'riga'} ${index + 1}`;
+                                const label = `riga ${index + 1}`;
                                 return (
                                     <TableRow
                                         key={line.key}
@@ -1098,9 +1039,7 @@ export function ExpenseLines({
             </div>
             {filtered && !readOnly && (
                 <p className="text-sm text-muted-foreground">
-                    {contractMode
-                        ? 'Azzera i filtri per riordinare le condizioni.'
-                        : 'Azzera i filtri per riordinare le righe.'}
+                    Azzera i filtri per riordinare le righe.
                 </p>
             )}
             {showSummary && (
@@ -1112,22 +1051,9 @@ export function ExpenseLines({
                     >
                         {(
                             [
-                                [
-                                    contractMode
-                                        ? 'Totale allocato'
-                                        : allocatedLabel,
-                                    totals.allocated,
-                                ],
-                                [
-                                    contractMode
-                                        ? 'Totale effettivo'
-                                        : 'Effettivo',
-                                    totals.actual,
-                                ],
-                                [
-                                    `Scostamento (effettivo − ${allocatedLabel.toLowerCase()})`,
-                                    variance,
-                                ],
+                                ['Totale (Allocato)', totals.allocated],
+                                ['Totale (Effettivo)', totals.actual],
+                                ['Scostamento', variance],
                             ] as const
                         ).map(([label, value]) => (
                             <div key={label}>

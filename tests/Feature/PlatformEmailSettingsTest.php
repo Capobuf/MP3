@@ -10,8 +10,10 @@ use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Transport\ArrayTransport;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -106,7 +108,8 @@ class PlatformEmailSettingsTest extends TestCase
     public function test_test_requires_saved_smtp_and_a_valid_explicit_recipient(): void
     {
         $this->admin();
-        $this->post(route('platform.email.test'), ['recipient' => 'tester@example.test'])->assertSessionHasErrors('recipient');
+        $this->post(route('platform.email.test'), ['recipient' => 'tester@example.test'])
+            ->assertSessionHasNoErrors()->assertSessionHas('email_error.message');
         PlatformMailSetting::query()->create(['id' => 1, ...$this->settings()]);
         foreach (['', 'invalid'] as $recipient) {
             $this->post(route('platform.email.test'), ['recipient' => $recipient])->assertSessionHasErrors('recipient');
@@ -137,17 +140,64 @@ class PlatformEmailSettingsTest extends TestCase
 
     public function test_transport_error_is_safe_and_does_not_report_success(): void
     {
+        Log::spy();
         $this->admin();
         PlatformMailSetting::query()->create(['id' => 1, ...$this->settings()]);
         $transport = Mockery::mock(TransportInterface::class);
         $transport->shouldReceive('send')->once()->andThrow(new TransportException('smtp://user:smtp-secret@private-host.example.test stack trace'));
         Mail::extend('smtp', fn () => $transport);
         $this->post(route('platform.email.test'), ['recipient' => 'tester@example.test'])
-            ->assertSessionHasErrors('recipient')->assertSessionMissing('email_status');
-        $errors = json_encode(session('errors')->getBag('default')->all());
+            ->assertSessionHasNoErrors()->assertSessionHas('email_error')->assertSessionMissing('email_status');
+        $error = session('email_error');
+        $errors = json_encode($error);
         $this->assertStringNotContainsString('smtp-secret', $errors);
         $this->assertStringNotContainsString('private-host', $errors);
         $this->assertStringNotContainsString('stack trace', $errors);
+        $this->assertTrue(Str::isUuid($error['reference']));
+        Log::shouldHaveReceived('warning')->once()->with('Prova email SMTP non riuscita.', [
+            'reference' => $error['reference'],
+            'message' => $error['message'],
+            'exception_class' => TransportException::class,
+            'smtp_code' => null,
+        ]);
+        $this->get(route('platform.email.edit'))->assertInertia(fn (Assert $page) => $page
+            ->where('sendError', $error)->where('status', null));
+    }
+
+    #[DataProvider('smtpFailures')]
+    public function test_smtp_failure_explains_the_cause_without_exposing_server_details(string $detail, int $code, string $expected): void
+    {
+        Log::spy();
+        $this->admin();
+        PlatformMailSetting::query()->create(['id' => 1, ...$this->settings()]);
+        $transport = Mockery::mock(TransportInterface::class);
+        $transport->shouldReceive('send')->once()->andThrow(new TransportException($detail.' smtp-secret', $code));
+        Mail::extend('smtp', fn () => $transport);
+
+        $this->post(route('platform.email.test'), ['recipient' => 'tester@example.test'])
+            ->assertSessionHasNoErrors()->assertSessionMissing('email_status')
+            ->assertSessionHas('email_error.message', fn ($message) => str_contains($message, $expected) && ! str_contains($message, 'smtp-secret'));
+        Log::shouldHaveReceived('warning')->once()->with('Prova email SMTP non riuscita.', [
+            'reference' => session('email_error.reference'),
+            'message' => session('email_error.message'),
+            'exception_class' => TransportException::class,
+            'smtp_code' => $code >= 400 && $code <= 599 ? $code : null,
+        ]);
+    }
+
+    public static function smtpFailures(): array
+    {
+        return [
+            'credentials' => ['Failed to authenticate on SMTP server with username "private-user".', 535, 'Autenticazione SMTP'],
+            'auth unavailable' => ['Failed to find an authenticator supported by the SMTP server.', 504, 'Autenticazione SMTP'],
+            'starttls' => ['Unable to connect with STARTTLS: certificate verify failed', 0, 'Connessione sicura'],
+            'implicit tls' => ['Connection could not be established with host "ssl://private-host": SSL operation failed', 0, 'Connessione sicura'],
+            'timeout' => ['Connection to "private-host" timed out.', 0, 'non ha risposto in tempo'],
+            'unreachable' => ['Connection could not be established with host "private-host": Connection refused', 0, 'Connessione SMTP'],
+            'temporary rejection' => ['Server response: private details', 451, 'errore temporaneo (451)'],
+            'permanent rejection' => ['Server response: private details', 550, 'rifiutato la richiesta (550)'],
+            'unknown' => ['Unexpected private transport details', 0, 'Invio SMTP non riuscito'],
+        ];
     }
 
     public function test_cancelled_message_does_not_report_success(): void
@@ -157,7 +207,8 @@ class PlatformEmailSettingsTest extends TestCase
         Mail::extend('smtp', fn () => new ArrayTransport);
         Event::listen(MessageSending::class, fn () => false);
         $this->post(route('platform.email.test'), ['recipient' => 'tester@example.test'])
-            ->assertSessionHasErrors('recipient')->assertSessionMissing('email_status');
+            ->assertSessionHasNoErrors()->assertSessionMissing('email_status')
+            ->assertSessionHas('email_error.message', fn ($message) => str_contains($message, 'Invio non completato'));
     }
 
     public function test_standard_fortify_notifications_use_saved_smtp_and_ignore_mail_url(): void

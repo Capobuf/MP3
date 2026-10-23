@@ -33,7 +33,6 @@ import { MoneyField } from './money-field';
 import { FormSurface } from './form-surface';
 import { draftLines, emptyDraftLine, ExpenseLines } from './expense-lines';
 import { ExpensePeriodFields } from './expense-period-fields';
-import { dateLabel } from './helpers';
 import type { DraftLine } from './expense-lines';
 import { api, ApiError, decimalInput } from './helpers';
 import { RecordSelect } from './record-select';
@@ -76,7 +75,7 @@ const fields: Record<Kind, FormField[]> = {
         { key: 'ends_on', label: 'Data finale', type: 'date' },
     ],
     expenses: [
-        { key: 'title', label: 'Descrizione spesa', required: true },
+        { key: 'title', label: 'Descrizione', required: true },
         { key: 'period_starts_on', label: 'Inizio periodo', type: 'date' },
         { key: 'period_ends_on', label: 'Fine periodo', type: 'date' },
         {
@@ -234,7 +233,21 @@ export function EntityForm({
         }
         return [initial];
     });
-    const [localOptions, setLocalOptions] = useState(options);
+    const [localOptions, setLocalOptions] = useState(() => ({
+        ...options,
+        contracts: contractContext
+            ? [
+                  ...options.contracts,
+                  { ...contractContext, name: contractContext.name ?? '' },
+              ]
+            : options.contracts,
+        projects: projectContext
+            ? [
+                  ...options.projects,
+                  { ...projectContext, name: projectContext.name ?? '' },
+              ]
+            : options.projects,
+    }));
     const [creatingCostCenter, setCreatingCostCenter] = useState<string | null>(
         null,
     );
@@ -269,8 +282,9 @@ export function EntityForm({
         formBusy,
     );
     useEffect(() => {
+        if (!dirty && !formBusy) return;
         const listener = (event: BeforeUnloadEvent) => {
-            if (dirty || formBusy) event.preventDefault();
+            event.preventDefault();
         };
         window.addEventListener('beforeunload', listener);
         return () => window.removeEventListener('beforeunload', listener);
@@ -423,7 +437,8 @@ export function EntityForm({
                     );
                 }
             }
-            if (contractContext) payload.contract_entry = true;
+            if (contractContext && current.values.contract_id)
+                payload.contract_entry = true;
             if (budgetYearId && !current.record)
                 payload.budget_year_id = budgetYearId;
         }
@@ -606,19 +621,17 @@ export function EntityForm({
                     </>
                 }
                 description={
-                    <>
-                        {current.kind === 'expenses'
-                            ? current.detailed
-                                ? contractLines
-                                    ? `${current.record ? 'Modifica' : 'Inserisci'} i dati della spesa e le condizioni economiche.`
-                                    : `${current.record ? 'Modifica' : 'Inserisci'} i dati generali e le righe economiche della spesa.`
-                                : 'Inserisci il allocato, l’effettivo oppure entrambi. Un campo vuoto indica un importo non disponibile; zero è un importo valorizzato.'
-                            : current.kind === 'contracts'
-                              ? current.record
-                                  ? 'Modifica i dati del contratto. Le condizioni economiche sono nelle spese collegate.'
-                                  : 'Inserisci il contratto e le condizioni economiche della prima spesa.'
-                              : `Dati di ${tenant.name}.`}
-                    </>
+                    current.kind === 'expenses'
+                        ? current.detailed
+                            ? contractLines
+                                ? null
+                                : `${current.record ? 'Modifica' : 'Inserisci'} i dati generali e le righe economiche della spesa.`
+                            : 'Inserisci il allocato, l’effettivo oppure entrambi. Un campo vuoto indica un importo non disponibile; zero è un importo valorizzato.'
+                        : current.kind === 'contracts'
+                          ? current.record
+                              ? 'Modifica i dati del contratto. Gestisci gli importi dalle spese collegate.'
+                              : 'Inserisci il contratto e le righe della prima spesa.'
+                          : `Dati di ${tenant.name}.`
                 }
             >
                 {frames.length > 1 && (
@@ -672,27 +685,11 @@ export function EntityForm({
                         {current.kind === 'expenses' && (
                             <h2 className="font-semibold">Dati della spesa</h2>
                         )}
-                        {current.kind === 'expenses' && projectContext && (
-                            <p className="text-sm text-muted-foreground">
-                                Progetto: {projectContext.name}. La spesa verrà
-                                collegata a questo progetto.
-                            </p>
-                        )}
-                        {current.kind === 'expenses' && contractContext && (
-                            <p className="text-sm text-muted-foreground">
-                                Contratto:{' '}
-                                {contractContext.display_name ??
-                                    contractContext.name}
-                                . Date di riferimento:{' '}
-                                {dateLabel(contractContext.starts_on)} –{' '}
-                                {dateLabel(contractContext.ends_on)}.
-                            </p>
-                        )}
                         <FieldGroup
                             className={
                                 current.kind === 'expenses' ||
                                 current.kind === 'contracts'
-                                    ? 'grid gap-4 sm:grid-cols-2'
+                                    ? 'grid items-start gap-4 sm:grid-cols-2'
                                     : 'gap-5'
                             }
                             role={
@@ -754,12 +751,12 @@ export function EntityForm({
                                         return null;
                                     if (
                                         projectContext &&
-                                        field.key === 'project_id'
+                                        field.key === 'contract_id'
                                     )
                                         return null;
                                     if (
                                         contractContext &&
-                                        (field.key === 'contract_id' ||
+                                        (field.key === 'project_id' ||
                                             (!current.detailed &&
                                                 [
                                                     'vendor_id',
@@ -827,13 +824,6 @@ export function EntityForm({
                                             {field.label}
                                             {field.required && ' *'}
                                         </FieldLabel>
-                                        {incompatible && (
-                                            <p className="text-sm text-muted-foreground">
-                                                {budgetYearId
-                                                    ? 'Una voce singola del Budget deve restare autonoma.'
-                                                    : 'Rimuovi prima il collegamento all’altro contenitore per cambiarlo.'}
-                                            </p>
-                                        )}
                                         {field.catalog ? (
                                             <div className="flex gap-2">
                                                 <RecordSelect
@@ -993,6 +983,13 @@ export function EntityForm({
                                                 }
                                             />
                                         )}
+                                        {incompatible && (
+                                            <p className="text-sm text-muted-foreground">
+                                                {budgetYearId
+                                                    ? 'Una voce singola del Budget deve restare autonoma.'
+                                                    : 'Rimuovi prima il collegamento all’altro contenitore per cambiarlo.'}
+                                            </p>
+                                        )}
                                         {errors[field.key] && (
                                             <FieldError id={`${id}-error`}>
                                                 {errors[field.key][0]}
@@ -1086,16 +1083,15 @@ export function EntityForm({
                         {initialExpense && (
                             <FieldGroup>
                                 <p className="text-sm text-muted-foreground">
-                                    Compila le condizioni economiche per
-                                    registrare una spesa inclusa nei totali. Se
-                                    le lasci vuote, viene creato solo il
-                                    contratto.
+                                    Compila le righe della spesa per registrare
+                                    una spesa inclusa nei totali. Se le lasci
+                                    vuote, viene creato solo il contratto.
                                 </p>
                                 <Field
                                     data-invalid={!!initialExpenseErrors.title}
                                 >
                                     <FieldLabel htmlFor="initial-expense-title">
-                                        Descrizione spesa
+                                        Descrizione
                                     </FieldLabel>
                                     <Input
                                         id="initial-expense-title"
@@ -1132,9 +1128,7 @@ export function EntityForm({
                                 disabled={formBusy}
                                 onClick={useDetailedLines}
                             >
-                                {contractLines
-                                    ? 'Passa alle condizioni economiche'
-                                    : 'Passa alle righe economiche'}
+                                Passa alle righe della spesa
                             </Button>
                         )}
                         {((current.kind === 'expenses' && current.detailed) ||
@@ -1153,13 +1147,17 @@ export function EntityForm({
                                 defaultDescription={
                                     editingInitialExpense
                                         ? current.values.name
-                                        : (contractContext?.name ??
-                                          current.record?.contract?.name ??
-                                          localOptions.contracts.find(
+                                        : (localOptions.contracts.find(
                                               (contract) =>
                                                   String(contract.id) ===
                                                   current.values.contract_id,
-                                          )?.name)
+                                          )?.name ??
+                                          (String(
+                                              current.record?.contract?.id,
+                                          ) === current.values.contract_id
+                                              ? (current.record?.contract
+                                                    ?.name ?? undefined)
+                                              : undefined))
                                 }
                                 defaultPeriod={
                                     editingInitialExpense
