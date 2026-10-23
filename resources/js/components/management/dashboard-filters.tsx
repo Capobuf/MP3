@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import { Plus, Search, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     InputGroup,
@@ -38,12 +38,14 @@ export function DashboardFilters({
     path,
     busy = false,
     onCreate,
+    createAction,
     hideRelations = [],
     contractMode = false,
 }: Omit<ExpensePageProps, 'totals'> & {
     path: string;
     busy?: boolean;
     onCreate?: () => void;
+    createAction?: ReactNode;
     hideRelations?: ('vendors' | 'contracts' | 'projects')[];
     contractMode?: boolean;
 }) {
@@ -247,17 +249,18 @@ export function DashboardFilters({
                     Azzera filtri
                 </Button>
             )}
-            {onCreate && (
-                <Button
-                    type="button"
-                    className="w-full sm:ml-auto sm:w-auto"
-                    disabled={busy}
-                    onClick={onCreate}
-                >
-                    <Plus data-icon="inline-start" />
-                    Nuova spesa
-                </Button>
-            )}
+            {createAction ??
+                (onCreate && (
+                    <Button
+                        type="button"
+                        className="w-full sm:ml-auto sm:w-auto"
+                        disabled={busy}
+                        onClick={onCreate}
+                    >
+                        <Plus data-icon="inline-start" />
+                        Nuova spesa
+                    </Button>
+                ))}
             {activeFilters > 0 && (
                 <div
                     className="flex w-full flex-wrap gap-2 border-t pt-3"

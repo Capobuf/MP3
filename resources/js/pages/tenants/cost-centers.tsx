@@ -246,20 +246,12 @@ export default function CostCenters({
                     icon={Tags}
                     accent="cost-center"
                     actions={
-                        <>
-                            <Button
-                                onClick={() => router.visit(`${path}/create`)}
-                            >
-                                <Plus data-icon="inline-start" />
-                                Nuovo Centro di Costo
-                            </Button>
-                            <SpreadsheetActions
-                                slug={tenant.slug}
-                                resource="cost-centers"
-                                label="Centri di costo"
-                                filters={filters}
-                            />
-                        </>
+                        <SpreadsheetActions
+                            slug={tenant.slug}
+                            resource="cost-centers"
+                            label="Centri di costo"
+                            filters={filters}
+                        />
                     }
                 >
                     <h1 className="page-title">Centri di Costo</h1>
@@ -329,6 +321,15 @@ export default function CostCenters({
                                     </Button>
                                 )}
                             </TableFilters>
+                            <Button
+                                type="button"
+                                className="w-full sm:ml-auto sm:w-auto"
+                                disabled={busy}
+                                onClick={() => router.visit(`${path}/create`)}
+                            >
+                                <Plus data-icon="inline-start" />
+                                Nuovo Centro di Costo
+                            </Button>
                         </div>
                         {records.data.length ? (
                             <div className="min-w-0 overflow-hidden rounded-lg border bg-card">

@@ -62,7 +62,6 @@ import {
     EmptyHeader,
     EmptyTitle,
     EmptyDescription,
-    EmptyContent,
 } from '@/components/ui/empty';
 import {
     Select,
@@ -164,20 +163,12 @@ export default function CatalogPage({
                     icon={catalogHeroes[catalog].icon}
                     accent={catalogHeroes[catalog].accent}
                     actions={
-                        <>
-                            <Button
-                                onClick={() => router.visit(`${path}/create`)}
-                            >
-                                <Plus data-icon="inline-start" />
-                                Nuovo {singular[catalog]}
-                            </Button>
-                            <SpreadsheetActions
-                                slug={tenant.slug}
-                                resource={catalog}
-                                label={labels[catalog]}
-                                filters={filters}
-                            />
-                        </>
+                        <SpreadsheetActions
+                            slug={tenant.slug}
+                            resource={catalog}
+                            label={labels[catalog]}
+                            filters={filters}
+                        />
                     }
                 >
                     <h1 className="page-title">{labels[catalog]}</h1>
@@ -387,6 +378,15 @@ export default function CatalogPage({
                                     </Button>
                                 </form>
                             </TableFilters>
+                            <Button
+                                type="button"
+                                className="w-full sm:ml-auto sm:w-auto"
+                                disabled={deleting !== null}
+                                onClick={() => router.visit(`${path}/create`)}
+                            >
+                                <Plus data-icon="inline-start" />
+                                Nuovo {singular[catalog]}
+                            </Button>
                         </div>
                         {records.data.length === 0 ? (
                             <Empty className="border">
@@ -399,16 +399,6 @@ export default function CatalogPage({
                                         primo elemento.
                                     </EmptyDescription>
                                 </EmptyHeader>
-                                <EmptyContent>
-                                    <Button
-                                        variant="outline"
-                                        onClick={() =>
-                                            router.visit(`${path}/create`)
-                                        }
-                                    >
-                                        Aggiungi {singular[catalog]}
-                                    </Button>
-                                </EmptyContent>
                             </Empty>
                         ) : (
                             <div className="min-w-0 overflow-hidden rounded-lg border bg-card">

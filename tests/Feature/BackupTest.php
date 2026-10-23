@@ -72,6 +72,7 @@ class BackupTest extends TestCase
         $archives = $backups->archives();
         $this->assertCount(1, $archives);
         $name = $archives[0]['name'];
+        $this->assertMatchesRegularExpression('/^obake-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}(?:-\d+)?\.zip$/', $name);
         $path = $backups->path(null, $name);
         $zip = BackupArchive::open($path);
         try {
@@ -95,6 +96,38 @@ class BackupTest extends TestCase
     private function tenant(string $slug): Tenant
     {
         return Tenant::create(['name' => $slug, 'slug' => $slug]);
+    }
+
+    public function test_backup_names_use_rome_time_and_only_add_a_suffix_for_collisions(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-23 22:05:42', 'UTC'));
+        $tenant = $this->tenant('source');
+        $backups = app(BackupManager::class);
+        $disk = Storage::disk('backups');
+
+        $first = $backups->create($tenant);
+        $this->assertSame('obake-24-10-2026-00-05.zip', $first);
+        $original = hash_file('sha256', $backups->path($tenant, $first));
+        $this->assertSame('obake-24-10-2026-00-05-2.zip', $backups->create($tenant));
+        $disk->put('.pending/obake-24-10-2026-00-05-3.zip', 'unfinished archive');
+        $this->assertSame('obake-24-10-2026-00-05-4.zip', $backups->create($tenant));
+        $this->assertSame('unfinished archive', $disk->get('.pending/obake-24-10-2026-00-05-3.zip'));
+        $this->assertSame($original, hash_file('sha256', $backups->path($tenant, $first)));
+
+        $this->travelTo(now()->addMinute());
+        $this->assertSame('obake-24-10-2026-00-06.zip', $backups->create($tenant));
+    }
+
+    public function test_archives_are_sorted_by_date_with_both_old_and_new_names(): void
+    {
+        $disk = Storage::disk('backups');
+        $names = ['2026-08-01-12-00-00-legacy.zip', 'obake-30-09-2026-12-00.zip', 'obake-01-10-2026-12-00.zip'];
+        foreach ($names as $index => $name) {
+            $disk->put('platform/'.$name, 'archive');
+            touch($disk->path('platform/'.$name), now()->subDays(3 - $index)->timestamp);
+        }
+
+        $this->assertSame(array_reverse($names), array_column(app(BackupManager::class)->archives(), 'name'));
     }
 
     /** @return array{Tenant, User} */

@@ -336,6 +336,29 @@ class DriveSyncTest extends TestCase
         }
     }
 
+    public function test_backup_names_do_not_reuse_an_existing_drive_copy_after_local_deletion(): void
+    {
+        $this->freezeTime();
+        $this->connected()->update(['backup_enabled' => true]);
+        $this->mock(PlatformBackup::class, function ($mock): void {
+            $mock->shouldReceive('create')->twice()->andReturnUsing(function ($name) {
+                Storage::disk('backups')->put('.pending/'.$name, 'archive-'.$name);
+
+                return Storage::disk('backups')->path('.pending/'.$name);
+            });
+        });
+        $backups = app(BackupManager::class);
+        $first = $backups->create();
+        $fileId = app(DriveSync::class)->objectId('backup-'.$first);
+        $original = $this->server->files[$fileId]['content'];
+        $backups->delete(null, [$first]);
+
+        $second = $backups->create();
+        $this->assertSame(substr($first, 0, -4).'-2.zip', $second);
+        $this->assertNotSame($fileId, app(DriveSync::class)->objectId('backup-'.$second));
+        $this->assertSame($original, $this->server->files[$fileId]['content']);
+    }
+
     public function test_reconnecting_same_account_keeps_ids_and_switching_account_uses_separate_folders(): void
     {
         $settings = $this->connected();

@@ -27,7 +27,6 @@ class MultitenancyTest extends TestCase
         $this->actingAs($member)
             ->post(route('platform.tenants.store'), [
                 'name' => 'Unauthorized',
-                'slug' => 'unauthorized',
             ])
             ->assertForbidden();
         $this->assertDatabaseCount('tenants', 0);
@@ -58,12 +57,11 @@ class MultitenancyTest extends TestCase
         $this->actingAs($superuser)
             ->post(route('platform.tenants.store'), [
                 'name' => 'Acme S.r.l.',
-                'slug' => 'acme',
             ])
             ->assertRedirect(route('platform.index'))
             ->assertInertiaFlash('toast.message', 'Azienda creata correttamente.');
 
-        $tenant = Tenant::query()->where('slug', 'acme')->firstOrFail();
+        $tenant = Tenant::query()->where('slug', 'acme-srl')->firstOrFail();
 
         $this->actingAs($superuser)
             ->patch(route('platform.tenants.update', $tenant), [
@@ -74,7 +72,34 @@ class MultitenancyTest extends TestCase
             ->assertInertiaFlash('toast.message', 'Azienda aggiornata correttamente.');
 
         $this->assertSame('Acme Group', $tenant->refresh()->name);
-        $this->assertSame('acme', $tenant->slug);
+        $this->assertSame('acme-srl', $tenant->slug);
+    }
+
+    public function test_tenant_slugs_are_generated_from_names_and_duplicates_get_suffixes(): void
+    {
+        $this->actingAs($this->createSuperuser());
+
+        foreach ([
+            ['Caffè & Società', 'caffe-societa'],
+            ['Caffe Societa', 'caffe-societa-2'],
+            ['Caffè & Società', 'caffe-societa-3'],
+            ['!!!', 'azienda'],
+            ['???', 'azienda-2'],
+            ['0', '0'],
+            [str_repeat('a', 255), str_repeat('a', 255)],
+            [str_repeat('a', 255), str_repeat('a', 253).'-2'],
+        ] as [$name, $slug]) {
+            $this->post(route('platform.tenants.store'), ['name' => $name, 'slug' => 'ignored'])
+                ->assertSessionHasNoErrors()
+                ->assertRedirect(route('platform.index'));
+            $this->assertDatabaseHas('tenants', ['name' => $name, 'slug' => $slug]);
+        }
+
+        foreach (['', str_repeat('a', 256)] as $name) {
+            $this->postJson(route('platform.tenants.store'), ['name' => $name])
+                ->assertUnprocessable()->assertJsonValidationErrors('name');
+        }
+        $this->assertDatabaseCount('tenants', 8);
     }
 
     public function test_superuser_can_rename_a_tenant_inline_and_invalid_names_are_rejected(): void
