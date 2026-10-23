@@ -126,6 +126,9 @@ jobs:
         run: npm run build
 
       - name: Test frontend
+        env:
+          # Vitest initializes Vite in serve mode, which Laravel rejects in CI.
+          LARAVEL_BYPASS_ENV_CHECK: '1'
         run: npx --no-install vp test run --bail=1
 
       # Wayfinder generates route types during the build.
