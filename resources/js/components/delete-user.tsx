@@ -1,4 +1,4 @@
-import { Form } from '@inertiajs/react';
+import { Form, usePage } from '@inertiajs/react';
 import { useRef } from 'react';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import Heading from '@/components/heading';
@@ -17,14 +17,17 @@ import {
 import { Label } from '@/components/ui/label';
 
 export default function DeleteUser() {
+    const { auth } = usePage().props;
     const passwordInput = useRef<HTMLInputElement>(null);
+
+    if (auth.user.is_super_admin) return null;
 
     return (
         <div className="space-y-6">
             <Heading
                 variant="small"
                 title="Elimina account"
-                description="Elimina il tuo account e tutte le risorse associate."
+                description="Elimina il tuo account solo se non ci sono dati storici collegati."
             />
             <div className="space-y-4 rounded-lg border border-destructive/25 bg-destructive/5 p-4">
                 <div className="relative space-y-0.5 text-destructive">
@@ -48,9 +51,10 @@ export default function DeleteUser() {
                             Vuoi eliminare il tuo account?
                         </DialogTitle>
                         <DialogDescription>
-                            L’account, i dati e le risorse associate verranno
-                            eliminati definitivamente. Inserisci la password per
-                            confermare.
+                            L’account e le credenziali saranno eliminati
+                            definitivamente. Se ci sono dati storici collegati,
+                            contatta un amministratore per bloccare l’accesso.
+                            Inserisci la password per confermare.
                         </DialogDescription>
 
                         <Form
@@ -81,6 +85,7 @@ export default function DeleteUser() {
                                         />
 
                                         <InputError message={errors.password} />
+                                        <InputError message={errors.user} />
                                     </div>
 
                                     <DialogFooter className="gap-2">

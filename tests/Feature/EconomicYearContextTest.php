@@ -25,7 +25,7 @@ class EconomicYearContextTest extends TestCase
         $this->travelTo(now()->setDate(2026, 10, 12));
         $this->tenant = Tenant::create(['name' => 'Alfa', 'slug' => 'alfa']);
         $this->other = Tenant::create(['name' => 'Beta', 'slug' => 'beta']);
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_platform_admin' => true]);
         $user->tenants()->attach([$this->tenant->id, $this->other->id]);
         $this->actingAs($user);
     }
@@ -44,7 +44,8 @@ class EconomicYearContextTest extends TestCase
         $this->get('/t/beta/dashboard?year=2024')->assertInertia(fn (Assert $page) => $page->where('economicContext.year', 2024));
         $this->get('/t/alfa/budget')->assertInertia(fn (Assert $page) => $page->where('selectedYear', 2025));
         $this->get('/t/beta/expenses')->assertInertia(fn (Assert $page) => $page->where('filters.year', 2024));
-        $this->get('/dashboard')->assertInertia(fn (Assert $page) => $page->where('economicContext', null));
+        $this->get('/dashboard')->assertRedirect('/platform');
+        $this->get('/platform')->assertInertia(fn (Assert $page) => $page->where('economicContext', null));
     }
 
     public function test_invalid_get_years_are_rejected_without_changing_session(): void

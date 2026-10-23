@@ -112,14 +112,25 @@ export default function TenantUsers({
                                     </p>
                                     <Badge
                                         variant={
+                                            user.is_active
+                                                ? 'secondary'
+                                                : 'destructive'
+                                        }
+                                    >
+                                        {user.is_active
+                                            ? 'Abilitato'
+                                            : 'Bloccato'}
+                                    </Badge>
+                                    <Badge
+                                        variant={
                                             user.email_verified_at
                                                 ? 'secondary'
                                                 : 'outline'
                                         }
                                     >
                                         {user.email_verified_at
-                                            ? 'Attivo'
-                                            : 'Email non verificata'}
+                                            ? 'Email verificata'
+                                            : 'Email da verificare'}
                                     </Badge>
                                 </div>
                                 {user.is_super_admin ? (
@@ -156,7 +167,7 @@ export default function TenantUsers({
                                 Rimuovere l’accesso di {removing?.email} a{' '}
                                 {tenant.name}? L’account e gli altri ambienti
                                 assegnati saranno conservati. Se rimuovi il tuo
-                                accesso, tornerai alla scelta dell’ambiente.
+                                accesso, tornerai alla pagina del tuo account.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         {Object.values(removal.errors).map((message) => (

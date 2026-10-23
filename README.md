@@ -268,7 +268,7 @@ git remote set-url origin https://github.com/Capobuf/obake.git
 
 ## Email della piattaforma
 
-I super admin possono aprire **Impostazioni Piattaforma → Email** e salvare
+Gli amministratori della piattaforma possono aprire **Impostazioni Piattaforma → Email** e salvare
 un unico SMTP per tutti gli ambienti. La configurazione si applica al mailer
 standard Laravel, compresi verifica email e recupero password Fortify.
 La modalità **Automatica / STARTTLS** usa `smtp` e negozia STARTTLS quando
@@ -318,16 +318,37 @@ nel browser non certificano da sole il recapito o la compatibilità del client.
 
 ## Inviti e accesso agli ambienti
 
-In **Impostazioni Piattaforma → Utenti** il super admin invita un nuovo account
-con email e nome facoltativo. L’invito non assegna ambienti né privilegi globali.
-Un account già presente si assegna agli ambienti dalla gestione esistente.
+In **Impostazioni Piattaforma → Utenti**, super admin e amministratori della
+piattaforma invitano nuovi amministratori tramite **Invita utente**, scegliendo
+zero, uno o più ambienti. Il profilo Piattaforma accede alle impostazioni globali
+(utenti, ambienti, email, backup e sync), ma consulta solo gli ambienti assegnati.
+È un permesso forte: può modificare esplicitamente anche queste assegnazioni.
+Solo `is_super_admin`, riservato al bootstrap/CLI, bypassa le associazioni tenant.
 
 Ogni membro può gestire **Impostazioni ambiente → Utenti**, stati dei progetti
-e importazione/esportazione dati del proprio ambiente. L’invito a un nuovo
-utente usa il reset password Fortify; un account esistente conserva password
-e altri ambienti e riceve una notifica con il link all’ambiente. La rimozione
-revoca soltanto l’associazione corrente, anche quando riguarda il proprio
-accesso; i super admin mantengono accesso a tutti gli ambienti.
+e importazione/esportazione del proprio ambiente. Questo invito crea un utente
+aziendale con un solo ambiente e senza accesso Platform né selettore ambienti.
+Un account aziendale già assegnato altrove o un amministratore Platform non può
+essere riutilizzato da questo invito; il reinvito nello stesso ambiente non
+invia una seconda email. La rimozione revoca solo l’associazione corrente.
+
+Dalla riga utente in Platform si gestiscono gli ambienti (massimo uno per gli
+aziendali), si conferma esplicitamente la promozione a Piattaforma, si blocca o
+riattiva l’accesso e si elimina un account senza storico. Il blocco è distinto
+dalla verifica email, revoca le sessioni database e impedisce password, 2FA,
+passkey e sessioni già aperte. Reset password e assegnazioni non lo rimuovono.
+Commenti, anche eliminati logicamente, storico undo o allegati con autore
+impediscono la cancellazione, anche dal profilo personale. Super admin e
+account corrente sono protetti dalle azioni distruttive di Platform.
+
+**Rollout:** applicare la migration `2026_10_23_000001_add_platform_access_to_users`.
+Gli account esistenti restano abilitati e non ricevono nuovi privilegi. Controllare
+il profilo nella pagina Utenti: gli account aziendali legacy con più ambienti
+sono segnalati e non accedono ai tenant fino alla correzione esplicita delle
+assegnazioni o alla promozione confermata. Anche gli account precedentemente
+invitati globalmente richiedono una promozione esplicita se devono gestire Platform.
+Il ripristino di backup aziendali rifiuta una seconda associazione aziendale;
+non promuove utenti né rimuove associazioni automaticamente.
 
 Il link di impostazione password usa `password_reset_tokens` e la scadenza del
 broker configurato (normalmente 60 minuti). L’indirizzo diventa verificato solo
@@ -618,7 +639,7 @@ php artisan test --filter=ContractScheduleTest --stop-on-failure
 
 ## Backup locali e ripristino
 
-**Impostazioni Piattaforma → Backup** è riservato ai super admin. Crea uno ZIP
+**Impostazioni Piattaforma → Backup** è riservato agli amministratori della piattaforma. Crea uno ZIP
 con il database MySQL completo, `storage/app/private` (allegati, foto e copie
 Undo), storage pubblico, codice, asset compilati, lockfile, configurazione e
 `.env`, inclusa `APP_KEY`. Non richiede Google Drive. Gli archivi sono in
@@ -796,7 +817,7 @@ Per l’intera suite usare il database separato `testing`, mai quello operativo:
 ## Google Drive: report annuali e copia dei backup
 
 **Impostazioni Piattaforma → Sync** collega un solo account Google tramite
-`google/apiclient` con lo scope `drive.file`. Solo i super admin collegano o
+`google/apiclient` con lo scope `drive.file`. Solo gli amministratori della piattaforma collegano o
 scollegano l’account e abilitano gli ambienti. I membri di ogni ambiente possono
 consultarne lo stato e avviare **Sincronizza ora**, con gli stessi permessi delle
 altre impostazioni ambiente. Non sono presenti OAuth o override per tenant.
@@ -816,7 +837,7 @@ altre impostazioni ambiente. Non sono presenti OAuth o override per tenant.
    esattamente quell’URI in Google Cloud. Il valore predefinito
    è `APP_URL/platform/settings/sync/callback`; `GOOGLE_DRIVE_REDIRECT_URI`
    consente di specificare l’URL effettivo dietro un proxy. La pagina e il
-   callback devono condividere la sessione autenticata del super admin.
+   callback devono condividere la sessione autenticata dell’amministratore della piattaforma.
 4. Pubblicare l’applicazione su un hostname HTTPS per collegare Google:
    `http://10.0.0.30:8000` non è un redirect OAuth valido. Google ammette HTTP
    soltanto per localhost/loopback, con le eccezioni descritte nelle
@@ -871,7 +892,7 @@ OAuth, e abilitare Google Picker API. Non si ricava il numero dal Client ID.
 La chiave è destinata all’uso nel browser: limitarla a Google Picker API e agli
 origin consentiti secondo la [guida Google Picker](https://developers.google.com/workspace/drive/picker/guides/web-picker).
 Il selettore riutilizza l’access token centrale con scope `drive.file`:
-non aggiunge un secondo login o permessi globali su Drive. Solo il super admin
+non aggiunge un secondo login o permessi globali su Drive. Solo l’amministratore della piattaforma
 riceve temporaneamente l’access token, da una risposta privata non memorizzabile
 in cache; refresh token e Client Secret restano sul server.
 

@@ -13,16 +13,16 @@ import type { NavItem, Tenant } from '@/types';
 
 export function getPrimaryNavItems(
     tenant: Tenant | null,
-    isSuperAdmin: boolean,
+    canManagePlatform: boolean,
 ): NavItem[] {
     if (!tenant) {
         return [
             {
-                title: isSuperAdmin
+                title: canManagePlatform
                     ? 'Impostazioni Piattaforma'
-                    : 'Scegli ambiente',
-                href: isSuperAdmin ? '/platform' : '/dashboard',
-                icon: isSuperAdmin ? Settings : LayoutGrid,
+                    : 'Il mio ambiente',
+                href: canManagePlatform ? '/platform' : '/dashboard',
+                icon: canManagePlatform ? Settings : LayoutGrid,
             },
         ];
     }
@@ -73,7 +73,7 @@ export function getPrimaryNavItems(
 
 export function getAdministrativeNavItems(
     tenant: Tenant | null,
-    isSuperAdmin: boolean,
+    canManagePlatform: boolean,
 ): NavItem[] {
     return [
         ...(tenant
@@ -85,7 +85,7 @@ export function getAdministrativeNavItems(
                   },
               ]
             : []),
-        ...(isSuperAdmin
+        ...(canManagePlatform
             ? [
                   {
                       title: 'Impostazioni Piattaforma',

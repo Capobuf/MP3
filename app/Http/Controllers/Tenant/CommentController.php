@@ -9,6 +9,7 @@ use App\Models\CostCenter;
 use App\Models\Expense;
 use App\Models\Project;
 use App\Models\Tenant;
+use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -79,6 +80,8 @@ class CommentController extends Controller
     public function store(CommentRequest $request, Tenant $tenant, string $resource, int $record): JsonResponse
     {
         $comment = DB::transaction(function () use ($request, $tenant, $resource, $record) {
+            // Serialize new authorship with account deletion (comments have no user FK).
+            User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $owner = $this->owner($tenant, $resource, $record, true);
             $parentId = $request->validated('parent_id');
             if ($parentId !== null && ! $owner->comments()->whereNull('parent_id')->whereKey($parentId)->exists()) {

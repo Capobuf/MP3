@@ -40,7 +40,7 @@ class DashboardTest extends TestCase
             ->assertRedirect(route('tenant.dashboard', $tenant));
     }
 
-    public function test_user_with_multiple_tenants_can_choose_between_them(): void
+    public function test_legacy_company_user_with_multiple_tenants_requires_correction(): void
     {
         $user = User::factory()->create();
         $first = Tenant::create(['name' => 'Acme', 'slug' => 'acme']);
@@ -52,8 +52,7 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('dashboard')
-                ->has('tenants', 2)
-                ->where('tenants.0.slug', 'acme')
-                ->where('tenants.1.slug', 'globex'));
+                ->has('tenants', 0)
+                ->where('invalidMemberships', true));
     }
 }

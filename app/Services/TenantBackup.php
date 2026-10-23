@@ -187,6 +187,9 @@ class TenantBackup
                     $settings['user_ids'] = array_map(fn ($id) => $this->reference($maps, 'users', $id), $settings['user_ids']);
                 }
                 $tenant->forceFill(['contract_reminders' => $settings, 'logo_path' => $logoPath])->saveOrFail();
+                foreach (User::whereIn('id', $members)->orderBy('id')->lockForUpdate()->get() as $member) {
+                    Archive::check($member->canManagePlatform() || ! $member->tenants()->where('tenants.id', '!=', $tenant->id)->exists(), 'Un utente aziendale è già assegnato a un altro ambiente. Correggere il profilo dalla gestione Utenti prima del ripristino.');
+                }
                 $tenant->users()->sync($members);
             });
         } catch (Throwable $error) {
@@ -219,7 +222,7 @@ class TenantBackup
     {
         $map = [];
         foreach ($users as $identity) {
-            $existing = User::where('email', $identity['email'])->first();
+            $existing = User::where('email', $identity['email'])->lockForUpdate()->first();
             if ($existing !== null) {
                 Archive::check($installation === hash('sha256', (string) config('app.key')) && $existing->id === $identity['id'] && $existing->name === $identity['name'] && $existing->email === $identity['email'], 'Conflitto di identità utente: nessun account esistente è stato modificato.');
                 $map[$identity['id']] = $existing->id;

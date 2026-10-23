@@ -19,6 +19,28 @@ export function TenantSwitcher() {
     const { auth, currentTenant } = usePage().props;
     const { isMobile, setOpenMobile } = useSidebar();
 
+    if (!auth.canManagePlatform || auth.tenants.length === 0) {
+        return (
+            <div
+                className="flex min-w-0 items-center gap-2 px-2 py-3"
+                title={
+                    currentTenant?.name ??
+                    auth.tenants[0]?.name ??
+                    'Nessun ambiente assegnato'
+                }
+            >
+                <Building2 className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate group-data-[collapsible=icon]:hidden">
+                    {currentTenant?.name ??
+                        auth.tenants[0]?.name ??
+                        (auth.canManagePlatform
+                            ? 'Piattaforma'
+                            : 'Nessun ambiente assegnato')}
+                </span>
+            </div>
+        );
+    }
+
     return (
         <SidebarMenu>
             <SidebarMenuItem>
@@ -87,7 +109,7 @@ export function TenantSwitcher() {
                                 </DropdownMenuItem>
                             ))
                         )}
-                        {auth.user.is_super_admin && (
+                        {auth.canManagePlatform && (
                             <>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem asChild>

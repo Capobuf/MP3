@@ -98,10 +98,10 @@ class BackupTest extends TestCase
     }
 
     /** @return array{Tenant, User} */
-    private function fixture(): array
+    private function fixture(bool $platform = true): array
     {
         $tenant = $this->tenant('source');
-        $user = User::factory()->create();
+        $user = User::factory()->create(['is_platform_admin' => $platform]);
         $tenant->users()->attach($user);
         $tenant->forceFill(['contract_reminders' => ['enabled' => true, 'mode' => 'expiry', 'days' => [7], 'monthly_day' => 1, 'user_ids' => [$user->id], 'external_emails' => []]])->save();
         $vendor = $tenant->vendors()->create(['name' => 'Fornitore']);
@@ -403,7 +403,7 @@ class BackupTest extends TestCase
 
     public function test_authorization_manual_backup_and_authenticated_download(): void
     {
-        [$tenant, $user] = $this->fixture();
+        [$tenant, $user] = $this->fixture(false);
         $path = '/t/'.$tenant->slug.'/settings/backups';
         $this->get($path)->assertRedirect('/login');
         $this->actingAs(User::factory()->create())->get($path)->assertForbidden();
@@ -414,7 +414,7 @@ class BackupTest extends TestCase
         $name = app(BackupManager::class)->archives($tenant)[0]['name'];
         $this->get($path.'/'.$name)->assertOk()->assertDownload($name)->assertHeader('Cache-Control', 'no-store, private');
         $other = $this->tenant('other');
-        $other->users()->attach($user);
+        $user->tenants()->sync([$other->id]);
         $this->get('/t/other/settings/backups/'.$name)->assertNotFound();
         foreach (['get', 'post', 'put'] as $method) {
             $this->{$method}('/platform/settings/backups')->assertForbidden();
@@ -588,6 +588,7 @@ class BackupTest extends TestCase
         $backups->restoreTenant($target, $path);
         $new = User::where('email', 'new-account@example.test')->sole();
         $this->assertFalse($new->is_super_admin);
+        $this->assertFalse($new->is_platform_admin);
         $this->assertNull($new->email_verified_at);
         $this->assertSame([$new->id], $target->users()->pluck('users.id')->all());
         $this->assertSame([$new->id], $target->fresh()->contract_reminders['user_ids']);
@@ -970,5 +971,23 @@ class BackupTest extends TestCase
         Storage::disk('backups')->assertMissing('platform/old.zip');
         Storage::disk('backups')->assertExists('platform/new.zip');
         BackupLock::run(fn () => $this->post('/login', ['email' => 'test@example.test', 'password' => 'anything'])->assertStatus(503));
+    }
+
+    public function test_restore_does_not_add_a_second_tenant_to_a_company_account(): void
+    {
+        [$source, $user] = $this->fixture(false);
+        $backups = app(BackupManager::class);
+        $path = $backups->path($source, $backups->create($source));
+        $target = $this->tenant('destination');
+        $files = Storage::disk('attachments')->allFiles();
+        try {
+            $backups->restoreTenant($target, $path);
+            $this->fail('Company membership must not be duplicated by restore.');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('utente aziendale', $error->getMessage());
+        }
+        $this->assertTrue(app(TenantBackup::class)->isEmpty($target->fresh()));
+        $this->assertSame([$source->id], $user->tenants()->pluck('tenants.id')->all());
+        $this->assertSame($files, Storage::disk('attachments')->allFiles());
     }
 }
