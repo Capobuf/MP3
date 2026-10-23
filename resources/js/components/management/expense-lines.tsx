@@ -96,6 +96,7 @@ export function lineCents(line: ExpenseLine): bigint | null {
 
 export function ExpenseLines({
     lines,
+    preservedAmounts,
     onChange,
     onSaveLine,
     disabled = false,
@@ -109,6 +110,7 @@ export function ExpenseLines({
     errors = {},
 }: {
     lines: DraftLine[];
+    preservedAmounts?: Pick<RecordData, 'allocated_amount' | 'actual_amount'>;
     onChange?: (lines: DraftLine[]) => void;
     onSaveLine?: (
         key: string,
@@ -148,6 +150,19 @@ export function ExpenseLines({
         allocated: null,
         actual: null,
     };
+    if (preservedAmounts) {
+        for (const type of ['allocated', 'actual'] as const) {
+            const amount = preservedAmounts[`${type}_amount`];
+            if (amount != null) {
+                totals[type] = lineCents({
+                    type,
+                    description: '',
+                    unit_price: amount,
+                    quantity: '1',
+                });
+            }
+        }
+    }
     const incomplete = new Set<ExpenseLine['type']>();
     for (const line of lines) {
         const cents = lineCents(line);

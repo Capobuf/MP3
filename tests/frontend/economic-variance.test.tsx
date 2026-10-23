@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { useState } from 'react';
+import { ExpenseLinesCard } from '../../resources/js/components/management/expense-lines-card';
+import type { DraftLine } from '../../resources/js/components/management/expense-lines';
+import type { Expense } from '../../resources/js/components/management/types';
 import {
     ExpenseLines,
     draftLines,
@@ -16,6 +20,24 @@ import {
 import { budgetSummary } from '../../resources/js/components/management/budget-types';
 import { DashboardSummary } from '../../resources/js/components/management/dashboard-summary';
 import type { EconomicValues } from '../../resources/js/components/management/analytics-types';
+
+vi.mock('react', async (importOriginal) => {
+    const react = await importOriginal<typeof import('react')>();
+    return { ...react, useState: vi.fn(react.useState) };
+});
+
+function editorSummary(expense: Expense, draft = draftLines(expense)) {
+    // SSR cannot click Manage lines: enter the card's editing state directly.
+    vi.mocked(useState).mockImplementationOnce(() => [draft, vi.fn()]);
+    const html = renderToStaticMarkup(
+        <ExpenseLinesCard
+            expense={expense}
+            url="/expenses/1"
+            onEditingChange={() => {}}
+        />,
+    );
+    return html.slice(html.indexOf('<dl'));
+}
 
 vi.mock('@inertiajs/react', () => ({
     usePage: () => ({ props: { economicContext: { year: 2026 } } }),
@@ -47,6 +69,26 @@ describe('Economic variance', () => {
     it.each(cases)(
         'previews %s / %s with signed cents and optional amounts',
         (allocated, actual, variance) => {
+            const expense: Expense = {
+                id: 1,
+                title: 'Importata',
+                year: 2026,
+                allocated_amount: allocated,
+                actual_amount: actual,
+                lines: [],
+            };
+            expect(draftLines(expense)).toEqual([]);
+            const editor = editorSummary(expense);
+            expect(editor).toContain(
+                allocated === null ? 'Da completare' : money(allocated),
+            );
+            expect(editor).toContain(
+                actual === null ? 'Da completare' : money(actual),
+            );
+            expect(editor.slice(editor.indexOf('Scostamento ('))).toContain(
+                money(variance),
+            );
+            expect(editor).not.toContain('+');
             const html = renderToStaticMarkup(
                 <ExpenseLines
                     lines={draftLines({
@@ -79,14 +121,51 @@ describe('Economic variance', () => {
                 allocated_amount: '100.00',
                 actual_amount: price,
             });
-            const html = renderToStaticMarkup(
-                <ExpenseLines lines={lines} readOnly />,
+            const html = editorSummary(
+                {
+                    id: 1,
+                    title: 'Importata',
+                    year: 2026,
+                    allocated_amount: '100.00',
+                    actual_amount: '80.00',
+                    lines: [],
+                },
+                lines,
             );
             const summary = html.slice(html.indexOf('Scostamento ('));
             expect(summary).toContain('Da completare');
             expect(summary).not.toContain('-100,00');
         },
     );
+    it('uses draft amounts and only restores direct amounts for originally empty lines', () => {
+        const expense: Expense = {
+            id: 1,
+            title: 'Importata',
+            year: 2026,
+            allocated_amount: '100.00',
+            actual_amount: '80.00',
+            lines: [],
+        };
+        const draft: DraftLine[] = [
+            {
+                key: 'new',
+                description: 'Nuova',
+                type: 'actual',
+                quantity: '1',
+                unit_price: '0',
+            },
+        ];
+        expect(editorSummary(expense, draft)).toContain(money(0));
+        expect(editorSummary(expense, draft)).not.toContain(money(80));
+        expect(editorSummary(expense, [])).toContain(money(-20));
+        const deleted = editorSummary({ ...expense, lines: draft }, []);
+        expect(deleted).toContain('Da completare');
+        expect(deleted.slice(deleted.indexOf('Scostamento ('))).toContain(
+            money(0),
+        );
+        expect(deleted).not.toContain(money(80));
+        expect(deleted).not.toContain(money(100));
+    });
     it('aggregates Other from independent sums and retains missing and zero counts', () => {
         const rows = [
             {
