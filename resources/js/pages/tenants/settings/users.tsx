@@ -1,4 +1,4 @@
-import { Form, Head, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import { UserAccountStatus, UserAvatar } from '@/components/user-info';
@@ -21,6 +21,15 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -34,6 +43,8 @@ export default function TenantUsers({
     users: User[];
 }) {
     const { auth } = usePage().props;
+    const [inviting, setInviting] = useState(false);
+    const invite = useForm({ email: '' });
     const [removing, setRemoving] = useState<User | null>(null);
     const removal = useForm<Record<string, string>>({});
     const path = `/t/${tenant.slug}/settings/users`;
@@ -49,58 +60,97 @@ export default function TenantUsers({
                     <h1 className="page-title">Impostazioni</h1>
                 </header>
                 <TenantSettingsNav slug={tenant.slug} />
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Invita utente</CardTitle>
-                        <CardDescription>
-                            Assegna l’accesso completo a questa azienda. I nuovi
-                            utenti riceveranno un link per impostare la
-                            password; chi ha già un account manterrà la propria.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <Form action={path} method="post" resetOnSuccess>
-                            {({ processing, errors }) => (
-                                <FieldGroup>
-                                    <Field
-                                        data-invalid={Boolean(errors.email)}
-                                        data-disabled={processing}
-                                    >
-                                        <FieldLabel htmlFor="invite-email">
-                                            Email{' '}
-                                            <span aria-hidden="true">*</span>
-                                        </FieldLabel>
-                                        <Input
-                                            id="invite-email"
-                                            name="email"
-                                            type="email"
-                                            required
-                                            maxLength={255}
-                                            disabled={processing}
-                                            aria-invalid={Boolean(errors.email)}
-                                        />
-                                        <InputError message={errors.email} />
-                                    </Field>
-                                    <Button disabled={processing}>
-                                        {processing && <Spinner />}
-                                        Invita
-                                    </Button>
-                                </FieldGroup>
-                            )}
-                        </Form>
-                    </CardContent>
-                </Card>
                 <Card className="overflow-hidden pb-0">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            Utenti dell’azienda{' '}
-                            <Badge variant="secondary">{users.length}</Badge>
-                        </CardTitle>
-                        <CardDescription>
-                            La rimozione revoca solo l’accesso a questa azienda.
-                            I super admin hanno sempre accesso a tutte le
-                            aziende.
-                        </CardDescription>
+                    <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="space-y-2">
+                            <CardTitle className="flex items-center gap-2">
+                                Utenti dell’azienda{' '}
+                                <Badge variant="secondary">
+                                    {users.length}
+                                </Badge>
+                            </CardTitle>
+                            <CardDescription>
+                                La rimozione revoca solo l’accesso a questa
+                                azienda. I super admin hanno sempre accesso a
+                                tutte le aziende.
+                            </CardDescription>
+                        </div>
+                        <Dialog
+                            open={inviting}
+                            onOpenChange={(open) => {
+                                if (!invite.processing) setInviting(open);
+                            }}
+                        >
+                            <DialogTrigger asChild>
+                                <Button>Invita utente</Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
+                                <DialogHeader>
+                                    <DialogTitle>Invita utente</DialogTitle>
+                                    <DialogDescription>
+                                        Assegna l’accesso completo a questa
+                                        azienda. I nuovi utenti riceveranno un
+                                        link per impostare la password; chi ha
+                                        già un account manterrà la propria.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <form
+                                    className="flex flex-col gap-4"
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        invite.post(path, {
+                                            onSuccess: () => {
+                                                setInviting(false);
+                                                invite.reset();
+                                            },
+                                        });
+                                    }}
+                                >
+                                    <FieldGroup>
+                                        <Field
+                                            data-invalid={Boolean(
+                                                invite.errors.email,
+                                            )}
+                                            data-disabled={invite.processing}
+                                        >
+                                            <FieldLabel htmlFor="invite-email">
+                                                Email{' '}
+                                                <span aria-hidden="true">
+                                                    *
+                                                </span>
+                                            </FieldLabel>
+                                            <Input
+                                                id="invite-email"
+                                                name="email"
+                                                type="email"
+                                                required
+                                                maxLength={255}
+                                                value={invite.data.email}
+                                                onChange={(event) =>
+                                                    invite.setData(
+                                                        'email',
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                disabled={invite.processing}
+                                                aria-invalid={Boolean(
+                                                    invite.errors.email,
+                                                )}
+                                            />
+                                            <InputError
+                                                message={invite.errors.email}
+                                            />
+                                        </Field>
+                                    </FieldGroup>
+                                    <DialogFooter>
+                                        <Button disabled={invite.processing}>
+                                            {invite.processing && <Spinner />}
+                                            Invita utente
+                                        </Button>
+                                    </DialogFooter>
+                                </form>
+                            </DialogContent>
+                        </Dialog>
                     </CardHeader>
                     <CardContent className="p-0">
                         {users.length === 0 ? (
