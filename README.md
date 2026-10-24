@@ -104,7 +104,7 @@ Sostituire `UTENTE_SITO` e `NOME_DOMINIO` con i valori reali, e il binario PHP s
 
 1. Aprire `APP_URL` nel browser ed entrare con l'amministratore appena creato.
 2. Aprire **Impostazioni Piattaforma -> Email**, configurare SMTP e inviare un'email di test. Finche SMTP non e configurato, i messaggi esterni (inviti, recupero password, promemoria) non vengono recapitati.
-3. In CloudPanel verificare i limiti PHP di upload: gli allegati richiedono almeno `upload_max_filesize=20M` e `post_max_size` superiore (es. `25M`). Per ripristinare backup dalla pagina web servono limiti piu elevati, adeguati allo ZIP caricato.
+3. In CloudPanel verificare i limiti PHP di upload: con il default di 2 MB per allegato servono almeno `upload_max_filesize=2M` e `post_max_size` superiore (es. `3M`). Adeguarli se si aumenta il limite in Amministrazione → Generali. Per ripristinare backup dalla pagina web servono limiti piu elevati, adeguati allo ZIP caricato.
 4. Per i backup globali verificare da SSH la disponibilita di `mysqldump`, `mysql` e `zip` per il Site User, oltre allo spazio libero e ai permessi di `storage/` e `bootstrap/cache/`. Provare almeno un backup reale.
 
 **In caso di errore:** se compare **Hello World :-)**, controllare **prima** che lo ZIP non sia stato estratto in `public/`, creando il percorso errato `public/public/`. Poi verificare la Root Directory CloudPanel, l'eventuale `public/index.html` di esempio, i valori in `.env`, la versione PHP CLI/FPM e `storage/logs/laravel.log`. Non impostare permessi `777`.
@@ -502,10 +502,21 @@ estensione e MIME del contenuto; i pacchetti Office con macro vengono respinti,
 anche se rinominati. PDF e immagini possono essere aperti nel browser; gli altri
 formati si scaricano. Questi controlli non costituiscono una scansione antivirus.
 
-Il limite iniziale è **20 MB per file**. È centralizzato in
-`config/attachments.php`, modificabile con `ATTACHMENTS_MAX_SIZE_KB` in `.env`
-(valore iniziale: `20480`). Dopo modifiche alla configurazione rigenerare
-l’eventuale cache Laravel. Il frontend riceve limiti ed estensioni dal server.
+Il limite predefinito è **2 MB per file** (2 MiB, 2048 KiB). In
+**Amministrazione → Generali → Allegati** si può salvare un limite globale per
+contratti, spese e progetti di tutte le aziende. La UI usa MB (1 MB = 1024 KiB),
+accetta valori da 1 KiB a 1024 MB e richiede una conversione esatta in KiB interi.
+Il valore è salvato nel singleton `platform_settings` e vale dalla richiesta
+successiva, senza riavvii o invalidazioni di cache; le pagine già aperte vanno
+aggiornate per visualizzarlo. I file già caricati restano invariati.
+
+Senza un valore nel database si usa `config/attachments.php`: la variabile
+server `ATTACHMENTS_MAX_SIZE_KB` in `.env` personalizza questo fallback
+(default: `2048`). La UI non scrive `.env`; soltanto le modifiche manuali al
+fallback richiedono di rigenerare l’eventuale cache Laravel. Il frontend riceve
+limiti ed estensioni dal server. Il backup globale include l’impostazione nel
+dump DB; i backup tenant non la modificano. I limiti di backup e ripristino,
+CSV/XLSX, loghi e avatar rimangono separati.
 
 I contenuti sono sul disco Laravel privato `attachments`, sotto
 `storage/app/private/attachments/{tenant_id}` con nomi casuali; il nome originale
@@ -517,8 +528,12 @@ al frontend. `storage/app/private/.gitignore` esclude i documenti da Git.
 
 L’utente del processo PHP (in Sail: `sail`) deve poter leggere e scrivere questa
 directory, oltre a `storage` e `bootstrap/cache`; evitare permessi globali `777`.
-PHP deve consentire `upload_max_filesize >= 20M` e un `post_max_size` superiore
-(es. `25M`) per l’overhead multipart, con `file_uploads=On`. Ogni richiesta contiene
+PHP deve consentire `upload_max_filesize` almeno pari al limite effettivo e un
+`post_max_size` superiore per l’overhead multipart, con `file_uploads=On`
+(per il default: almeno `2M` e, per esempio, `3M`). La UI non modifica questi
+parametri: PHP, il webserver o il provider possono imporre un limite inferiore
+a quello salvato. Per ripristinare ZIP di backup servono limiti adeguati allo ZIP,
+indipendentemente dalla soglia degli allegati. Ogni richiesta contiene
 un solo file, perciò non è richiesto un limite POST di 200 MB. Verificare anche
 limiti e timeout di eventuali proxy/web server. Sail usa `artisan serve` e il
 proprio `php.ini` configura entrambi i limiti a `100M`; non è necessario modificarli.
