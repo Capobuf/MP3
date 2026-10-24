@@ -4,6 +4,7 @@ use App\Http\Controllers\BackupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DriveSyncController;
 use App\Http\Controllers\Platform\EmailSettingsController;
+use App\Http\Controllers\Platform\GeneralSettingsController;
 use App\Http\Controllers\Platform\PlatformController;
 use App\Http\Controllers\Platform\TenantController as PlatformTenantController;
 use App\Http\Controllers\Platform\TenantUserController;
@@ -41,6 +42,8 @@ Route::middleware('auth')->group(function () {
 
     Route::prefix('platform')->middleware(EnsurePlatformAccess::class)->name('platform.')->group(function () {
         Route::get('/', PlatformController::class)->name('index');
+        Route::get('settings/general', [GeneralSettingsController::class, 'edit'])->name('general.edit');
+        Route::put('settings/general', [GeneralSettingsController::class, 'update'])->name('general.update');
         Route::get('settings/sync', [DriveSyncController::class, 'index'])->name('sync.index');
         Route::put('settings/sync/picker', [DriveSyncController::class, 'pickerSettings'])->name('sync.picker-settings');
         Route::post('settings/sync/picker-token', [DriveSyncController::class, 'pickerToken'])->middleware('throttle:10,1')->name('sync.picker-token');

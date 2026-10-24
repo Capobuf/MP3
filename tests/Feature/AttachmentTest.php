@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Attachment;
 use App\Models\Contract;
 use App\Models\Expense;
+use App\Models\PlatformSetting;
 use App\Models\Project;
 use App\Models\Tenant;
 use App\Models\User;
@@ -95,7 +96,7 @@ class AttachmentTest extends TestCase
             $this->get('/storage/attachments/'.$first->path)->assertForbidden();
             $this->get('/storage/'.$first->path)->assertForbidden();
             $this->getJson($url)->assertOk()->assertJsonCount(2, 'attachments')
-                ->assertJsonPath('attachments.0.id', $second->id)->assertJsonPath('limits.max_size_bytes', 20 * 1024 * 1024)
+                ->assertJsonPath('attachments.0.id', $second->id)->assertJsonPath('limits.max_size_bytes', 2 * 1024 * 1024)
                 ->assertJsonMissingPath('attachments.0.path')->assertJsonMissingPath('attachments.0.disk');
             $this->patchJson('/t/alfa/'.$resource.'/'.$owner->id, $resource === 'expenses' ? ['actual_amount' => '8'] : ['name' => 'Aggiornato', ...($resource === 'projects' ? ['status' => 'completato'] : [])])->assertOk();
             $this->assertSame(2, $owner->attachments()->count());
@@ -147,7 +148,7 @@ class AttachmentTest extends TestCase
     {
         $owner = $this->owner('contracts');
         $url = '/t/alfa/contracts/'.$owner->id.'/attachments';
-        $this->postJson($url, ['file' => UploadedFile::fake()->create('large.txt', 20481)])->assertUnprocessable()->assertJsonValidationErrors('file');
+        $this->postJson($url, ['file' => UploadedFile::fake()->create('large.txt', 2049)])->assertUnprocessable()->assertJsonValidationErrors('file');
         foreach (['svg', 'html', 'exe', 'php', 'zip', 'docm', 'xlsm'] as $extension) {
             $this->postJson($url, ['file' => $this->realFile('bad.'.$extension, 'text')])->assertUnprocessable();
         }
@@ -159,6 +160,39 @@ class AttachmentTest extends TestCase
         $this->postJson($url, ['file' => $this->realFile('wrong.docx', file_get_contents(base_path('tests/Fixtures/attachments/workbook.xlsx')))])->assertUnprocessable();
         $this->assertDatabaseCount('attachments', 0);
         $this->assertSame([], Storage::disk('attachments')->allFiles());
+    }
+
+    public function test_global_limit_changes_apply_to_all_tenants_and_entities_without_touching_existing_files(): void
+    {
+        $admin = User::factory()->create(['is_platform_admin' => true]);
+        foreach ([$this->tenant, $this->other] as $tenant) {
+            $this->user->tenants()->sync([$tenant->id]);
+            foreach (['contracts', 'expenses', 'projects'] as $resource) {
+                $owner = $this->owner($resource, $tenant);
+                $url = '/t/'.$tenant->slug.'/'.$resource.'/'.$owner->id.'/attachments';
+                config(['attachments.max_size_kb' => 2]);
+                PlatformSetting::query()->delete();
+                $this->actingAs($this->user)->getJson($url)->assertOk()->assertJsonPath('limits.max_size_bytes', 2048);
+                $original = $this->upload($url, $this->realFile('originale.txt', str_repeat('a', 2048)));
+
+                $this->actingAs($admin)->put('/platform/settings/general', ['attachment_max_size_mb' => 1 / 1024])->assertSessionHasNoErrors();
+                $this->actingAs($this->user)->getJson($url)->assertOk()->assertJsonPath('limits.max_size_bytes', 1024);
+                $count = Attachment::count();
+                $files = Storage::disk('attachments')->allFiles();
+                $this->postJson($url, ['file' => $this->realFile('troppo-grande.txt', str_repeat('b', 1025))])
+                    ->assertUnprocessable()->assertJsonValidationErrors('file')
+                    ->assertJsonPath('errors.file.0', 'Il file supera il limite di 0.0009765625 MB.');
+                $this->assertDatabaseCount('attachments', $count);
+                $this->assertSame($files, Storage::disk('attachments')->allFiles());
+                $this->upload($url, $this->realFile('entro-limite.txt', str_repeat('c', 1024)));
+                $this->assertSame(str_repeat('a', 2048), $this->get($url.'/'.$original->id.'/download')->assertOk()->streamedContent());
+
+                $this->actingAs($admin)->put('/platform/settings/general', ['attachment_max_size_mb' => 2 / 1024])->assertSessionHasNoErrors();
+                $this->actingAs($this->user)->getJson($url)->assertOk()->assertJsonPath('limits.max_size_bytes', 2048);
+                $this->upload($url, $this->realFile('nuovo-limite.txt', str_repeat('d', 2048)));
+            }
+        }
+        $this->assertSame(102400, config('platform-backups.upload_max_kb'));
     }
 
     public function test_renamed_office_document_with_macros_is_rejected(): void

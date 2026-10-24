@@ -7,6 +7,7 @@ use App\Http\Requests\AttachmentRequest;
 use App\Models\Attachment;
 use App\Models\Contract;
 use App\Models\Expense;
+use App\Models\PlatformSetting;
 use App\Models\Project;
 use App\Models\Tenant;
 use App\Services\AttachmentFiles;
@@ -52,7 +53,7 @@ class AttachmentController extends Controller
         return response()->json([
             'attachments' => $owner->attachments()->where('tenant_id', $tenant->id)->orderByDesc('created_at')->orderByDesc('id')->get()->map(fn (Attachment $attachment) => $this->payload($attachment)),
             'limits' => [
-                'max_size_bytes' => config('attachments.max_size_kb') * 1024,
+                'max_size_bytes' => PlatformSetting::attachmentMaxSizeKb() * 1024,
                 'max_files' => config('attachments.max_files_per_selection'),
                 'extensions' => config('attachments.extensions'),
             ],

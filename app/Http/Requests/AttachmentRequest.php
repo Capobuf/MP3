@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\PlatformSetting;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rules\File;
@@ -28,7 +29,7 @@ class AttachmentRequest extends FormRequest
         };
 
         return [
-            'file' => ['required', File::types(config('attachments.extensions'))->max(config('attachments.max_size_kb')), 'extensions:'.implode(',', config('attachments.extensions')), 'mimetypes:'.implode(',', $mimeTypes)],
+            'file' => ['required', File::types(config('attachments.extensions'))->max(PlatformSetting::attachmentMaxSizeKb()), 'extensions:'.implode(',', config('attachments.extensions')), 'mimetypes:'.implode(',', $mimeTypes)],
             'tenant_id' => ['prohibited'],
             'contract_id' => ['prohibited'],
             'expense_id' => ['prohibited'],
@@ -48,7 +49,7 @@ class AttachmentRequest extends FormRequest
         return [
             'file.required' => 'Seleziona un file.',
             'file.uploaded' => 'Caricamento non riuscito: verifica la dimensione del file e i limiti del server.',
-            'file.max' => 'Il file supera il limite di '.(config('attachments.max_size_kb') / 1024).' MB.',
+            'file.max' => 'Il file supera il limite di '.(PlatformSetting::attachmentMaxSizeKb() / 1024).' MB.',
             'file.mimes' => 'Formato o contenuto del file non consentito.',
             'file.mimetypes' => 'Il contenuto del file non corrisponde al formato consentito.',
             'file.extensions' => 'Estensione non consentita. Usa PDF, JPG, JPEG, PNG, WEBP, DOCX, XLSX, CSV o TXT.',
