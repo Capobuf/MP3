@@ -4,8 +4,8 @@ import {
     BudgetReassignment,
     BudgetReassignmentRequired,
 } from './budget-reassignment';
-import { Plus, ArrowLeft } from 'lucide-react';
-import { useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { useEffect, useId, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { toast } from 'sonner';
 import {
@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
     Field,
     FieldGroup,
@@ -108,7 +109,6 @@ type Frame = {
     detailed: boolean;
     costCenterIds: number[];
     original: string;
-    returnField?: string;
     initialExpense?: InitialExpense;
 };
 function snapshot(
@@ -146,7 +146,7 @@ function frame(
     kind: Kind,
     year: number,
     record?: RecordData,
-    returnField?: string,
+    quickCreate = false,
 ): Frame {
     const values = Object.fromEntries(
         fields[kind].map((field) => [
@@ -159,7 +159,7 @@ function frame(
     const costCenterIds =
         record?.cost_centers?.map((center) => center.id) ?? [];
     const initialExpense =
-        kind === 'contracts' && !record
+        kind === 'contracts' && !record && !quickCreate
             ? {
                   values: {
                       title: '',
@@ -185,7 +185,6 @@ function frame(
             detailed,
             initialExpense,
         }),
-        returnField,
     };
 }
 export type EntityFormHandle = {
@@ -205,6 +204,7 @@ export function EntityForm({
     onClose,
     onSaved,
     onBusyChange,
+    quickCreate = false,
 }: {
     ref?: Ref<EntityFormHandle>;
     tenant: Tenant;
@@ -218,11 +218,20 @@ export function EntityForm({
     onClose: () => void;
     onSaved: (record: RecordData) => void;
     onBusyChange?: (busy: boolean) => void;
+    quickCreate?: boolean;
 }) {
     const { economicContext } = usePage().props;
     const year = providedYear ?? record?.year ?? economicContext!.year;
-    const [frames, setFrames] = useState<Frame[]>(() => {
-        const initial = frame(kind, year, record);
+    const formId = useId();
+    const formElement = useRef<HTMLFormElement>(null);
+    const relationForm = useRef<EntityFormHandle>(null);
+    const relationTrigger = useRef<HTMLButtonElement | null>(null);
+    const [creatingRelation, setCreatingRelation] = useState<{
+        catalog: Catalog;
+        field: string;
+    } | null>(null);
+    const [current, setCurrent] = useState(() => {
+        const initial = frame(kind, year, record, quickCreate);
         if (kind === 'expenses' && contractContext && !record) {
             initial.values.title = contractContext.name ?? '';
             initial.lines = [
@@ -235,7 +244,7 @@ export function EntityForm({
             initial.values.project_id = String(projectContext.id);
             initial.original = snapshot(initial);
         }
-        return [initial];
+        return initial;
     });
     const [localOptions, setLocalOptions] = useState(() => ({
         ...options,
@@ -261,15 +270,18 @@ export function EntityForm({
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [busy, setBusy] = useState(false);
     const [attachmentsBusy, setAttachmentsBusy] = useState(false);
-    const formBusy = busy || attachmentsBusy || reassignment !== null;
+    const formBusy =
+        busy ||
+        attachmentsBusy ||
+        reassignment !== null ||
+        creatingRelation !== null;
     useEffect(() => {
         onBusyChange?.(formBusy);
         return () => onBusyChange?.(false);
     }, [formBusy, onBusyChange]);
     useImperativeHandle(ref, () => ({ requestClose }));
     const [confirmYear, setConfirmYear] = useState<number | null>(null);
-    const [discard, setDiscard] = useState<'close' | 'back' | null>(null);
-    const current = frames[frames.length - 1];
+    const [discard, setDiscard] = useState(false);
     const initialExpense = current.initialExpense;
     const editingInitialExpense = !!initialExpense;
     const contractLines =
@@ -283,10 +295,10 @@ export function EntityForm({
                 messages,
             ]),
     );
-    const dirty = frames.some((item) => snapshot(item) !== item.original);
+    const dirty = snapshot(current) !== current.original;
     const navigation = useUnsavedNavigation(
-        dirty && !formBusy && creatingCostCenter === null,
-        formBusy,
+        !quickCreate && dirty && !formBusy && creatingCostCenter === null,
+        !quickCreate && formBusy,
     );
     useEffect(() => {
         if (!dirty && !formBusy) return;
@@ -297,98 +309,84 @@ export function EntityForm({
         return () => window.removeEventListener('beforeunload', listener);
     }, [dirty, formBusy]);
     function change(key: string, value: string) {
-        setFrames((previous) =>
-            previous.map((item, index) => {
-                if (index !== previous.length - 1) return item;
-                const values = { ...item.values, [key]: value };
-                let lines = item.lines;
-                if (
-                    item.kind === 'expenses' &&
-                    key === 'contract_id' &&
-                    !item.record
-                ) {
-                    const previousName =
-                        localOptions.contracts.find(
-                            (contract) =>
-                                String(contract.id) === item.values.contract_id,
-                        )?.name ?? '';
-                    const name =
-                        localOptions.contracts.find(
-                            (contract) => String(contract.id) === value,
-                        )?.name ?? '';
-                    if (values.title === '' || values.title === previousName)
-                        values.title = name;
-                    lines = lines.map((line) =>
-                        line.description === '' ||
-                        line.description === previousName
-                            ? { ...line, description: name }
+        setCurrent((item) => {
+            const values = { ...item.values, [key]: value };
+            let lines = item.lines;
+            if (
+                item.kind === 'expenses' &&
+                key === 'contract_id' &&
+                !item.record
+            ) {
+                const previousName =
+                    localOptions.contracts.find(
+                        (contract) =>
+                            String(contract.id) === item.values.contract_id,
+                    )?.name ?? '';
+                const name =
+                    localOptions.contracts.find(
+                        (contract) => String(contract.id) === value,
+                    )?.name ?? '';
+                if (values.title === '' || values.title === previousName)
+                    values.title = name;
+                lines = lines.map((line) =>
+                    line.description === '' || line.description === previousName
+                        ? { ...line, description: name }
+                        : line,
+                );
+            }
+            let initialExpense = item.initialExpense;
+            if (initialExpense && key === 'name') {
+                initialExpense = {
+                    ...initialExpense,
+                    values: {
+                        ...initialExpense.values,
+                        title:
+                            initialExpense.values.title === item.values.name
+                                ? value
+                                : initialExpense.values.title,
+                    },
+                    lines: initialExpense.lines.map((line) =>
+                        line.description === item.values.name
+                            ? { ...line, description: value }
                             : line,
-                    );
-                }
-                let initialExpense = item.initialExpense;
-                if (initialExpense && key === 'name') {
-                    initialExpense = {
-                        ...initialExpense,
-                        values: {
-                            ...initialExpense.values,
-                            title:
-                                initialExpense.values.title === item.values.name
-                                    ? value
-                                    : initialExpense.values.title,
-                        },
-                        lines: initialExpense.lines.map((line) =>
-                            line.description === item.values.name
-                                ? { ...line, description: value }
-                                : line,
-                        ),
-                    };
-                }
-                return { ...item, values, lines, initialExpense };
-            }),
-        );
+                    ),
+                };
+            }
+            return { ...item, values, lines, initialExpense };
+        });
     }
     function changeInitialExpense(key: string, value: string) {
-        setFrames((previous) =>
-            previous.map((item, index) => {
-                if (index !== previous.length - 1 || !item.initialExpense)
-                    return item;
-                const values = { ...item.initialExpense.values, [key]: value };
-                return {
-                    ...item,
-                    initialExpense: { ...item.initialExpense, values },
-                };
-            }),
-        );
+        setCurrent((item) => {
+            if (!item.initialExpense) return item;
+            const values = { ...item.initialExpense.values, [key]: value };
+            return {
+                ...item,
+                initialExpense: { ...item.initialExpense, values },
+            };
+        });
     }
     function useDetailedLines() {
-        setFrames((previous) =>
-            previous.map((item, index) => {
-                if (index !== previous.length - 1) return item;
-                return {
-                    ...item,
-                    detailed: true,
-                    lines: draftLines({
-                        id: item.record?.id ?? 0,
-                        title: item.values.title,
-                        year: Number(item.values.year),
-                        period_starts_on: item.values.period_starts_on || null,
-                        period_ends_on: item.values.period_ends_on || null,
-                        allocated_amount: decimalInput(
-                            item.values.allocated_amount,
-                        ),
-                        actual_amount: decimalInput(item.values.actual_amount),
-                    }),
-                };
-            }),
-        );
-    }
-    function back() {
-        setErrors({});
-        setFrames((previous) => previous.slice(0, -1));
+        setCurrent((item) => {
+            return {
+                ...item,
+                detailed: true,
+                lines: draftLines({
+                    id: item.record?.id ?? 0,
+                    title: item.values.title,
+                    year: Number(item.values.year),
+                    period_starts_on: item.values.period_starts_on || null,
+                    period_ends_on: item.values.period_ends_on || null,
+                    allocated_amount: decimalInput(
+                        item.values.allocated_amount,
+                    ),
+                    actual_amount: decimalInput(item.values.actual_amount),
+                }),
+            };
+        });
     }
     function requestClose() {
         if (formBusy) return;
-        if (dirty) setDiscard('close');
+        if (dirty) setDiscard(true);
         else close();
     }
     function close() {
@@ -499,54 +497,6 @@ export function EntityForm({
                 router.visit(
                     `/t/${tenant.slug}/contracts/${data.record.id}?year=${continuationYear}`,
                 );
-            } else if (frames.length > 1) {
-                const catalog = current.kind as Catalog;
-                setLocalOptions((previous) => ({
-                    ...previous,
-                    [catalog]: [
-                        ...previous[catalog],
-                        {
-                            id: data.record.id,
-                            name:
-                                data.record.display_name ??
-                                data.record.name ??
-                                '',
-                        },
-                    ],
-                }));
-                setFrames((previous) =>
-                    previous.slice(0, -1).map((item, index) =>
-                        index === previous.length - 2
-                            ? {
-                                  ...item,
-                                  values: {
-                                      ...item.values,
-                                      title:
-                                          current.kind === 'contracts' &&
-                                          !item.values.title
-                                              ? (data.record.name ?? '')
-                                              : item.values.title,
-                                      [current.returnField!]: String(
-                                          data.record.id,
-                                      ),
-                                  },
-                                  lines:
-                                      current.kind === 'contracts'
-                                          ? item.lines.map((line) =>
-                                                line.description === ''
-                                                    ? {
-                                                          ...line,
-                                                          description:
-                                                              data.record
-                                                                  .name ?? '',
-                                                      }
-                                                    : line,
-                                            )
-                                          : item.lines,
-                              }
-                            : item,
-                    ),
-                );
             } else {
                 navigation.allow();
                 onSaved(data.record);
@@ -588,13 +538,14 @@ export function EntityForm({
             if (Object.keys(mappedErrors).length) {
                 setErrors({ ...mappedErrors, _form: [message] });
                 requestAnimationFrame(() =>
-                    document
-                        .querySelector<HTMLElement>(
-                            '#entity-form [aria-invalid="true"]',
-                        )
+                    formElement.current
+                        ?.querySelector<HTMLElement>('[aria-invalid="true"]')
                         ?.focus(),
                 );
-            } else toast.error(message);
+            } else {
+                if (quickCreate) setErrors({ _form: [message] });
+                toast.error(message);
+            }
         } finally {
             setBusy(false);
         }
@@ -613,19 +564,10 @@ export function EntityForm({
                         ...previous,
                         cost_centers: [...previous.cost_centers, center],
                     }));
-                    setFrames((previous) =>
-                        previous.map((item, index) =>
-                            index === previous.length - 1
-                                ? {
-                                      ...item,
-                                      costCenterIds: [
-                                          ...item.costCenterIds,
-                                          center.id,
-                                      ],
-                                  }
-                                : item,
-                        ),
-                    );
+                    setCurrent((item) => ({
+                        ...item,
+                        costCenterIds: [...item.costCenterIds, center.id],
+                    }));
                     setCreatingCostCenter(null);
                 }}
             />
@@ -669,37 +611,27 @@ export function EntityForm({
                         : current.kind === 'contracts'
                           ? current.record
                               ? 'Modifica i dati del contratto. Gestisci gli importi dalle spese collegate.'
-                              : 'Inserisci il contratto e le righe della prima spesa.'
+                              : quickCreate
+                                ? 'Inserisci i dati del contratto.'
+                                : 'Inserisci il contratto e le righe della prima spesa.'
                           : `Dati di ${tenant.name}.`
                 }
             >
-                {frames.length > 1 && (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        className="mx-4 justify-start"
-                        disabled={formBusy}
-                        onClick={() => {
-                            if (snapshot(current) !== current.original)
-                                setDiscard('back');
-                            else back();
-                        }}
-                    >
-                        <ArrowLeft className="mr-2 size-4" />
-                        Torna al form precedente
-                    </Button>
-                )}
                 <form
-                    id="entity-form"
+                    ref={formElement}
+                    id={formId}
                     aria-busy={formBusy}
                     data-undo-dirty={dirty}
                     className="flex min-h-0 flex-1 flex-col"
                     onSubmit={(event) => {
                         event.preventDefault();
+                        event.stopPropagation();
+                        if (formBusy) return;
                         const startYear = Number(
                             current.values.starts_on?.slice(0, 4),
                         );
                         if (
+                            !quickCreate &&
                             current.kind === 'contracts' &&
                             !current.record &&
                             startYear &&
@@ -764,6 +696,7 @@ export function EntityForm({
                                             <ExpensePeriodFields
                                                 key={field.key}
                                                 values={current.values}
+                                                idPrefix={formId}
                                                 onChange={change}
                                                 disabled={formBusy}
                                                 errors={errors}
@@ -818,7 +751,7 @@ export function EntityForm({
                                                 'project_id',
                                             ].includes(field.key)));
                                 const value = current.values[field.key];
-                                const id = `field-${field.key}`;
+                                const id = `${formId}-field-${field.key}`;
                                 const selectOptions = field.catalog
                                     ? [
                                           ...localOptions[field.catalog],
@@ -901,22 +834,15 @@ export function EntityForm({
                                                             incompatible
                                                         }
                                                         aria-label={`Crea ${singular[field.catalog]}`}
-                                                        onClick={() => {
-                                                            setErrors({});
-                                                            setFrames(
-                                                                (previous) => [
-                                                                    ...previous,
-                                                                    frame(
+                                                        onClick={(event) => {
+                                                            relationTrigger.current =
+                                                                event.currentTarget;
+                                                            setCreatingRelation(
+                                                                {
+                                                                    catalog:
                                                                         field.catalog!,
-                                                                        field.catalog ===
-                                                                            'contracts'
-                                                                            ? economicContext!
-                                                                                  .year
-                                                                            : year,
-                                                                        undefined,
-                                                                        field.key,
-                                                                    ),
-                                                                ],
+                                                                    field: field.key,
+                                                                },
                                                             );
                                                         }}
                                                     >
@@ -1058,11 +984,13 @@ export function EntityForm({
                                             )
                                         }
                                     >
-                                        <FieldLabel htmlFor="entity-cost-centers">
+                                        <FieldLabel
+                                            htmlFor={`${formId}-entity-cost-centers`}
+                                        >
                                             Centri di Costo
                                         </FieldLabel>
                                         <CostCenterSelect
-                                            id="entity-cost-centers"
+                                            id={`${formId}-entity-cost-centers`}
                                             options={localOptions.cost_centers}
                                             value={current.costCenterIds}
                                             onCreate={setCreatingCostCenter}
@@ -1076,24 +1004,16 @@ export function EntityForm({
                                                         ),
                                                 )
                                             }
-                                            describedBy="entity-cost-centers-error"
+                                            describedBy={`${formId}-entity-cost-centers-error`}
                                             onChange={(costCenterIds) =>
-                                                setFrames((previous) =>
-                                                    previous.map(
-                                                        (item, index) =>
-                                                            index ===
-                                                            previous.length - 1
-                                                                ? {
-                                                                      ...item,
-                                                                      costCenterIds,
-                                                                  }
-                                                                : item,
-                                                    ),
-                                                )
+                                                setCurrent((item) => ({
+                                                    ...item,
+                                                    costCenterIds,
+                                                }))
                                             }
                                         />
                                         <FieldError
-                                            id="entity-cost-centers-error"
+                                            id={`${formId}-entity-cost-centers-error`}
                                             errors={Object.entries(errors)
                                                 .filter(
                                                     ([key]) =>
@@ -1129,11 +1049,13 @@ export function EntityForm({
                                 <Field
                                     data-invalid={!!initialExpenseErrors.title}
                                 >
-                                    <FieldLabel htmlFor="initial-expense-title">
+                                    <FieldLabel
+                                        htmlFor={`${formId}-initial-expense-title`}
+                                    >
                                         Descrizione
                                     </FieldLabel>
                                     <Input
-                                        id="initial-expense-title"
+                                        id={`${formId}-initial-expense-title`}
                                         value={initialExpense.values.title}
                                         onChange={(event) =>
                                             changeInitialExpense(
@@ -1147,11 +1069,13 @@ export function EntityForm({
                                         }
                                         aria-describedby={
                                             initialExpenseErrors.title
-                                                ? 'initial-expense-title-error'
+                                                ? `${formId}-initial-expense-title-error`
                                                 : undefined
                                         }
                                     />
-                                    <FieldError id="initial-expense-title-error">
+                                    <FieldError
+                                        id={`${formId}-initial-expense-title-error`}
+                                    >
                                         {initialExpenseErrors.title?.[0]}
                                     </FieldError>
                                 </Field>
@@ -1222,21 +1146,17 @@ export function EntityForm({
                                             ),
                                         ),
                                     );
-                                    setFrames((previous) =>
-                                        previous.map((item, index) =>
-                                            index === previous.length - 1
-                                                ? editingInitialExpense &&
-                                                  item.initialExpense
-                                                    ? {
-                                                          ...item,
-                                                          initialExpense: {
-                                                              ...item.initialExpense,
-                                                              lines,
-                                                          },
-                                                      }
-                                                    : { ...item, lines }
-                                                : item,
-                                        ),
+                                    setCurrent((item) =>
+                                        editingInitialExpense &&
+                                        item.initialExpense
+                                            ? {
+                                                  ...item,
+                                                  initialExpense: {
+                                                      ...item.initialExpense,
+                                                      lines,
+                                                  },
+                                              }
+                                            : { ...item, lines },
                                     );
                                 }}
                             />
@@ -1247,11 +1167,13 @@ export function EntityForm({
                                     data-invalid={!!errors.notes}
                                     data-disabled={formBusy}
                                 >
-                                    <FieldLabel htmlFor="field-notes">
+                                    <FieldLabel
+                                        htmlFor={`${formId}-field-notes`}
+                                    >
                                         Note
                                     </FieldLabel>
                                     <Textarea
-                                        id="field-notes"
+                                        id={`${formId}-field-notes`}
                                         value={current.values.notes}
                                         onChange={(event) =>
                                             change('notes', event.target.value)
@@ -1260,11 +1182,13 @@ export function EntityForm({
                                         aria-invalid={!!errors.notes}
                                         aria-describedby={
                                             errors.notes
-                                                ? 'field-notes-error'
+                                                ? `${formId}-field-notes-error`
                                                 : undefined
                                         }
                                     />
-                                    <FieldError id="field-notes-error">
+                                    <FieldError
+                                        id={`${formId}-field-notes-error`}
+                                    >
                                         {errors.notes?.[0]}
                                     </FieldError>
                                 </Field>
@@ -1278,7 +1202,7 @@ export function EntityForm({
                                         tenant={tenant}
                                         resource={current.kind}
                                         recordId={current.record.id}
-                                        id="sheet-attachments"
+                                        id={`${formId}-sheet-attachments`}
                                         disabled={busy}
                                         onBusyChange={setAttachmentsBusy}
                                     />
@@ -1298,8 +1222,7 @@ export function EntityForm({
                         {['expenses', 'contracts', 'projects'].includes(
                             current.kind,
                         ) &&
-                            current.record &&
-                            frames.length === 1 && (
+                            current.record && (
                                 <div className="mr-auto">
                                     <DeleteRecord
                                         url={`/t/${tenant.slug}/${current.kind}/${current.record.id}`}
@@ -1342,6 +1265,80 @@ export function EntityForm({
                     </div>
                 </form>
             </FormSurface>
+            <Dialog
+                open={creatingRelation !== null}
+                onOpenChange={(open) => {
+                    if (!open) relationForm.current?.requestClose();
+                }}
+            >
+                <DialogContent
+                    className="max-h-[90dvh] overflow-y-auto p-0 sm:max-w-3xl"
+                    aria-describedby={undefined}
+                    onCloseAutoFocus={(event) => {
+                        event.preventDefault();
+                        relationTrigger.current?.focus({ preventScroll: true });
+                    }}
+                >
+                    {creatingRelation && (
+                        <>
+                            <DialogTitle className="sr-only">
+                                Nuovo {singular[creatingRelation.catalog]}
+                            </DialogTitle>
+                            <EntityForm
+                                ref={relationForm}
+                                tenant={tenant}
+                                kind={creatingRelation.catalog}
+                                year={year}
+                                options={localOptions}
+                                quickCreate
+                                onClose={() => setCreatingRelation(null)}
+                                onSaved={(record) => {
+                                    const { catalog, field } = creatingRelation;
+                                    setLocalOptions((previous) => ({
+                                        ...previous,
+                                        [catalog]: [
+                                            ...previous[catalog],
+                                            {
+                                                id: record.id,
+                                                name:
+                                                    record.display_name ??
+                                                    record.name ??
+                                                    '',
+                                            },
+                                        ],
+                                    }));
+                                    setCurrent((item) => ({
+                                        ...item,
+                                        values: {
+                                            ...item.values,
+                                            [field]: String(record.id),
+                                            title:
+                                                catalog === 'contracts' &&
+                                                !item.values.title
+                                                    ? (record.name ?? '')
+                                                    : item.values.title,
+                                        },
+                                        lines:
+                                            catalog === 'contracts'
+                                                ? item.lines.map((line) =>
+                                                      line.description === ''
+                                                          ? {
+                                                                ...line,
+                                                                description:
+                                                                    record.name ??
+                                                                    '',
+                                                            }
+                                                          : line,
+                                                  )
+                                                : item.lines,
+                                    }));
+                                    setCreatingRelation(null);
+                                }}
+                            />
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
             <AlertDialog
                 open={confirmYear !== null}
                 onOpenChange={(open) => !open && setConfirmYear(null)}
@@ -1355,8 +1352,6 @@ export function EntityForm({
                             Il contratto inizia nel {confirmYear}, ma stai
                             lavorando nel {economicContext!.year}. Vuoi salvare
                             e passare al {confirmYear}?
-                            {frames.length > 1 &&
-                                ' Passando al nuovo anno aprirai il dettaglio del contratto e lascerai il modulo precedente senza salvarlo.'}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1376,10 +1371,10 @@ export function EntityForm({
                 </AlertDialogContent>
             </AlertDialog>
             <AlertDialog
-                open={discard !== null || navigation.pending !== null}
+                open={discard || navigation.pending !== null}
                 onOpenChange={(open) => {
                     if (!open) {
-                        setDiscard(null);
+                        setDiscard(false);
                         navigation.cancel();
                     }
                 }}
@@ -1402,9 +1397,8 @@ export function EntityForm({
                             variant="destructive"
                             onClick={() => {
                                 if (navigation.pending) navigation.confirm();
-                                else if (discard === 'close') close();
-                                else back();
-                                setDiscard(null);
+                                else close();
+                                setDiscard(false);
                             }}
                         >
                             Scarta modifiche
