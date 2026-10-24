@@ -1,7 +1,8 @@
 import { InlineEdit } from './inline-edit';
 import { usePage } from '@inertiajs/react';
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { CellError } from './cell-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -133,6 +134,16 @@ export function ExpenseLines({
     const [filter, setFilter] = useState('all');
     const [selected, setSelected] = useState<string[]>([]);
     const pendingFocus = useRef<string | null>(initialFocusKey ?? null);
+    const errorId = useId();
+    const fields = useRef<HTMLElement>(null);
+    const errorSignature = JSON.stringify(errors);
+    useEffect(() => {
+        if (!disabled && errorSignature !== '{}') {
+            fields.current
+                ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+                ?.focus();
+        }
+    }, [disabled, errorSignature]);
     const visible = lines.filter(
         (line) =>
             (filter === 'all' || line.type === filter) &&
@@ -337,6 +348,13 @@ export function ExpenseLines({
         ];
         onChange?.(next);
     }
+    function focusInvalidField() {
+        requestAnimationFrame(() =>
+            fields.current
+                ?.querySelector<HTMLElement>('[aria-invalid="true"]')
+                ?.focus(),
+        );
+    }
     function resetFilters() {
         setSearch('');
         setFilter('all');
@@ -370,6 +388,7 @@ export function ExpenseLines({
     const format = (cents: bigint) => money(Number(cents) / 100);
     return (
         <section
+            ref={fields}
             className="flex min-w-0 flex-col gap-3"
             aria-label={readOnly ? 'Dettaglio spesa' : 'Righe della spesa'}
         >
@@ -461,7 +480,14 @@ export function ExpenseLines({
             {hiddenErrors && (
                 <p role="alert" className="text-sm text-destructive">
                     Ci sono campi da correggere nelle colonne nascoste.{' '}
-                    <Button type="button" variant="link" onClick={view.reset}>
+                    <Button
+                        type="button"
+                        variant="link"
+                        onClick={() => {
+                            view.reset();
+                            focusInvalidField();
+                        }}
+                    >
                         Mostra tutte le colonne
                     </Button>
                 </p>
@@ -478,7 +504,10 @@ export function ExpenseLines({
                         <Button
                             type="button"
                             variant="link"
-                            onClick={resetFilters}
+                            onClick={() => {
+                                resetFilters();
+                                focusInvalidField();
+                            }}
                         >
                             Mostra tutte le righe
                         </Button>
@@ -689,7 +718,11 @@ export function ExpenseLines({
                                             )}
                                             <TableCell
                                                 key="type"
-                                                className={cn('min-w-32')}
+                                                className={cn(
+                                                    readOnly
+                                                        ? 'min-w-32'
+                                                        : 'relative min-w-40 pr-10',
+                                                )}
                                             >
                                                 {readOnly ? (
                                                     editable(
@@ -713,6 +746,11 @@ export function ExpenseLines({
                                                 ) : (
                                                     <NativeSelect
                                                         aria-label={`Tipo ${label}`}
+                                                        aria-describedby={
+                                                            fieldError('type')
+                                                                ? `${errorId}-${line.key}-type`
+                                                                : undefined
+                                                        }
                                                         aria-invalid={
                                                             !!fieldError('type')
                                                         }
@@ -734,18 +772,17 @@ export function ExpenseLines({
                                                         </NativeSelectOption>
                                                     </NativeSelect>
                                                 )}
-                                                {fieldError('type') && (
-                                                    <p
-                                                        role="alert"
-                                                        className="text-sm text-destructive"
-                                                    >
-                                                        {fieldError('type')}
-                                                    </p>
-                                                )}
+                                                <CellError
+                                                    id={`${errorId}-${line.key}-type`}
+                                                    label={`Tipo ${label}`}
+                                                    message={fieldError('type')}
+                                                />
                                             </TableCell>
                                             <TableCell
                                                 key="description"
                                                 className={cn(
+                                                    !readOnly &&
+                                                        'relative pr-10',
                                                     'w-full whitespace-normal',
                                                     readOnly
                                                         ? 'min-w-32 font-medium [overflow-wrap:anywhere] sm:min-w-48'
@@ -781,6 +818,13 @@ export function ExpenseLines({
                                                             }
                                                         }}
                                                         aria-label={`Descrizione ${label}`}
+                                                        aria-describedby={
+                                                            fieldError(
+                                                                'description',
+                                                            )
+                                                                ? `${errorId}-${line.key}-description`
+                                                                : undefined
+                                                        }
                                                         aria-invalid={
                                                             !!fieldError(
                                                                 'description',
@@ -798,21 +842,21 @@ export function ExpenseLines({
                                                         }
                                                     />
                                                 )}
-                                                {fieldError('description') && (
-                                                    <p
-                                                        role="alert"
-                                                        className="mt-1 text-sm text-destructive"
-                                                    >
-                                                        {fieldError(
-                                                            'description',
-                                                        )}
-                                                    </p>
-                                                )}
+                                                <CellError
+                                                    id={`${errorId}-${line.key}-description`}
+                                                    label={`Descrizione ${label}`}
+                                                    message={fieldError(
+                                                        'description',
+                                                    )}
+                                                />
                                             </TableCell>
                                             <TableCell
                                                 key="unit_price"
                                                 className={cn(
-                                                    'w-32 min-w-32 text-right financial-value',
+                                                    readOnly
+                                                        ? 'w-32 min-w-32'
+                                                        : 'relative w-40 min-w-40 pr-10',
+                                                    'text-right financial-value',
                                                 )}
                                             >
                                                 {readOnly ? (
@@ -825,6 +869,13 @@ export function ExpenseLines({
                                                 ) : (
                                                     <MoneyField
                                                         aria-label={`Prezzo unitario ${label}`}
+                                                        aria-describedby={
+                                                            fieldError(
+                                                                'unit_price',
+                                                            )
+                                                                ? `${errorId}-${line.key}-unit_price`
+                                                                : undefined
+                                                        }
                                                         aria-invalid={
                                                             !!fieldError(
                                                                 'unit_price',
@@ -843,21 +894,21 @@ export function ExpenseLines({
                                                         }
                                                     />
                                                 )}
-                                                {fieldError('unit_price') && (
-                                                    <p
-                                                        role="alert"
-                                                        className="mt-1 text-sm text-destructive"
-                                                    >
-                                                        {fieldError(
-                                                            'unit_price',
-                                                        )}
-                                                    </p>
-                                                )}
+                                                <CellError
+                                                    id={`${errorId}-${line.key}-unit_price`}
+                                                    label={`Prezzo unitario ${label}`}
+                                                    message={fieldError(
+                                                        'unit_price',
+                                                    )}
+                                                />
                                             </TableCell>
                                             <TableCell
                                                 key="quantity"
                                                 className={cn(
-                                                    'w-24 min-w-24 text-right financial-value',
+                                                    readOnly
+                                                        ? 'w-24 min-w-24'
+                                                        : 'relative w-32 min-w-32 pr-10',
+                                                    'text-right financial-value',
                                                 )}
                                             >
                                                 {readOnly ? (
@@ -877,6 +928,13 @@ export function ExpenseLines({
                                                 ) : (
                                                     <Input
                                                         aria-label={`Quantità ${label}`}
+                                                        aria-describedby={
+                                                            fieldError(
+                                                                'quantity',
+                                                            )
+                                                                ? `${errorId}-${line.key}-quantity`
+                                                                : undefined
+                                                        }
                                                         aria-invalid={
                                                             !!fieldError(
                                                                 'quantity',
@@ -895,14 +953,13 @@ export function ExpenseLines({
                                                         }
                                                     />
                                                 )}
-                                                {fieldError('quantity') && (
-                                                    <p
-                                                        role="alert"
-                                                        className="mt-1 text-sm text-destructive"
-                                                    >
-                                                        {fieldError('quantity')}
-                                                    </p>
-                                                )}
+                                                <CellError
+                                                    id={`${errorId}-${line.key}-quantity`}
+                                                    label={`Quantità ${label}`}
+                                                    message={fieldError(
+                                                        'quantity',
+                                                    )}
+                                                />
                                             </TableCell>
                                             <TableCell
                                                 key="total"

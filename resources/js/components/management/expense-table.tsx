@@ -170,7 +170,6 @@ export function ExpenseTable({
                 });
             });
             if (result.cleanup_failed) {
-                setError(result.message);
                 toast.error(result.message);
             } else
                 toast.success(
@@ -184,8 +183,8 @@ export function ExpenseTable({
             const detail = persisted
                 ? 'Operazione completata sul server, ma i dati visualizzati non sono aggiornati. Ricarica la pagina prima di continuare.'
                 : `${message} ${unlink ? 'Scollegamento' : 'Eliminazione'} non confermato. La selezione è conservata.`;
-            setError(detail);
-            toast.error(detail);
+            if (persisted) toast.error(detail);
+            else setError(detail);
         } finally {
             lock.current = false;
             refreshing.current = false;
@@ -403,11 +402,6 @@ export function ExpenseTable({
                       ? 'Aggiornamento delle spese…'
                       : ''}
             </p>
-            {error && (
-                <p role="alert" className="text-sm text-destructive">
-                    {error}
-                </p>
-            )}
             <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
                 <Table>
                     <TableViewHeader view={view} disabled={busy || loading} />

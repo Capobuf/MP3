@@ -99,12 +99,18 @@ export function CostCenterForm({
                 error instanceof Error
                     ? error.message
                     : 'Salvataggio non riuscito.';
-            setErrors(
-                error instanceof ApiError
-                    ? { ...error.errors, _form: [message] }
-                    : { _form: [message] },
-            );
-            toast.error(message);
+            if (error instanceof ApiError && Object.keys(error.errors).length) {
+                setErrors(error.errors);
+                requestAnimationFrame(() =>
+                    document
+                        .getElementById(
+                            error.errors.name
+                                ? 'cost-center-name'
+                                : 'cost-center-parent',
+                        )
+                        ?.focus(),
+                );
+            } else toast.error(message);
         } finally {
             setBusy(false);
         }
@@ -122,14 +128,6 @@ export function CostCenterForm({
                     className="flex min-h-0 flex-1 flex-col"
                 >
                     <FieldGroup className="flex-1 overflow-y-auto p-5 sm:px-6">
-                        {errors._form && (
-                            <p
-                                role="alert"
-                                className="text-sm text-destructive"
-                            >
-                                {errors._form[0]}
-                            </p>
-                        )}
                         <Field data-invalid={!!errors.name}>
                             <FieldLabel htmlFor="cost-center-name">
                                 Nome
@@ -170,7 +168,11 @@ export function CostCenterForm({
                                     id="cost-center-parent"
                                     className="w-full"
                                     aria-invalid={!!errors.parent_id}
-                                    aria-describedby="cost-center-parent-hint"
+                                    aria-describedby={
+                                        errors.parent_id
+                                            ? 'cost-center-parent-hint cost-center-parent-error'
+                                            : 'cost-center-parent-hint'
+                                    }
                                 >
                                     <SelectValue />
                                 </SelectTrigger>
@@ -201,7 +203,9 @@ export function CostCenterForm({
                                     : 'Sono consentiti al massimo due livelli: ad esempio Infrastruttura / Switch.'}
                             </FieldDescription>
                             {errors.parent_id && (
-                                <FieldError>{errors.parent_id[0]}</FieldError>
+                                <FieldError id="cost-center-parent-error">
+                                    {errors.parent_id[0]}
+                                </FieldError>
                             )}
                         </Field>
                     </FieldGroup>

@@ -1,9 +1,11 @@
 import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { TenantSettingsNav } from '@/components/management/tenant-settings-nav';
 import { ProjectStatusSelect } from '@/components/management/project-status-select';
 import { InlineEdit } from '@/components/management/inline-edit';
-import { api } from '@/components/management/helpers';
+import { api, ApiError } from '@/components/management/helpers';
+import { CellError } from '@/components/management/cell-error';
 import type { ProjectStatus } from '@/components/management/types';
 import type { Tenant } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -42,6 +44,8 @@ export default function ProjectStatuses({
     statuses: ProjectStatus[];
 }) {
     const [name, setName] = useState('');
+    const nameInput = useRef<HTMLInputElement>(null);
+    const [nameError, setNameError] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [deleting, setDeleting] = useState<ProjectStatus | null>(null);
@@ -53,17 +57,21 @@ export default function ProjectStatuses({
         );
     const create = async () => {
         setBusy(true);
-        setError('');
+        setNameError('');
         try {
             await api(path, 'POST', { name });
             setName('');
             await reload();
         } catch (error) {
-            setError(
-                error instanceof Error
-                    ? error.message
-                    : 'Creazione non riuscita.',
-            );
+            if (error instanceof ApiError && error.errors.name?.[0]) {
+                setNameError(error.errors.name[0]);
+                requestAnimationFrame(() => nameInput.current?.focus());
+            } else
+                toast.error(
+                    error instanceof Error
+                        ? error.message
+                        : 'Creazione non riuscita.',
+                );
         } finally {
             setBusy(false);
         }
@@ -116,20 +124,35 @@ export default function ProjectStatuses({
                             className="flex flex-wrap items-end gap-3"
                         >
                             <FieldGroup className="min-w-48 flex-1">
-                                <Field>
+                                <Field data-invalid={!!nameError}>
                                     <FieldLabel htmlFor="status-name">
                                         Nuovo stato
                                     </FieldLabel>
-                                    <Input
-                                        id="status-name"
-                                        value={name}
-                                        onChange={(event) =>
-                                            setName(event.target.value)
-                                        }
-                                        disabled={busy}
-                                        required
-                                        maxLength={255}
-                                    />
+                                    <div className="relative pr-9">
+                                        <Input
+                                            ref={nameInput}
+                                            aria-invalid={!!nameError}
+                                            aria-describedby={
+                                                nameError
+                                                    ? 'status-name-error'
+                                                    : undefined
+                                            }
+                                            id="status-name"
+                                            value={name}
+                                            onChange={(event) => {
+                                                setName(event.target.value);
+                                                setNameError('');
+                                            }}
+                                            disabled={busy}
+                                            required
+                                            maxLength={255}
+                                        />
+                                        <CellError
+                                            id="status-name-error"
+                                            label="Nuovo stato"
+                                            message={nameError}
+                                        />
+                                    </div>
                                 </Field>
                             </FieldGroup>
                             <Button
@@ -139,14 +162,6 @@ export default function ProjectStatuses({
                                 Aggiungi stato
                             </Button>
                         </form>
-                        {error && !deleting && (
-                            <p
-                                role="alert"
-                                className="text-sm text-destructive"
-                            >
-                                {error}
-                            </p>
-                        )}
                         <Table>
                             <TableHeader>
                                 <TableRow>
