@@ -222,7 +222,7 @@ class SectionSpreadsheet
         $ids = BudgetSelection::ids($request, $tenant, $year);
         $snapshot = $year ? app(AnnualBudget::class)->snapshot($tenant, $year, $ids) : ['entries' => [], 'totals' => [], 'groups' => []];
         $typeNames = ['contract' => 'Contratto', 'project' => 'Progetto', 'expense' => 'Spesa'];
-        $rows = array_map(fn ($row) => [$selected, $typeNames[$row['type']], $row['description'], $row['included'] ? 'Sì' : 'No', $row['cost_center'] ? self::path($row['cost_center']) : null, self::amount($row['allocated']), self::amount($row['actual']), self::amount($row['variance']), $row['estimated_count'] ? 'Solo stima' : ($row['actual'] !== null ? 'Effettivo registrato' : 'Nessun importo registrato'), $row['notes'], self::excelDate($row['starts_on']), self::excelDate($row['ends_on'])], $snapshot['entries']);
+        $rows = array_map(fn ($row) => [$selected, $typeNames[$row['type']], $row['description'], $row['cost_center'] ? self::path($row['cost_center']) : null, self::amount($row['allocated']), self::amount($row['actual']), self::amount($row['variance']), $row['estimated_count'] ? 'Solo stima' : ($row['actual'] !== null ? 'Effettivo registrato' : 'Nessun importo registrato'), $row['notes'], self::excelDate($row['starts_on']), self::excelDate($row['ends_on'])], $snapshot['entries']);
         $summaries = [];
         foreach (['Totale' => $snapshot['totals'], ...$snapshot['groups']] as $label => $totals) {
             if ($totals !== []) {
@@ -231,7 +231,7 @@ class SectionSpreadsheet
         }
 
         return new SectionWorkbook([
-            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Inclusa', 'Centro di costo', 'Allocato', 'Effettivo', 'Scostamento', 'Importi registrati', 'Note', 'Data iniziale', 'Data finale'], $rows, ['F' => self::EUR, 'G' => self::EUR, 'H' => self::VARIANCE, 'K' => self::DATE, 'L' => self::DATE]),
+            new ReportSheet('Budget', ['Anno', 'Tipo', 'Descrizione', 'Centro di costo', 'Allocato', 'Effettivo', 'Scostamento', 'Importi registrati', 'Note', 'Data iniziale', 'Data finale'], $rows, ['E' => self::EUR, 'F' => self::EUR, 'G' => self::VARIANCE, 'J' => self::DATE, 'K' => self::DATE]),
             new ReportSheet('Riepilogo annuale', ['Anno', 'Gruppo', 'Allocato', 'Effettivo', 'Scostamento', 'Voci solo stima'], $summaries, ['C' => self::EUR, 'D' => self::EUR, 'E' => self::VARIANCE]),
             $this->periodSheet($selected),
         ]);

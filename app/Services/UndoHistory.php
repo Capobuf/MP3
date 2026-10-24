@@ -161,6 +161,9 @@ class UndoHistory
     {
         $target = $redo ? 'after' : 'before';
         $source = $redo ? 'before' : 'after';
+        foreach ($action->changes['budget_entries'] ?? [] as $change) {
+            abort_if(isset($change[$target]) && ! $change[$target]['included'], 409, 'Questa operazione usa la precedente esclusione dal Budget e non può essere ripristinata.');
+        }
         // Restore bytes first. A storage failure leaves the database untouched.
         foreach ($action->changes['attachments'] ?? [] as $change) {
             $row = $change[$target];

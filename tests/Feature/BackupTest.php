@@ -1140,4 +1140,26 @@ class BackupTest extends TestCase
         $this->assertSame([$source->id], $user->tenants()->pluck('tenants.id')->all());
         $this->assertSame($files, Storage::disk('attachments')->allFiles());
     }
+
+    public function test_legacy_backup_exclusions_restore_as_removed_without_rewriting_archive(): void
+    {
+        $source = Tenant::create(['name' => 'Origine', 'slug' => 'origine']);
+        $target = Tenant::create(['name' => 'Nuova', 'slug' => 'nuova']);
+        $expense = $source->expenses()->create(['title' => 'Storica', 'year' => 2026, 'allocated_amount' => '-12.34']);
+        $year = $source->budgetYears()->create(['year' => 2026]);
+        $year->entries()->create(['tenant_id' => $source->id, 'type' => 'expense', 'expense_id' => $expense->id]);
+        $path = Storage::disk('backups')->path('legacy.zip');
+        app(TenantBackup::class)->create($source, $path);
+        $this->rewriteArchive($path, function ($zip, &$data): void {
+            $this->assertEquals(1, $data['tables']['budget_entries'][0]['included']);
+            $data['tables']['budget_entries'][0]['included'] = false;
+        });
+        $hash = hash_file('sha256', $path);
+        app(TenantBackup::class)->restore($target, $path);
+        $restored = $target->expenses()->sole();
+        $this->assertSame('-12.34', $restored->allocated_amount);
+        $this->assertSame(['expense:'.$restored->id], $target->budgetYears()->sole()->dismissed_sources);
+        $this->assertSame(0, $target->budgetEntries()->count());
+        $this->assertSame($hash, hash_file('sha256', $path));
+    }
 }

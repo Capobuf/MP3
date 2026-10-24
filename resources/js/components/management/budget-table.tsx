@@ -544,10 +544,9 @@ function SortableBudgetRow({
             }}
             data-state={row.getIsSelected() ? 'selected' : undefined}
             className={cn(
-                (!row.original.included ||
-                    (row.original.type === 'expense' &&
-                        row.original.expenses[0] &&
-                        !row.original.expenses[0].contributes)) &&
+                row.original.type === 'expense' &&
+                    row.original.expenses[0] &&
+                    !row.original.expenses[0].contributes &&
                     'text-muted-foreground',
                 isDragging && 'bg-accent opacity-80',
             )}
@@ -753,20 +752,12 @@ export function BudgetTable({
     const [search, setSearch] = useState('');
     const [vendor, setVendor] = useState('all');
     const [center, setCenter] = useState('all');
-    const [status, setStatus] = useState('included');
     const hasFilters =
         !!search ||
         typeFilter !== 'all' ||
         vendor !== 'all' ||
-        center !== 'all' ||
-        status !== 'included';
-    const filterKey = JSON.stringify([
-        search,
-        typeFilter,
-        vendor,
-        center,
-        status,
-    ]);
+        center !== 'all';
+    const filterKey = JSON.stringify([search, typeFilter, vendor, center]);
     const [filteredBudget, setFilteredBudget] = useState<{
         source: BudgetSnapshot;
         key: string;
@@ -969,8 +960,7 @@ export function BudgetTable({
                             preferences.visibility.type === false) ||
                             (row.original.type === 'expense' &&
                                 row.original.expenses[0]?.contributes ===
-                                    false) ||
-                            !row.original.included) && (
+                                    false)) && (
                             <div className="flex max-w-48 flex-col items-start gap-1">
                                 {preferences.group === 'center' &&
                                     preferences.visibility.type === false && (
@@ -987,9 +977,6 @@ export function BudgetTable({
                                             expense={row.original.expenses[0]}
                                         />
                                     )}
-                                {!row.original.included && (
-                                    <Badge variant="outline">Esclusa</Badge>
-                                )}
                             </div>
                         )}
                     </div>
@@ -1179,17 +1166,7 @@ export function BudgetTable({
                                             Righe e collegamenti
                                         </DropdownMenuItem>
                                     )}
-                                    {!entry.included && (
-                                        <DropdownMenuItem
-                                            onSelect={() => {
-                                                void batch('reactivate', [
-                                                    entry.id,
-                                                ]);
-                                            }}
-                                        >
-                                            Riattiva nei totali
-                                        </DropdownMenuItem>
-                                    )}
+
                                     <DropdownMenuItem
                                         variant="destructive"
                                         onSelect={() => setRemoving([entry.id])}
@@ -1230,11 +1207,9 @@ export function BudgetTable({
                     (vendor === 'all' ||
                         String(row.vendor?.id ?? 'none') === vendor) &&
                     (center === 'all' ||
-                        String(row.cost_center_id ?? 'none') === center) &&
-                    (status === 'all' ||
-                        row.included === (status === 'included')),
+                        String(row.cost_center_id ?? 'none') === center),
             ),
-        [budget.entries, typeFilter, vendor, center, status],
+        [budget.entries, typeFilter, vendor, center],
     );
     const data = useMemo(
         () =>
@@ -1466,7 +1441,6 @@ export function BudgetTable({
         typeFilter !== 'all',
         vendor !== 'all',
         center !== 'all',
-        status !== 'included',
     ].filter(Boolean).length;
     const vendors = [
         ...new Map(
@@ -1593,11 +1567,6 @@ export function BudgetTable({
             try {
                 setReport(
                     captureBudgetReport(table, summary, [
-                        status === 'included'
-                            ? 'Voci incluse'
-                            : status === 'excluded'
-                              ? 'Voci escluse'
-                              : 'Incluse ed escluse',
                         ...(search ? [`Ricerca: ${search}`] : []),
                         ...(typeFilter !== 'all'
                             ? [
@@ -1710,25 +1679,7 @@ export function BudgetTable({
                                 })),
                             ]}
                         />
-                        <FilterSelect
-                            label="Inclusione nel Budget"
-                            value={status}
-                            onChange={setStatus}
-                            options={[
-                                {
-                                    value: 'included',
-                                    label: 'Voci incluse',
-                                },
-                                {
-                                    value: 'excluded',
-                                    label: 'Voci escluse',
-                                },
-                                {
-                                    value: 'all',
-                                    label: 'Incluse ed escluse',
-                                },
-                            ]}
-                        />
+
                         {hasFilters && (
                             <Button
                                 size="sm"
@@ -1738,7 +1689,6 @@ export function BudgetTable({
                                     setTypeFilter('all');
                                     setVendor('all');
                                     setCenter('all');
-                                    setStatus('included');
                                 }}
                             >
                                 Azzera filtri
@@ -1779,18 +1729,7 @@ export function BudgetTable({
                     <span role="status">
                         {selected.length} voci selezionate
                     </span>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => {
-                            void batch('reactivate', selected).then((ok) => {
-                                if (ok) setSelection({});
-                            });
-                        }}
-                    >
-                        Riattiva nei totali
-                    </Button>
+
                     <Button
                         size="sm"
                         variant="outline"

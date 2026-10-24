@@ -59,6 +59,7 @@ class TenantBackup
                 $tenant = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
                 $tables = app(UndoHistory::class)->snapshot($tenant);
                 $tables = array_map(array_values(...), $tables);
+                $tables['budget_entries'] = AnnualBudget::normalizeLegacyEntries($tables['budget_entries'], $tables['budget_years']);
                 $tables['comments'] = [];
                 foreach (self::MODELS as $model => $table) {
                     foreach (DB::table('comments')->where('commentable_type', (new $model)->getMorphClass())->whereIn('commentable_id', array_column($tables[$table], 'id'))->get() as $comment) {
@@ -364,6 +365,8 @@ class TenantBackup
         }
         sort($expectedFiles);
         Archive::check(array_keys($manifest['files']) === $expectedFiles, 'File inattesi o mancanti nel backup tenant.');
+
+        $data['tables']['budget_entries'] = AnnualBudget::normalizeLegacyEntries($data['tables']['budget_entries'], $data['tables']['budget_years']);
 
         return $data;
     }

@@ -20,7 +20,6 @@ import type { BudgetEntry, BudgetSnapshot, BudgetTotals } from './budget-types';
 import { money } from './helpers';
 
 export const budgetReportColumns = {
-    status: 'Stato',
     description: 'Descrizione',
     type: 'Tipo',
     vendor: 'Fornitore',
@@ -72,9 +71,6 @@ export function defaultBudgetReportOptions(
             budgetReportBlocks,
         ),
         groupByType: true,
-        columns: (
-            Object.keys(budgetReportColumns) as BudgetReportColumn[]
-        ).filter((key) => key !== 'status'),
     };
 }
 
@@ -111,19 +107,18 @@ function amount(value: string | null, variance = false) {
 }
 function reportCell(entry: BudgetEntry, column: BudgetReportColumn) {
     switch (column) {
-        case 'status':
-            return (
-                <>
-                    <span className="budget-report-status-label">
-                        {entry.included ? 'Inclusa' : 'Esclusa'}
-                    </span>
-                    {entry.estimated_count > 0 && <small>Solo stima</small>}
-                </>
-            );
         case 'variance':
             return money(entry.variance);
         case 'description':
-            return entry.description;
+            return (
+                <>
+                    {entry.description}
+                    {entry.estimated_count > 0 && <small>Solo stima</small>}
+                    {entry.allocated === null && entry.actual === null && (
+                        <small>Non valorizzato</small>
+                    )}
+                </>
+            );
         case 'type':
             return budgetLabels[entry.type];
         case 'vendor':
@@ -318,9 +313,6 @@ export function BudgetReport({
                                                 <tr
                                                     key={entry.id}
                                                     data-entry-id={entry.id}
-                                                    data-included={
-                                                        entry.included
-                                                    }
                                                 >
                                                     {options.columns.map(
                                                         (column) => (

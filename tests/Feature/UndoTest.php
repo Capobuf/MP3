@@ -8,6 +8,7 @@ use App\Models\UndoAction;
 use App\Models\User;
 use App\Services\ExpenseAllocation;
 use App\Services\ExpenseWriter;
+use App\Services\UndoHistory;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -102,7 +103,7 @@ class UndoTest extends TestCase
         $keys = ['expense:'.$first->id, 'expense:'.$second->id];
         $year = $this->tenant->budgetYears()->create(['year' => 2026, 'dismissed_sources' => $keys]);
         $other = $this->tenant->budgetYears()->create(['year' => 2025]);
-        $entry = $other->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $second->id, 'included' => false]);
+        $entry = $other->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $second->id]);
         $disk = Storage::disk('attachments');
         $disk->put('original.txt', 'Originale');
         $file = $first->attachments()->forceCreate(['tenant_id' => $this->tenant->id, 'disk' => 'attachments', 'path' => 'original.txt',
@@ -333,24 +334,18 @@ class UndoTest extends TestCase
         $this->assertDatabaseCount('expense_lines', 0);
     }
 
-    public function test_budget_exclusion_removal_and_year_creation_are_undoable(): void
+    public function test_budget_removal_and_year_creation_are_undoable(): void
     {
         $year = $this->postJson('/t/alfa/budget/years', ['year' => 2026])->assertCreated()->json('year.id');
         $this->assertNotNull($year);
         $url = '/t/alfa/budget/years/'.$year.'/entries';
         $expense = $this->postJson('/t/alfa/expenses', ['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '42.10', 'budget_year_id' => $year])->assertCreated()->json('record.id');
         $entry = $this->tenant->budgetEntries()->where('expense_id', $expense)->sole()->id;
-        $this->patchJson($url, ['action' => 'exclude', 'ids' => [$entry]])->assertOk();
-        $exclude = $this->undo();
-        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'included' => true]);
-        $this->redo($exclude);
-        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'included' => false]);
         $this->patchJson($url, ['action' => 'remove', 'ids' => [$entry]])->assertOk();
         $remove = $this->undo();
-        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'expense_id' => $expense, 'included' => false]);
+        $this->assertDatabaseHas('budget_entries', ['id' => $entry, 'expense_id' => $expense]);
         $this->redo($remove);
         $this->undo(); // Undo removal again.
-        $this->undo(); // Undo exclusion.
         $this->undo(); // Undo entry addition.
         $this->assertDatabaseCount('budget_entries', 0);
         $yearAction = $this->undo();
@@ -487,5 +482,19 @@ class UndoTest extends TestCase
         $this->postJson('/t/alfa/vendors', ['name' => 'Fornitore'])->assertCreated();
         $result = $this->postJson('/t/alfa/undo')->assertOk()->assertJsonPath('seconds', 7);
         $this->assertEqualsWithDelta(now()->addSeconds(7)->getTimestamp(), strtotime($result->json('expires_at')), 1);
+    }
+
+    public function test_old_undo_cannot_recreate_an_excluded_reference(): void
+    {
+        $year = $this->tenant->budgetYears()->create(['year' => 2026]);
+        $expense = $this->tenant->expenses()->create(['title' => 'Spesa', 'year' => 2026]);
+        $entry = $year->entries()->forceCreate(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $expense->id, 'included' => false]);
+        $history = app(UndoHistory::class);
+        $before = $history->snapshot($this->tenant);
+        $entry->forceFill(['included' => true])->save();
+        $history->record($this->tenant, $this->user, 'Vecchia riattivazione', $before, $history->snapshot($this->tenant));
+        $this->postJson('/t/alfa/undo')->assertConflict();
+        $this->assertTrue($entry->fresh()->included);
+        $this->assertNull(UndoAction::sole()->undone_at);
     }
 }

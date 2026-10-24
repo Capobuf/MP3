@@ -24,11 +24,10 @@ class BudgetEntriesRequest extends FormRequest
         $rules = [
             'tenant_id' => ['prohibited'],
             'entries' => ['required', 'array', 'list', 'min:1'],
-            'entries.*' => ['required', 'array:type,source_id,cost_center_id,reactivate,restore'],
+            'entries.*' => ['required', 'array:type,source_id,cost_center_id,restore'],
             'entries.*.type' => ['required', Rule::in(AnnualBudget::TYPES)],
             'entries.*.source_id' => ['required', 'integer'],
             'entries.*.cost_center_id' => ['nullable', 'integer', Rule::exists('cost_centers', 'id')->where('tenant_id', $tenant->id)],
-            'entries.*.reactivate' => ['sometimes', 'boolean'],
             'entries.*.restore' => ['sometimes', 'boolean'],
         ];
 

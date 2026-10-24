@@ -336,6 +336,23 @@ class TenantCsvTransfer
             }
         }
 
+        if ($errorCount === 0) {
+            $removed = 0;
+            foreach ($records as $ref => $record) {
+                if ($record['type'] === 'budget-entry' && ! $record['data']['included']) {
+                    $data = $record['data'];
+                    $year = &$records[$data['budget_year_ref']]['data'];
+                    $year['dismissed_sources'] = array_values(array_unique([...($year['dismissed_sources'] ?? []), $data[$data['type'].'_ref']]));
+                    unset($year, $records[$ref]);
+                    $counts['budget-entry']--;
+                    $removed++;
+                }
+            }
+            if ($removed > 0) {
+                $warnings[] = "{$removed} voci storicamente escluse saranno ripristinate come rimosse dal Budget, senza includerle nei totali.";
+            }
+        }
+
         return ['meta' => $meta, 'records' => $records, 'counts' => $counts, 'errors' => $errors, 'error_count' => $errorCount, 'warnings' => $warnings];
     }
 

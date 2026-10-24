@@ -6,7 +6,7 @@ Fornitori, contratti, progetti, spese, centri di costo e Budget hanno le azioni 
 
 Gli export rispettano i filtri applicati e includono tutte le pagine. Contratti e progetti hanno un foglio aggiuntivo con le spese per anno di attribuzione. Le spese includono il dettaglio delle righe economiche dell’anno selezionato; Budget usa le voci e i riepiloghi del servizio `AnnualBudget`. Gli importi di riferimento dei contratti sono distinti dagli importi delle spese. I report non contengono ID interni, formule o file allegati.
 
-Nel Budget, la vista iniziale esporta le sole voci incluse; un filtro senza risultati produce un file senza voci. Le caselle di selezione e i gruppi compressi non restringono l’export. I report annuali Drive mantengono tutte le voci dell’anno. Se una voce filtrata non è più disponibile, aggiornare il Budget prima di riprovare.
+Nel Budget, tutte le voci presenti contribuiscono ai totali; la colonna ridondante «Inclusa» non è più esportata. Un filtro senza risultati produce un file senza voci. Le caselle di selezione e i gruppi compressi non restringono l’export. I report annuali Drive mantengono tutte le voci dell’anno. Se una voce filtrata non è più disponibile, aggiornare il Budget prima di riprovare.
 
 Per importare, scaricare il modello della sezione e compilare il foglio **Dati** senza cambiare le intestazioni. Il foglio **Istruzioni** documenta i valori ammessi:
 
@@ -48,7 +48,7 @@ La prima riga dati è `meta,tenant`, con payload oggetto JSON contenente `format
 
 Tipi supportati: `vendor`, `cost-center`, `contract`, `project`, `expense`, `expense-line`, `budget-year`, `budget-entry`. Il riferimento è locale al file, nel formato `tipo:numero-positivo`; non viene riutilizzato come ID di database.
 
-Gli attributi e i riferimenti ammessi sono definiti esplicitamente in `TenantCsvTransfer::TYPES`. Tutti i campi previsti devono essere presenti, anche quando nulli. I payload comprendono i campi gestionali, `created_at`, `updated_at` e i riferimenti delle relazioni. Contratti, progetti e spese contengono `cost_center_refs`, lista dei centri associati. `budget-year.dismissed_sources` contiene riferimenti locali a sorgenti escluse/rimosse; vengono rimappati ai nuovi ID. Importi e quantità sono stringhe decimali canoniche con rispettivamente due e quattro decimali; anni e posizioni sono interi JSON; gli stati booleani sono booleani JSON. Le date sono `Y-m-d`; i timestamp conservano la precisione al secondo dello schema applicativo.
+Gli attributi e i riferimenti ammessi sono definiti esplicitamente in `TenantCsvTransfer::TYPES`. Tutti i campi previsti devono essere presenti, anche quando nulli. I payload comprendono i campi gestionali, `created_at`, `updated_at` e i riferimenti delle relazioni. Contratti, progetti e spese contengono `cost_center_refs`, lista dei centri associati. `budget-year.dismissed_sources` contiene riferimenti locali a sorgenti rimosse; vengono rimappati ai nuovi ID. Importi e quantità sono stringhe decimali canoniche con rispettivamente due e quattro decimali; anni e posizioni sono interi JSON; gli stati booleani sono booleani JSON. Le date sono `Y-m-d`; i timestamp conservano la precisione al secondo dello schema applicativo.
 
 Creare o selezionare un tenant senza dati gestionali, caricare il CSV, controllare i conteggi dell’anteprima e confermare. Il server rifiuta versioni, tipi o campi sconosciuti, riferimenti mancanti/duplicati, gerarchie e valori incoerenti. Ricontrolla che il tenant sia vuoto dentro la transazione. Il ripristino conserva le righe economiche originali e le associazioni senza ricalcolare o ricreare spese attraverso il flusso ordinario. Gli allegati già presenti rendono la destinazione non vuota.
 
@@ -69,3 +69,5 @@ Non ci sono code, job, staging persistente, merge tra tenant o aggiornamenti aut
 5. Verificare che il tenant popolato non accetti il CSV e che un membro ordinario non acceda alle impostazioni tecniche.
 
 Prima di eseguire PHPUnit, verificare la connessione effettiva e usare soltanto `testing` o SQLite in memoria, come descritto in `AGENTS.md`.
+
+I nuovi CSV e backup contengono solo voci Budget presenti. La colonna tecnica `included` rimane per compatibilità ed è sempre `true`. Le voci `included=false` nei vecchi archivi vengono convertite in sorgenti rimosse, con riferimenti rimappati, senza cancellare la sorgente né contarla nei totali. Riferimenti incoerenti impediscono il ripristino. Le operazioni Undo storiche che ripristinerebbero una voce esclusa sono rifiutate; la rimozione ordinaria resta annullabile.

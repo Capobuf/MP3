@@ -30,7 +30,6 @@ export type BudgetEntry = Omit<
     type: BudgetType;
     source_id: number | null;
     description: string;
-    included: boolean;
     position: number;
     allocated: string | null;
     actual: string | null;
@@ -73,7 +72,7 @@ export type BudgetSuggestion = {
     source_id: number;
     entry_id: number | null;
     description: string;
-    state: 'missing' | 'excluded' | 'removed' | 'blocked';
+    state: 'missing' | 'removed' | 'blocked';
     problem: string | null;
     expense_url: string;
     allocated: string | null;
