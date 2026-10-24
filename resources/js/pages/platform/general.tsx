@@ -57,11 +57,12 @@ export default function GeneralSettings({
                                         Dimensione massima per allegato (MB)
                                     </FieldLabel>
                                     <InputGroup
-                                        className="max-w-xs"
+                                        className="max-w-fit"
                                         data-disabled={form.processing}
                                     >
                                         <InputGroupInput
                                             id="attachment-max-size"
+                                            className="w-[calc(4ch+2.5rem)] flex-none tabular-nums"
                                             type="number"
                                             min={1 / 1024}
                                             max={1024}
