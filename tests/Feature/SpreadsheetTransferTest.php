@@ -153,7 +153,7 @@ class SpreadsheetTransferTest extends TestCase
             $this->assertSame($actual === '0.00' ? 1 : 0, $breakdown['actual']['zero']);
             $entry = app(AnnualBudget::class)->snapshot($tenant, $year)['entries'][0];
             $this->assertSame([$allocated, $actual, $variance], [$entry['allocated'], $entry['actual'], $entry['variance']]);
-            foreach (['expenses' => ['I2', 'J2'], 'budget' => ['F2', 'G2']] as $resource => [$allocatedCell, $actualCell]) {
+            foreach (['expenses' => ['I2', 'J2'], 'budget' => ['E2', 'F2']] as $resource => [$allocatedCell, $actualCell]) {
                 $sheet = $this->workbook('/t/ambiente/'.$resource.'/export.xlsx?year='.$selected)->getSheet(0);
                 $this->assertSame($allocated === null ? null : (float) $allocated, $sheet->getCell($allocatedCell)->getValue());
                 $this->assertSame($actual === null ? null : (float) $actual, $sheet->getCell($actualCell)->getValue());
@@ -269,9 +269,9 @@ class SpreadsheetTransferTest extends TestCase
         }
         $year->entries()->create(['tenant_id' => $tenant->id, 'type' => 'project', 'project_id' => $project->id]);
         $book = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
-        $this->assertEquals(-20, $book->getSheet(0)->getCell('H2')->getValue());
+        $this->assertEquals(-20, $book->getSheet(0)->getCell('G2')->getValue());
         $this->assertEquals(-20, $book->getSheet(1)->getCell('E2')->getValue());
-        $this->assertSame('Effettivo registrato', $book->getSheet(0)->getCell('I2')->getValue());
+        $this->assertSame('Effettivo registrato', $book->getSheet(0)->getCell('H2')->getValue());
     }
 
     public function test_report_budget_and_annual_xlsx_preserve_signed_numeric_variances_and_sources(): void
@@ -296,9 +296,9 @@ class SpreadsheetTransferTest extends TestCase
             try {
                 file_put_contents($file, Excel::raw(app(SectionSpreadsheet::class)->annual($tenant, 2026), \Maatwebsite\Excel\Excel::XLSX));
                 $annual = IOFactory::load($file);
-                $this->assertSame($status, $book->getSheet(0)->getCell('I2')->getValue());
-                $this->assertSame($status, $annual->getSheetByName('Budget')->getCell('I2')->getValue());
-                foreach ([$book->getSheet(0)->getCell('H2'), $book->getSheet(1)->getCell('E2'), $annual->getSheetByName('Budget')->getCell('H2')] as $cell) {
+                $this->assertSame($status, $book->getSheet(0)->getCell('H2')->getValue());
+                $this->assertSame($status, $annual->getSheetByName('Budget')->getCell('H2')->getValue());
+                foreach ([$book->getSheet(0)->getCell('G2'), $book->getSheet(1)->getCell('E2'), $annual->getSheetByName('Budget')->getCell('G2')] as $cell) {
                     $this->assertSame((float) $report['totals']['variance'], $cell->getValue());
                     $this->assertSame(DataType::TYPE_NUMERIC, $cell->getDataType());
                     $this->assertSame(SectionSpreadsheet::VARIANCE, $cell->getStyle()->getNumberFormat()->getFormatCode());
@@ -323,8 +323,8 @@ class SpreadsheetTransferTest extends TestCase
         $shared = $tenant->expenses()->create(['title' => 'Condivisa storica', 'year' => 2026, 'contract_id' => $contract->id, 'allocated_amount' => '100', 'actual_amount' => '80']);
         $tenant->expenses()->create(['title' => 'Progetto', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => '50', 'actual_amount' => '70']);
         $zero = $tenant->expenses()->create(['title' => 'Zero', 'year' => 2026, 'allocated_amount' => '0']);
-        $excluded = $tenant->expenses()->create(['title' => 'Esclusa', 'year' => 2026, 'allocated_amount' => '999', 'actual_amount' => '999']);
-        foreach ([['contract', $contract, true], ['project', $project, true], ['expense', $zero, true], ['expense', $excluded, false], ['expense', $shared, true]] as [$type, $source, $included]) {
+        $additional = $tenant->expenses()->create(['title' => 'Altra voce', 'year' => 2026, 'allocated_amount' => '999', 'actual_amount' => '999']);
+        foreach ([['contract', $contract, true], ['project', $project, true], ['expense', $zero, true], ['expense', $additional, true], ['expense', $shared, true]] as [$type, $source, $included]) {
             $year->entries()->create(['tenant_id' => $tenant->id, 'type' => $type, $type.'_id' => $source->id, 'included' => $included, 'cost_center_id' => $center->id]);
         }
         $ids = $year->entries()->orderBy('id')->pluck('id')->all();
@@ -338,9 +338,8 @@ class SpreadsheetTransferTest extends TestCase
             foreach ($snapshot['entries'] as $index => $entry) {
                 $row = $index + 2;
                 $this->assertSame($entry['description'], $sheet->getCell('C'.$row)->getValue());
-                $this->assertSame($entry['included'] ? 'Sì' : 'No', $sheet->getCell('D'.$row)->getValue());
-                $this->assertSame('Centro', $sheet->getCell('E'.$row)->getValue());
-                foreach (['F' => 'allocated', 'G' => 'actual', 'H' => 'variance'] as $column => $metric) {
+                $this->assertSame('Centro', $sheet->getCell('D'.$row)->getValue());
+                foreach (['E' => 'allocated', 'F' => 'actual', 'G' => 'variance'] as $column => $metric) {
                     $this->assertSame($entry[$metric] === null ? null : (float) $entry[$metric], $sheet->getCell($column.$row)->getValue());
                     if ($metric === 'variance') {
                         $this->assertSame(DataType::TYPE_NUMERIC, $sheet->getCell($column.$row)->getDataType());
@@ -358,9 +357,9 @@ class SpreadsheetTransferTest extends TestCase
         }
         $annual = app(SectionSpreadsheet::class)->annual($tenant, 2026)->sheets()[4]->array();
         $this->assertCount(5, $annual);
-        $this->assertSame('No', $annual[3][3]);
-        $this->assertNull($annual[4][5]);
-        $this->assertSame('150.00', app(AnnualBudget::class)->snapshot($tenant, $year)['totals']['allocated']);
+        $this->assertSame('Centro', $annual[3][3]);
+        $this->assertNull($annual[4][4]);
+        $this->assertSame('1149.00', app(AnnualBudget::class)->snapshot($tenant, $year)['totals']['allocated']);
     }
 
     public function test_budget_selection_rejects_malformed_foreign_year_and_removed_ids_for_xlsx_and_report(): void
@@ -412,7 +411,7 @@ class SpreadsheetTransferTest extends TestCase
         $this->assertSame('0.00', $tenant->expenses()->where('title', 'Spesa')->sole()->actual_amount);
         $this->assertSame('12.34', $tenant->budgetYears()->sole()->entries()->sole()->expense->allocated_amount);
         $budget = $this->workbook('/t/ambiente/budget/export.xlsx?year=2026');
-        $this->assertSame('Allocato', $budget->getSheet(0)->getCell('F1')->getValue());
+        $this->assertSame('Allocato', $budget->getSheet(0)->getCell('E1')->getValue());
         $this->assertSame('Allocato', $budget->getSheet(1)->getCell('C1')->getValue());
     }
 

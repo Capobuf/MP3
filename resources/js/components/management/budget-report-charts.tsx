@@ -38,7 +38,6 @@ export function budgetReportGroups(
     return budget.entries
         .filter(
             (entry) =>
-                entry.included &&
                 entry.type === (kind === 'projects' ? 'project' : 'contract'),
         )
         .map((entry) => ({ ...entry, name: entry.description, count: 1 }));
@@ -46,7 +45,7 @@ export function budgetReportGroups(
 
 export function budgetReportVariances(budget: BudgetSnapshot): EconomicGroup[] {
     const comparable = budget.entries.filter(
-        (entry) => entry.included && entry.variance !== null,
+        (entry) => entry.variance !== null,
     );
     return [
         ...comparable

@@ -148,7 +148,7 @@ class ExpenseAllocationTest extends TestCase
         $this->resolve($expense)->assertForbidden();
     }
 
-    public function test_budget_example_exclusions_and_filters_never_reassign_expenses(): void
+    public function test_budget_example_removals_and_filters_never_reassign_expenses(): void
     {
         $year = $this->tenant->budgetYears()->create(['year' => 2026]);
         $project = $this->tenant->projects()->create(['name' => 'X', 'year' => 2026]);
@@ -159,10 +159,10 @@ class ExpenseAllocationTest extends TestCase
         $path = '/t/allocation/budget/years/'.$year->id;
         $payload = ['entries' => [['type' => 'project', 'source_id' => $project->id], ['type' => 'contract', 'source_id' => $contract->id], ['type' => 'expense', 'source_id' => $free->id]]];
         $budget = $this->postJson($path.'/entries', $payload)->assertOk()->assertJsonPath('budget.totals.allocated', '1600.00')->json('budget');
-        $this->patchJson($path.'/entries', ['action' => 'exclude', 'ids' => [$budget['entries'][0]['id']]])->assertOk()
-            ->assertJsonPath('budget.totals.allocated', '1500.00')->assertJsonPath('budget.entries.0.allocated', null)->assertJsonCount(0, 'reassigned');
+        $this->patchJson($path.'/entries', ['action' => 'remove', 'ids' => [$budget['entries'][0]['id']]])->assertOk()
+            ->assertJsonPath('budget.totals.allocated', '1500.00')->assertJsonPath('budget.entries.0.allocated', '500.00')->assertJsonCount(0, 'reassigned');
         $this->getJson($path.'?entry_ids='.$budget['entries'][1]['id'])->assertOk()->assertJsonPath('budget.totals.allocated', '500.00');
-        $this->getJson($path.'/missing')->assertOk()->assertJsonPath('suggestions.0.type', 'project')->assertJsonPath('suggestions.0.state', 'excluded');
+        $this->getJson($path.'/missing')->assertOk()->assertJsonPath('suggestions.0.type', 'project')->assertJsonPath('suggestions.0.state', 'removed');
         foreach (['entries', 'entries/assist'] as $endpoint) {
             $this->postJson($path.'/'.$endpoint, ['entries' => [['type' => 'expense', 'source_id' => $linked->id]]])->assertUnprocessable();
         }

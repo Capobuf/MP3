@@ -42,7 +42,6 @@ const entries: BudgetEntry[] = [3, 2, 1].map((id) => ({
     type: 'expense',
     source_id: id,
     description: `Voce ${id} <script>`,
-    included: id !== 3,
     position: id,
     cost_center_id: null,
     cost_center: null,
@@ -194,10 +193,8 @@ describe('Budget report', () => {
             captureBudgetReport(table(), { ...summary, entries: [] }, []),
         ).toThrow('Dati del Budget cambiati');
     });
-    it('renders server amounts, zero/missing, excluded rows, column order and optional sections safely', () => {
-        const data = captureBudgetReport(table(), summary, [
-            'Voci incluse ed escluse',
-        ]);
+    it('renders server amounts, zero/missing, present rows, column order and optional sections safely', () => {
+        const data = captureBudgetReport(table(), summary, ['Voci del Budget']);
         const html = renderToStaticMarkup(
             <BudgetReport
                 data={data}
@@ -206,13 +203,7 @@ describe('Budget report', () => {
                     blocks: ['kpis', 'table', 'totals'],
                     title: 'Budget <2026>',
                     orientation: 'portrait',
-                    columns: [
-                        'allocated',
-                        'description',
-                        'actual',
-                        'variance',
-                        'status',
-                    ],
+                    columns: ['allocated', 'description', 'actual', 'variance'],
                 }}
                 tenantName="Tenant"
                 year={2026}
@@ -224,7 +215,8 @@ describe('Budget report', () => {
         expect(html).toContain('0,00');
         expect(html).toContain('Da inserire');
         expect(html).not.toContain('Dati incompleti: scostamento provvisorio.');
-        expect(html).toContain('Esclusa');
+        expect(html).not.toContain('Esclusa');
+        expect(html).toContain('Solo stima');
         expect(html).not.toContain('Ripartizione del Budget');
         expect(html).not.toContain('<button');
         expect(html).not.toContain('Fornitore');
@@ -299,7 +291,7 @@ it('defaults to all blocks and columns except Status, supports independent scope
         html.indexOf('data-report-block="kpis"'),
     );
 });
-it('uses server vendor groups and included attributed source amounts for charts', () => {
+it('uses server vendor groups and all attributed source amounts for charts', () => {
     const vendorTotals = {
         ...totals,
         allocated: '10.10',
@@ -311,17 +303,15 @@ it('uses server vendor groups and included attributed source amounts for charts'
         ...summary,
         vendor_groups: { '8': vendorTotals },
         entries: [
-            { ...entries[0], included: true, vendor: { id: 8, name: 'Uno' } },
+            { ...entries[0], vendor: { id: 8, name: 'Uno' } },
             {
                 ...entries[1],
-                included: true,
                 type: 'project' as const,
                 allocated: '0.00',
                 actual: null,
             },
             {
                 ...entries[2],
-                included: false,
                 type: 'project' as const,
                 actual: '900.00',
             },
@@ -330,7 +320,7 @@ it('uses server vendor groups and included attributed source amounts for charts'
     expect(budgetReportGroups(snapshot, 'vendors')).toEqual([
         { ...vendorTotals, id: '8', name: 'Uno' },
     ]);
-    expect(budgetReportGroups(snapshot, 'projects')).toHaveLength(1);
+    expect(budgetReportGroups(snapshot, 'projects')).toHaveLength(2);
     expect(budgetReportGroups(snapshot, 'projects')[0]).toMatchObject({
         id: entries[1].id,
         allocated: '0.00',
@@ -382,17 +372,13 @@ it('groups the table by type using server subtotals, or keeps the original order
     expect(ungrouped).not.toContain('Subtotale');
 });
 
-it('keeps the overview selection of five overruns and five savings, omitting zero, missing and excluded rows', () => {
+it('keeps the overview selection of five overruns and five savings, omitting zero and missing rows', () => {
     const rows: BudgetEntry[] = Array.from({ length: 20 }, (_, index) => ({
         ...entries[0],
         id: index,
-        included: true,
         variance: String(index - 10),
     }));
-    rows.push(
-        { ...entries[0], id: 30, included: false, variance: '999.00' },
-        { ...entries[0], id: 31, included: true, variance: null },
-    );
+    rows.push({ ...entries[0], id: 31, variance: null });
     const selected = budgetReportVariances({ ...summary, entries: rows });
     expect(selected.map((row) => row.id)).toEqual([
         19, 18, 17, 16, 15, 0, 1, 2, 3, 4,
@@ -494,7 +480,7 @@ it.each([
                     budget: {
                         ...summary,
                         totals: { ...totals, variance },
-                        entries: [{ ...entries[0], included: true, variance }],
+                        entries: [{ ...entries[0], variance }],
                     },
                     filters: [],
                 }}

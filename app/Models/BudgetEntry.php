@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property 'contract'|'project'|'expense' $type
  * @property int|null $expense_id
  */
-#[Fillable(['tenant_id', 'type', 'contract_id', 'project_id', 'expense_id', 'cost_center_id', 'included', 'position'])]
+#[Fillable(['tenant_id', 'type', 'contract_id', 'project_id', 'expense_id', 'cost_center_id', 'position'])]
 class BudgetEntry extends Model
 {
     /** @return BelongsTo<BudgetYear, $this> */

@@ -111,9 +111,8 @@ class BudgetController extends Controller
 
                     continue;
                 }
-                if (($suggestion['state'] === 'excluded' && ! ($data['reactivate'] ?? false)) ||
-                    ($suggestion['state'] === 'removed' && ! ($data['restore'] ?? false))) {
-                    throw ValidationException::withMessages(['entries' => 'Una voce è stata esclusa o rimossa. Riapri la selezione e conferma esplicitamente il ripristino.']);
+                if ($suggestion['state'] === 'removed' && ! ($data['restore'] ?? false)) {
+                    throw ValidationException::withMessages(['entries' => 'Una voce è stata rimossa. Riapri la selezione e conferma esplicitamente il ripristino.']);
                 }
                 $this->add($tenant, $year, $data, $index);
             }
@@ -134,12 +133,6 @@ class BudgetController extends Controller
         AnnualBudget::validateSource($tenant, $year, $source);
         $existing = $year->entries()->where($type.'_id', $source->id)->first();
         if ($existing !== null) {
-            if (! $existing->included && ($data['reactivate'] ?? false)) {
-                $existing->update(['included' => true]);
-            } elseif (! $existing->included) {
-                throw ValidationException::withMessages(["entries.{$index}.source_id" => 'La voce è già presente ma esclusa. Riattivala esplicitamente.']);
-            }
-
             return;
         }
         $fields = [$type.'_id' => $source->id];
@@ -151,7 +144,7 @@ class BudgetController extends Controller
     public function batch(Request $request, Tenant $tenant, BudgetYear $budgetYear, AnnualBudget $budget, AttachmentFiles $files): JsonResponse
     {
         $data = $request->validate([
-            'tenant_id' => ['prohibited'], 'action' => ['required', Rule::in(['exclude', 'reactivate', 'remove', 'delete_expense', 'reorder', 'update'])],
+            'tenant_id' => ['prohibited'], 'action' => ['required', Rule::in(['remove', 'delete_expense', 'reorder', 'update'])],
             'ids' => ['required', 'array', 'list', 'min:1'],
             'ids.*' => ['required', 'integer', 'distinct', Rule::exists('budget_entries', 'id')->where('tenant_id', $tenant->id)->where('budget_year_id', $budgetYear->id)],
             'changes' => ['sometimes', 'array:cost_center_id'],
@@ -171,12 +164,6 @@ class BudgetController extends Controller
                 $entry = $entries->get($id);
                 abort_unless($entry !== null, 409);
                 switch ($data['action']) {
-                    case 'exclude': case 'reactivate':
-                        if ($data['action'] === 'reactivate') {
-                            AnnualBudget::validateSource($tenant, $year, $entry->{$entry->type});
-                        }
-                        $entry->update(['included' => $data['action'] === 'reactivate']);
-                        break;
                     case 'reorder':
                         $entry->update(['position' => $position]);
                         break;
@@ -223,7 +210,7 @@ class BudgetController extends Controller
                 }
             }
 
-            return response()->json(['budget' => $after, 'reassigned' => $reassigned, 'message' => $reassigned === [] ? 'Budget aggiornato.' : count($reassigned).' spese riattribuite alle voci incluse secondo la priorità contratto, progetto, spesa singola.']);
+            return response()->json(['budget' => $after, 'reassigned' => $reassigned, 'message' => $reassigned === [] ? 'Budget aggiornato.' : count($reassigned).' spese riattribuite alle voci presenti secondo la priorità contratto, progetto, spesa singola.']);
         });
     }
 }

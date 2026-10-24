@@ -325,13 +325,11 @@ export function BudgetEntrySheet({
                         </Field>
                         {existing && (
                             <p role="status" className="text-sm">
-                                {existing.included
-                                    ? 'Questa voce è già inclusa nel Budget.'
-                                    : 'Questa voce è esclusa. Puoi riattivarla mantenendo i suoi collegamenti.'}
+                                Questa voce è già presente nel Budget.
                             </p>
                         )}
                         <Button
-                            disabled={busy || !source || existing?.included}
+                            disabled={busy || !source || !!existing}
                             onClick={() => {
                                 void (async () => {
                                     const ok = await mutate('entries', 'POST', {
@@ -340,7 +338,6 @@ export function BudgetEntrySheet({
                                                 type,
                                                 source_id: source?.id,
                                                 cost_center_id: center,
-                                                reactivate: !!existing,
                                             },
                                         ],
                                     });
@@ -349,11 +346,7 @@ export function BudgetEntrySheet({
                             }}
                         >
                             {busy && <Spinner />}
-                            {busy
-                                ? 'Salvataggio…'
-                                : existing
-                                  ? 'Riattiva voce'
-                                  : 'Aggiungi al Budget'}
+                            {busy ? 'Salvataggio…' : 'Aggiungi al Budget'}
                         </Button>
                     </>
                 </div>
@@ -411,7 +404,6 @@ export function BudgetMissingSheet({
             entries: items.map((row) => ({
                 type: row.type,
                 source_id: row.source_id,
-                reactivate: row.state === 'excluded',
                 restore: row.state === 'removed',
             })),
         });
@@ -484,111 +476,97 @@ export function BudgetMissingSheet({
                                         </AlertDescription>
                                     </Alert>
                                 ))}
-                            {(['missing', 'excluded', 'removed'] as const).map(
-                                (state) => {
-                                    const items = rows.filter(
-                                        (row) => row.state === state,
-                                    );
-                                    if (!items.length) return null;
-                                    return (
-                                        <section
-                                            key={state}
-                                            className="flex flex-col gap-2"
-                                        >
-                                            <h3 className="font-medium">
-                                                {state === 'missing'
-                                                    ? 'Da includere'
-                                                    : state === 'excluded'
-                                                      ? 'Escluse · riattivazione esplicita'
-                                                      : 'Rimosse · ripristino esplicito'}
-                                            </h3>
-                                            {state === 'missing' && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    className="self-start"
-                                                    onClick={() =>
-                                                        setSelected((value) => [
-                                                            ...new Set([
-                                                                ...value,
-                                                                ...items.map(
-                                                                    (row) =>
-                                                                        row.key,
-                                                                ),
-                                                            ]),
-                                                        ])
+                            {(['missing', 'removed'] as const).map((state) => {
+                                const items = rows.filter(
+                                    (row) => row.state === state,
+                                );
+                                if (!items.length) return null;
+                                return (
+                                    <section
+                                        key={state}
+                                        className="flex flex-col gap-2"
+                                    >
+                                        <h3 className="font-medium">
+                                            {state === 'missing'
+                                                ? 'Da includere'
+                                                : 'Rimosse · ripristino esplicito'}
+                                        </h3>
+                                        {state === 'missing' && (
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="self-start"
+                                                onClick={() =>
+                                                    setSelected((value) => [
+                                                        ...new Set([
+                                                            ...value,
+                                                            ...items.map(
+                                                                (row) =>
+                                                                    row.key,
+                                                            ),
+                                                        ]),
+                                                    ])
+                                                }
+                                            >
+                                                Seleziona tutte le mancanti
+                                            </Button>
+                                        )}
+                                        {items.map((row) => (
+                                            <label
+                                                key={row.key}
+                                                className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-accent"
+                                            >
+                                                <Checkbox
+                                                    aria-label={`${state === 'removed' ? 'Ripristina' : 'Includi'} ${row.description}`}
+                                                    checked={selected.includes(
+                                                        row.key,
+                                                    )}
+                                                    disabled={busy || loading}
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) =>
+                                                        setSelected((value) =>
+                                                            checked
+                                                                ? [
+                                                                      ...value,
+                                                                      row.key,
+                                                                  ]
+                                                                : value.filter(
+                                                                      (key) =>
+                                                                          key !==
+                                                                          row.key,
+                                                                  ),
+                                                        )
                                                     }
-                                                >
-                                                    Seleziona tutte le mancanti
-                                                </Button>
-                                            )}
-                                            {items.map((row) => (
-                                                <label
-                                                    key={row.key}
-                                                    className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-accent"
-                                                >
-                                                    <Checkbox
-                                                        aria-label={`${state === 'excluded' ? 'Riattiva' : state === 'removed' ? 'Ripristina' : 'Includi'} ${row.description}`}
-                                                        checked={selected.includes(
-                                                            row.key,
-                                                        )}
-                                                        disabled={
-                                                            busy || loading
-                                                        }
-                                                        onCheckedChange={(
-                                                            checked,
-                                                        ) =>
-                                                            setSelected(
-                                                                (value) =>
-                                                                    checked
-                                                                        ? [
-                                                                              ...value,
-                                                                              row.key,
-                                                                          ]
-                                                                        : value.filter(
-                                                                              (
-                                                                                  key,
-                                                                              ) =>
-                                                                                  key !==
-                                                                                  row.key,
-                                                                          ),
-                                                            )
-                                                        }
-                                                    />
-                                                    <span className="flex min-w-0 flex-1 flex-col gap-1">
-                                                        <span className="font-medium break-words">
-                                                            {row.description}
-                                                        </span>
-                                                        <span>
-                                                            <Badge variant="secondary">
-                                                                {
-                                                                    budgetLabels[
-                                                                        row.type
-                                                                    ]
-                                                                }
-                                                            </Badge>{' '}
-                                                            ·{' '}
-                                                            {
-                                                                row.expense_ids
-                                                                    .length
-                                                            }{' '}
-                                                            spese mancanti
-                                                        </span>
-                                                        <span className="financial-value text-sm">
-                                                            Allocato:{' '}
-                                                            {money(
-                                                                row.allocated,
-                                                            )}{' '}
-                                                            · Effettivo:{' '}
-                                                            {money(row.actual)}
-                                                        </span>
+                                                />
+                                                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                                                    <span className="font-medium break-words">
+                                                        {row.description}
                                                     </span>
-                                                </label>
-                                            ))}
-                                        </section>
-                                    );
-                                },
-                            )}
+                                                    <span>
+                                                        <Badge variant="secondary">
+                                                            {
+                                                                budgetLabels[
+                                                                    row.type
+                                                                ]
+                                                            }
+                                                        </Badge>{' '}
+                                                        ·{' '}
+                                                        {row.expense_ids.length}{' '}
+                                                        spese mancanti
+                                                    </span>
+                                                    <span className="financial-value text-sm">
+                                                        Allocato:{' '}
+                                                        {money(row.allocated)} ·
+                                                        Effettivo:{' '}
+                                                        {money(row.actual)}
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </section>
+                                );
+                            })}
                         </>
                     )}
                 </div>

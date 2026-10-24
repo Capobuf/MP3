@@ -16,6 +16,35 @@ class AnnualBudget
 {
     public const TYPES = ['contract', 'project', 'expense'];
 
+    /** Convert old excluded references to explicit removals without changing their sources.
+     * @param  array<int, array<string, mixed>>  $entries
+     * @param  array<int, array<string, mixed>>  $years
+     * @return list<array<string, mixed>>
+     */
+    public static function normalizeLegacyEntries(array $entries, array &$years): array
+    {
+        $yearsById = array_column($years, null, 'id');
+        foreach ($entries as $entry) {
+            if (! in_array($entry['included'], [false, 0, '0', true, 1, '1'], true)
+                || ! in_array($entry['type'], self::TYPES, true)
+                || count(array_filter([$entry['contract_id'], $entry['project_id'], $entry['expense_id']], fn ($id) => $id !== null)) !== 1
+                || $entry[$entry['type'].'_id'] === null
+                || ! isset($yearsById[$entry['budget_year_id']])
+                || $yearsById[$entry['budget_year_id']]['tenant_id'] !== $entry['tenant_id']) {
+                throw ValidationException::withMessages(['budget' => 'Riferimento Budget storico incoerente: correggilo prima di convertire o ripristinare i dati.']);
+            }
+            if (! $entry['included']) {
+                $year = &$yearsById[$entry['budget_year_id']];
+                $sources = json_decode($year['dismissed_sources'] ?? '[]', true, flags: JSON_THROW_ON_ERROR);
+                $year['dismissed_sources'] = json_encode(array_values(array_unique([...$sources, $entry['type'].':'.$entry[$entry['type'].'_id']])), JSON_THROW_ON_ERROR);
+                unset($year);
+            }
+        }
+        $years = array_values($yearsById);
+
+        return array_values(array_filter($entries, fn ($entry) => (bool) $entry['included']));
+    }
+
     public static function validateSource(Tenant $tenant, BudgetYear $year, Contract|Project|Expense $source): void
     {
         if ($source instanceof Expense) {
@@ -66,14 +95,14 @@ class AnnualBudget
                 $warnings[] = "Spesa #{$expense->id}: collegamenti storici incompatibili. I conteggi storici sono conservati; correggi esplicitamente i collegamenti e le voci Budget.";
                 // Restored historical conflicts retain their former attribution until explicitly resolved.
                 foreach (self::TYPES as $legacyType) {
-                    $owner = $entries->first(fn ($entry) => $entry->included && $entry->type === $legacyType && $this->matches($legacyType, (int) $entry->getAttribute($legacyType.'_id'), $expense));
+                    $owner = $entries->first(fn ($entry) => $entry->type === $legacyType && $this->matches($legacyType, (int) $entry->getAttribute($legacyType.'_id'), $expense));
                     if ($owner !== null) {
                         $owners[$expense->id] = $owner->id;
                         break;
                     }
                 }
             } else {
-                $owner = $entries->first(fn ($entry) => $entry->included && $entry->type === $type && $entry->getAttribute($type.'_id') === $id);
+                $owner = $entries->first(fn ($entry) => $entry->type === $type && $entry->getAttribute($type.'_id') === $id);
                 if ($owner !== null) {
                     $owners[$expense->id] = $owner->id;
                 }
@@ -90,7 +119,7 @@ class AnnualBudget
             $values = $this->values($parts);
             $rows[] = [
                 'id' => $entry->id, 'type' => $entry->type, 'source_id' => $source?->id,
-                'description' => $names[$entry->id], 'included' => $entry->included, 'position' => $entry->position,
+                'description' => $names[$entry->id], 'position' => $entry->position,
                 'cost_center_id' => $entry->cost_center_id, 'cost_center' => $entry->costCenter,
                 'vendor' => $source instanceof Contract || $source instanceof Expense ? $source->vendor : null,
                 'notes' => $source?->getAttribute('notes') ?? $source?->getAttribute('description'),
@@ -109,20 +138,19 @@ class AnnualBudget
         if ($entryIds !== null) {
             $rows = array_values(array_filter($rows, fn ($row) => in_array($row['id'], $entryIds, true)));
         }
-        $included = array_values(array_filter($rows, fn ($row) => $row['included']));
         $groups = [];
         foreach (self::TYPES as $type) {
-            $groups[$type] = $this->totals(array_values(array_filter($included, fn ($row) => $row['type'] === $type)));
+            $groups[$type] = $this->totals(array_values(array_filter($rows, fn ($row) => $row['type'] === $type)));
         }
         $centers = [];
         $vendors = [];
-        foreach ($included as $row) {
+        foreach ($rows as $row) {
             $centers[(string) ($row['cost_center_id'] ?? 'none')][] = $row;
             $vendors[(string) ($row['vendor']->id ?? 'none')][] = $row;
         }
 
         return [
-            'entries' => $rows, 'totals' => $this->totals($included), 'groups' => $groups,
+            'entries' => $rows, 'totals' => $this->totals($rows), 'groups' => $groups,
             'cost_center_groups' => array_map(fn ($group) => $this->totals($group), $centers),
             'vendor_groups' => array_map(fn ($group) => $this->totals($group), $vendors),
             'owners' => $owners, 'warnings' => $warnings,
@@ -190,7 +218,7 @@ class AnnualBudget
             $id = $type === 'expense' ? $expense->id : $expense->getAttribute($type.'_id');
             $key = $type.':'.$id;
             $existing = $entries->first(fn ($entry) => $entry['type'] === $type && $entry['source_id'] === $id);
-            $state = $existing !== null ? 'excluded' : (in_array($key, $year->dismissed_sources ?? [], true) ? 'removed' : 'missing');
+            $state = in_array($key, $year->dismissed_sources ?? [], true) ? 'removed' : 'missing';
             $problem = null;
             if ($expense->contract_id !== null && $expense->project_id !== null) {
                 $problem = 'La spesa è collegata sia a un contratto sia a un progetto. Scegli esplicitamente un solo collegamento nella modifica spesa.';

@@ -684,19 +684,6 @@
     color: var(--report-muted);
     font-size: 6.5pt;
 }
-.budget-report-status-label {
-    display: inline-block;
-    padding: 0.5mm 1.2mm;
-    border: 0.2mm solid #c9d5c3;
-    border-radius: 1mm;
-    color: #445d3b;
-    font-size: 6.5pt;
-    font-weight: 550;
-}
-.budget-report [data-included='false'] .budget-report-status-label {
-    color: #626b7b;
-    border-color: #cdd3dc;
-}
 .budget-report
     :is(
         [data-column='allocated'],
@@ -852,9 +839,6 @@
 .budget-report section > .budget-report-note,
 .budget-report-chart-batch > .budget-report-note {
     break-after: avoid;
-}
-.budget-report th[data-column='status'] {
-    width: 17mm;
 }
 .html2pdf__container .budget-report,
 .html2pdf__container .budget-report[data-orientation='portrait'] {

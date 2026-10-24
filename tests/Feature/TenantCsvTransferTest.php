@@ -140,7 +140,7 @@ class TenantCsvTransferTest extends TestCase
         $legacy = $source->expenses()->create(['title' => 'Legacy', 'year' => 2026, 'allocated_amount' => null, 'actual_amount' => '0.00']);
         $year = $source->budgetYears()->create(['year' => 2026, 'structure_copied' => true, 'dismissed_sources' => ['expense:'.$legacy->id]]);
         $free = $source->expenses()->create(['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '0.00', 'actual_amount' => null]);
-        $year->entries()->create(['tenant_id' => $source->id, 'type' => 'expense', 'expense_id' => $free->id, 'cost_center_id' => $child->id, 'included' => false]);
+        $year->entries()->create(['tenant_id' => $source->id, 'type' => 'expense', 'expense_id' => $free->id, 'cost_center_id' => $child->id]);
         $year->entries()->create(['tenant_id' => $source->id, 'type' => 'contract', 'contract_id' => $contract->id, 'position' => 2]);
         $attachment = $expense->attachments()->make(['original_name' => 'a.pdf', 'path' => 'private/test.pdf', 'mime_type' => 'application/pdf', 'size_bytes' => 1, 'disk' => 'local']);
         $attachment->tenant_id = $source->id;
@@ -188,7 +188,7 @@ class TenantCsvTransferTest extends TestCase
             $this->assertSame($source->{$relation}()->count(), $target->{$relation}()->count());
         }
         $this->assertSame(['expense:'.$newLegacy->id], $newYear->dismissed_sources);
-        $this->assertFalse($newYear->entries()->where('type', 'expense')->firstOrFail()->included);
+        $this->assertTrue($newYear->entries()->where('type', 'expense')->firstOrFail()->included);
         $this->assertSame($new->contract_id, $newYear->entries()->where('type', 'contract')->firstOrFail()->contract_id);
         $this->assertSame(0, $target->attachments()->count());
         $this->assertSame('Destinazione', $target->fresh()->name);
@@ -475,5 +475,35 @@ class TenantCsvTransferTest extends TestCase
     public static function annualTypes(): array
     {
         return [['contract'], ['project']];
+    }
+
+    public function test_legacy_csv_exclusions_restore_as_removed_with_remapped_sources(): void
+    {
+        [$source, $target] = $this->setupTenants();
+        $expense = $source->expenses()->create(['title' => 'Storica', 'year' => 2026, 'allocated_amount' => '100.00']);
+        $year = $source->budgetYears()->create(['year' => 2026]);
+        $year->entries()->create(['tenant_id' => $source->id, 'type' => 'expense', 'expense_id' => $expense->id]);
+        $csv = $this->get('/t/origine/settings/data/export.csv')->assertOk()->streamedContent();
+        $stream = fopen('php://temp', 'r+');
+        foreach (explode("\n", trim($csv)) as $line) {
+            $row = str_getcsv($line, ',', '"', '');
+            if ($row[0] === 'budget-entry') {
+                $payload = json_decode($row[2], true, flags: JSON_THROW_ON_ERROR);
+                $this->assertTrue($payload['included']);
+                $payload['included'] = false;
+                $row[2] = json_encode($payload, JSON_THROW_ON_ERROR);
+            }
+            fputcsv($stream, $row, ',', '"', '');
+        }
+        rewind($stream);
+        $file = $this->csv(stream_get_contents($stream));
+        fclose($stream);
+        $preview = $this->postJson('/t/destinazione/settings/data/import/preview', ['file' => $file])->assertOk()->assertJsonPath('error_count', 0)->assertJsonPath('counts.budget-entry', 0);
+        $this->assertNotEmpty($preview->json('warnings'));
+        $this->postJson('/t/destinazione/settings/data/import/commit', ['file' => $file, 'token' => $preview->json('token')])->assertOk();
+        $restored = $target->expenses()->sole();
+        $this->assertSame('100.00', $restored->allocated_amount);
+        $this->assertSame(['expense:'.$restored->id], $target->budgetYears()->sole()->dismissed_sources);
+        $this->assertSame(0, $target->budgetEntries()->count());
     }
 }
