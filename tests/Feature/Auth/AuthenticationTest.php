@@ -4,6 +4,7 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Fortify\Features;
@@ -13,6 +14,8 @@ use Laravel\Passkeys\Http\Controllers\PasskeyLoginController;
 use Laravel\Passkeys\Http\Requests\PasskeyVerificationRequest;
 use Laravel\Passkeys\Passkey;
 use Laravel\Passkeys\Passkeys;
+use ParagonIE\ConstantTime\Base64UrlSafe;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 use Webauthn\PublicKeyCredential;
 use Webauthn\PublicKeyCredentialRequestOptions;
@@ -45,17 +48,74 @@ class AuthenticationTest extends TestCase
             ->assertDontSee('as="image"', false);
     }
 
-    public function test_users_can_authenticate_using_the_login_screen()
+    /** @return array<string, array{bool}> */
+    public static function rememberChoices(): array
+    {
+        return ['session only' => [false], 'remember me' => [true]];
+    }
+
+    #[DataProvider('rememberChoices')]
+    public function test_users_can_authenticate_using_the_login_screen(bool $remember): void
     {
         $user = User::factory()->create();
 
         $response = $this->post(route('login.store'), [
             'email' => $user->email,
             'password' => 'password',
-        ]);
+        ] + ($remember ? ['remember' => 'on'] : []));
 
         $this->assertAuthenticated();
         $response->assertRedirect(route('dashboard', absolute: false));
+        $cookie = Auth::guard('web')->getRecallerName();
+        if ($remember) {
+            $response->assertCookie($cookie);
+        } else {
+            $response->assertCookieMissing($cookie);
+        }
+    }
+
+    #[DataProvider('rememberChoices')]
+    public function test_passkey_login_respects_remember_and_logout_revokes_it(bool $remember): void
+    {
+        $user = User::factory()->create();
+        $passkey = new Passkey;
+        $passkey->setRelation('user', $user);
+        $this->mock(VerifyPasskey::class, function ($mock) use ($passkey) {
+            $mock->shouldReceive('__invoke')->once()->andReturn($passkey);
+        });
+        $options = $this->getJson(route('passkey.login-options'))->assertOk()->json('options');
+
+        $response = $this->postJson(route('passkey.login'), [
+            'remember' => $remember,
+            'credential' => [
+                'id' => 'dGVzdA',
+                'rawId' => 'dGVzdA',
+                'type' => 'public-key',
+                'response' => [
+                    'clientDataJSON' => Base64UrlSafe::encodeUnpadded(json_encode([
+                        'type' => 'webauthn.get',
+                        'challenge' => $options['challenge'],
+                        'origin' => config('app.url'),
+                    ], JSON_THROW_ON_ERROR)),
+                    'authenticatorData' => Base64UrlSafe::encodeUnpadded(str_repeat("\0", 37)),
+                    'signature' => 'dGVzdA',
+                ],
+            ],
+        ])->assertOk();
+
+        $this->assertAuthenticatedAs($user);
+        $cookie = Auth::guard('web')->getRecallerName();
+        if ($remember) {
+            $response->assertCookie($cookie);
+            $this->assertGreaterThan(time(), $response->getCookie($cookie)->getExpiresTime());
+            $token = $user->fresh()->remember_token;
+            $this->withCookie($cookie, $response->getCookie($cookie)->getValue())
+                ->post(route('logout'))->assertCookieExpired($cookie);
+            $this->assertNotSame($token, $user->fresh()->remember_token);
+            $this->assertGuest();
+        } else {
+            $response->assertCookieMissing($cookie);
+        }
     }
 
     public function test_users_with_two_factor_enabled_are_redirected_to_two_factor_challenge()

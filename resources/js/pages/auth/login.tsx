@@ -1,4 +1,5 @@
 import { Form, Head } from '@inertiajs/react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -17,11 +18,13 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword }: Props) {
+    const [remember, setRemember] = useState(false);
+
     return (
         <>
             <Head title="Accedi" />
 
-            <PasskeyVerify />
+            <PasskeyVerify remember={remember} />
 
             <Form
                 {...store.form()}
@@ -61,6 +64,10 @@ export default function Login({ status, canResetPassword }: Props) {
                                 <Checkbox
                                     id="remember"
                                     name="remember"
+                                    checked={remember}
+                                    onCheckedChange={(checked) =>
+                                        setRemember(checked === true)
+                                    }
                                     tabIndex={3}
                                 />
                                 <Label htmlFor="remember">Ricordami</Label>
