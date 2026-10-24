@@ -10,7 +10,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { api } from './helpers';
+import { api, ApiError } from './helpers';
+import {
+    BudgetReassignment,
+    BudgetReassignmentRequired,
+} from './budget-reassignment';
 import { cn } from '@/lib/utils';
 
 export function InlineEdit({
@@ -53,6 +57,8 @@ export function InlineEdit({
     const [draft, setDraft] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+    const [reassignment, setReassignment] =
+        useState<BudgetReassignmentRequired | null>(null);
     const lock = useRef(false);
     const trigger = useRef<HTMLElement>(null);
     const keyboardHint = multiline
@@ -85,6 +91,11 @@ export function InlineEdit({
             if (restoreFocus)
                 requestAnimationFrame(() => trigger.current?.focus());
         } catch (failure) {
+            if (failure instanceof BudgetReassignmentRequired) {
+                setEditing(false);
+                setReassignment(failure);
+                return;
+            }
             setError(
                 failure instanceof Error
                     ? failure.message
@@ -95,7 +106,7 @@ export function InlineEdit({
             setSaving(false);
         }
     }
-    return editing ? (
+    const content = editing ? (
         <DismissableLayer
             asChild
             onPointerDownOutside={() => {
@@ -277,6 +288,23 @@ export function InlineEdit({
             {display ?? (value || 'Da inserire')}
         </Tag>
     );
+    return (
+        <>
+            {content}
+            {reassignment && (
+                <BudgetReassignment
+                    request={reassignment}
+                    onClose={() => setReassignment(null)}
+                    returnFocus={() => trigger.current?.focus()}
+                    onSaved={() => {
+                        setReassignment(null);
+                        reassignment.afterSaved?.();
+                        router.reload();
+                    }}
+                />
+            )}
+        </>
+    );
 }
 
 export async function saveInlineRecord(
@@ -284,7 +312,17 @@ export async function saveInlineRecord(
     data: Record<string, unknown>,
     beforeReload?: () => void,
 ) {
-    await api(url, 'PATCH', data);
+    try {
+        await api(url, 'PATCH', data);
+    } catch (error) {
+        if (
+            error instanceof ApiError &&
+            error.code === 'budget_reassignment_required'
+        ) {
+            throw new BudgetReassignmentRequired(url, data, beforeReload);
+        }
+        throw error;
+    }
     beforeReload?.();
     await new Promise<void>((resolve, reject) => {
         let refreshed = false;

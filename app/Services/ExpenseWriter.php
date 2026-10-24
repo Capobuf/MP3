@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Expense;
+use App\Models\ExpenseLine;
 use App\Models\Tenant;
 use App\Support\ExpensePeriods;
 use App\Support\Money;
@@ -76,7 +77,7 @@ class ExpenseWriter
             }
             // Keep the former shared-period API compatible without changing independent conditions.
             $periodUpdate = array_intersect_key($data, array_flip(['period_starts_on', 'period_ends_on', 'year']));
-            if ($hasLines && $periodUpdate !== []) {
+            if ($hasLines && $periodUpdate !== [] && $write) {
                 $sharedLines = $expense->lines()->where('period_starts_on', $expense->getRawOriginal('period_starts_on'))
                     ->where('period_ends_on', $expense->getRawOriginal('period_ends_on'))
                     ->where(fn ($query) => $query->where('year', $expense->getRawOriginal('year'))->orWhereNull('year'));
@@ -88,6 +89,15 @@ class ExpenseWriter
             }
             $expense->fill($data);
             if (! $write) {
+                $expense->load('lines');
+                foreach ($expense->lines as $line) {
+                    if ($line->getRawOriginal('period_starts_on') === $expense->getRawOriginal('period_starts_on')
+                        && $line->getRawOriginal('period_ends_on') === $expense->getRawOriginal('period_ends_on')
+                        && ($line->year === null || $line->year === $expense->getOriginal('year'))) {
+                        $line->fill($line->year === null ? array_diff_key($periodUpdate, ['year' => true]) : $periodUpdate);
+                    }
+                }
+
                 return;
             }
             $expense->save();
@@ -148,6 +158,8 @@ class ExpenseWriter
         }
         $expense->fill($data);
         if (! $write) {
+            $expense->setRelation('lines', $unchangedLines ? $existingLines : (new ExpenseLine)->newCollection(array_map(fn ($line) => new ExpenseLine($line), $lines)));
+
             return;
         }
         $expense->save();

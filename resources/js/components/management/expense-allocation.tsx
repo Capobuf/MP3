@@ -120,9 +120,9 @@ export function ExpenseAllocation({
                     <AlertTitle>Spesa singola nel Budget</AlertTitle>
                     <AlertDescription>
                         <p>
-                            Per collegarla a un contratto o progetto, rimuovi
-                            prima la sola voce da tutti i Budget indicati. Gli
-                            importi della spesa restano conservati.
+                            {allocation.type === null && !allocation.ambiguous
+                                ? 'Scegli un contratto o progetto nelle Informazioni o nel form di modifica: potrai confrontare i totali e confermare la rimozione delle sole voci dirette dal Budget.'
+                                : 'Per correggere i collegamenti storici, rimuovi prima la sola voce da tutti i Budget indicati. Gli importi della spesa restano conservati.'}
                         </p>
                         {allocation.budgets.map((budget) => (
                             <Button

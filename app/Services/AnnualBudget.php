@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\BudgetEntry;
 use App\Models\BudgetYear;
 use App\Models\Contract;
 use App\Models\Expense;
@@ -45,6 +46,13 @@ class AnnualBudget
         return array_values(array_filter($entries, fn ($entry) => (bool) $entry['included']));
     }
 
+    public static function removeEntry(BudgetYear $year, BudgetEntry $entry): void
+    {
+        $year->dismissed_sources = array_values(array_unique([...($year->dismissed_sources ?? []), $entry->type.':'.$entry->getAttribute($entry->type.'_id')]));
+        $year->save();
+        $entry->delete();
+    }
+
     public static function validateSource(Tenant $tenant, BudgetYear $year, Contract|Project|Expense $source): void
     {
         if ($source instanceof Expense) {
@@ -78,12 +86,17 @@ class AnnualBudget
     /** @param list<int>|null $entryIds
      * @return array<string, mixed>
      */
-    public function snapshot(Tenant $tenant, BudgetYear $year, ?array $entryIds = null): array
+    public function snapshot(Tenant $tenant, BudgetYear $year, ?array $entryIds = null, ?Expense $reassignedExpense = null): array
     {
         $entries = $tenant->budgetEntries()->where('budget_year_id', $year->id)
             ->with(['contract.vendor:id,name', 'project', 'expense.vendor:id,name', 'costCenter.parent:id,name'])
             ->orderBy('position')->orderBy('id')->get();
         $expenses = $this->expenses($tenant, $year->year);
+        if ($reassignedExpense !== null) {
+            $entries = $entries->reject(fn ($entry) => $entry->expense_id === $reassignedExpense->id);
+            $expenses = $expenses->reject(fn ($expense) => $expense->id === $reassignedExpense->id)
+                ->concat(ExpenseOverview::draftRows($reassignedExpense)->where('year', $year->year));
+        }
         $owners = [];
         $warnings = [];
         foreach ($expenses as $expense) {

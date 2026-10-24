@@ -334,6 +334,38 @@ class UndoTest extends TestCase
         $this->assertDatabaseCount('expense_lines', 0);
     }
 
+    public function test_budget_reassignment_is_one_undo_redo_with_all_direct_entries_and_dismissals(): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '42.10']);
+        $project = $this->tenant->projects()->create(['name' => 'Destinazione', 'year' => 2026]);
+        $entries = [];
+        foreach ([2025 => false, 2026 => true] as $year => $included) {
+            $budget = $this->tenant->budgetYears()->create(['year' => $year, 'dismissed_sources' => ['project:'.$project->id]]);
+            $entries[] = $budget->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $expense->id, 'included' => $included]);
+        }
+        $url = '/t/alfa/expenses/'.$expense->id.'/budget-reassignment';
+        $data = ['project_id' => $project->id, 'title' => 'Titolo modificato'];
+        $preview = $this->patchJson($url.'/preview', $data)->assertOk()->assertJsonPath('valid', true);
+        $this->assertDatabaseCount('undo_actions', 0);
+        $this->patchJson($url, [...$data, 'token' => $preview->json('token'), 'confirmed' => true])->assertOk()->assertHeader('X-Undo-Action');
+        $this->assertDatabaseCount('undo_actions', 1);
+        $this->assertDatabaseCount('budget_entries', 0);
+        $id = $this->undo();
+        $this->assertNull($expense->fresh()->project_id);
+        $this->assertSame('Libera', $expense->fresh()->title);
+        foreach ($entries as $entry) {
+            $this->assertSame($entry->included, $entry->fresh()->included);
+            $this->assertSame(['project:'.$project->id], $entry->budgetYear->dismissed_sources);
+        }
+        $this->redo($id);
+        $this->assertSame($project->id, $expense->fresh()->project_id);
+        $this->assertSame('Titolo modificato', $expense->fresh()->title);
+        $this->assertDatabaseCount('budget_entries', 0);
+        foreach ($this->tenant->budgetYears()->get() as $budget) {
+            $this->assertSame(['project:'.$project->id, 'expense:'.$expense->id], $budget->dismissed_sources);
+        }
+    }
+
     public function test_budget_removal_and_year_creation_are_undoable(): void
     {
         $year = $this->postJson('/t/alfa/budget/years', ['year' => 2026])->assertCreated()->json('year.id');

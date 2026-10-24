@@ -22,7 +22,7 @@ La validazione non scrive nel database. La conferma invia nuovamente il file e r
 
 ## Appartenenza e annualità del Budget
 
-Una spesa è autonoma oppure appartiene a un solo contratto o progetto. Form, modifica parziale, batch e import Excel verificano lo stato finale e rifiutano doppi collegamenti. Prima di collegare una spesa autonoma già nel Budget, usare **Rimuovi solo dal Budget** in tutte le annualità indicate nella scheda spesa.
+Una spesa è autonoma oppure appartiene a un solo contratto o progetto. Form, modifica parziale, batch e import Excel verificano lo stato finale e rifiutano doppi collegamenti. Quando si collega una spesa autonoma già nel Budget dalla tabella, dal dettaglio o dal form, un dialog mostra il confronto economico per anno. **Lascia invariato** non salva; la conferma rimuove soltanto le voci dirette (anche escluse) e salva il collegamento insieme alle eventuali modifiche del form, con una sola azione Undo/Redo. La destinazione non viene inclusa automaticamente. Anteprime superate vanno ricaricate; anni incompatibili e dati storici ambigui richiedono correzione manuale. Batch e import Excel mantengono il vincolo: prima del collegamento usare **Rimuovi solo dal Budget** in tutte le annualità interessate.
 
 Le voci Budget `expense` accettano soltanto spese autonome economicamente presenti nell’anno. Contratti e progetti devono appartenere allo stesso anno del Budget e includono tutte le proprie spese di quell’anno. Escludere o rimuovere una voce non trasferisce le sue spese ad altre voci; i valori non conteggiati restano vuoti, distinti dallo zero esplicito.
 
