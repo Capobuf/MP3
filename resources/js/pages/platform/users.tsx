@@ -2,6 +2,7 @@ import { Head, useForm, usePage } from '@inertiajs/react';
 import { AlertTriangle, MoreHorizontal, Users } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
+import PasswordInput from '@/components/password-input';
 import { UserAccountStatus, UserAvatar } from '@/components/user-info';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -45,7 +46,11 @@ import { Spinner } from '@/components/ui/spinner';
 import PlatformSettingsLayout from '@/layouts/platform/settings-layout';
 import type { Tenant, User } from '@/types';
 
-type PlatformUser = User & { tenants: Tenant[] };
+type PlatformUser = User & {
+    tenants: Tenant[];
+    two_factor_enabled: boolean;
+    can_disable_mfa: boolean;
+};
 
 function TenantChoices({
     tenants,
@@ -111,17 +116,19 @@ export default function PlatformUsers({
     const membership = useForm({ tenant_ids: [] as number[] });
     const [action, setAction] = useState<{
         user: PlatformUser;
-        kind: 'block' | 'activate' | 'delete' | 'promote';
+        kind: 'block' | 'activate' | 'delete' | 'promote' | 'disable-mfa';
     } | null>(null);
-    const change = useForm({ is_active: true, confirmed: true });
+    const change = useForm({ is_active: true, confirmed: true, password: '' });
     const actionLabel =
-        action?.kind === 'promote'
-            ? 'Abilita accesso ad Amministrazione'
-            : action?.kind === 'delete'
-              ? 'Elimina account'
-              : action?.kind === 'block'
-                ? 'Blocca utente'
-                : 'Riattiva utente';
+        action?.kind === 'disable-mfa'
+            ? 'Disattiva MFA'
+            : action?.kind === 'promote'
+              ? 'Abilita accesso ad Amministrazione'
+              : action?.kind === 'delete'
+                ? 'Elimina account'
+                : action?.kind === 'block'
+                  ? 'Blocca utente'
+                  : 'Riattiva utente';
 
     return (
         <>
@@ -325,6 +332,12 @@ export default function PlatformUsers({
                                             Stato account
                                         </p>
                                         <UserAccountStatus user={user} />
+                                        <Badge variant="outline">
+                                            TOTP:{' '}
+                                            {user.two_factor_enabled
+                                                ? 'attivo'
+                                                : 'non attivo'}
+                                        </Badge>
                                     </div>
                                     <div className="col-start-2 row-start-1 justify-self-end lg:col-start-4">
                                         {!user.is_super_admin && (
@@ -362,6 +375,26 @@ export default function PlatformUsers({
                                                         {user.id !==
                                                             auth.user.id && (
                                                             <>
+                                                                {user.can_disable_mfa && (
+                                                                    <DropdownMenuItem
+                                                                        variant="destructive"
+                                                                        onSelect={() => {
+                                                                            change.clearErrors();
+                                                                            change.reset(
+                                                                                'password',
+                                                                            );
+                                                                            setAction(
+                                                                                {
+                                                                                    user,
+                                                                                    kind: 'disable-mfa',
+                                                                                },
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        Disattiva
+                                                                        MFA
+                                                                    </DropdownMenuItem>
+                                                                )}
                                                                 {!user.is_platform_admin && (
                                                                     <DropdownMenuItem
                                                                         onSelect={() => {
@@ -496,26 +529,67 @@ export default function PlatformUsers({
                 <AlertDialog
                     open={action !== null}
                     onOpenChange={(open) => {
-                        if (!open && !change.processing) setAction(null);
+                        if (!open && !change.processing) {
+                            setAction(null);
+                            change.reset('password');
+                        }
                     }}
                 >
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>{actionLabel}</AlertDialogTitle>
                             <AlertDialogDescription className="break-words">
-                                {action?.user.email}.{' '}
-                                {action?.kind === 'promote'
-                                    ? 'Confermi l’accesso alle impostazioni globali di Obake, inclusa la gestione di utenti e assegnazioni delle aziende? Le aziende attuali e lo stato di blocco saranno conservati.'
-                                    : action?.kind === 'delete'
-                                      ? 'L’account, le credenziali, le assegnazioni e la cronologia di annullamento dell’utente saranno eliminati definitivamente. I dati aziendali e il nome sui contenuti storici saranno conservati.'
-                                      : action?.kind === 'block'
-                                        ? 'L’utente perderà l’accesso ad Amministrazione e a tutte le aziende, anche dalle sessioni aperte. Dati e assegnazioni saranno conservati.'
-                                        : 'L’utente potrà accedere nuovamente secondo il profilo e le assegnazioni attuali.'}
+                                {action?.user.name} ({action?.user.email}).{' '}
+                                {action?.kind === 'disable-mfa'
+                                    ? 'L’utente perderà la protezione 2FA fino a una nuova configurazione. Saranno revocate le sessioni aperte e l’accesso con Ricordami. Lo stato dell’account non cambierà. Conferma con la tua password corrente.'
+                                    : action?.kind === 'promote'
+                                      ? 'Confermi l’accesso alle impostazioni globali di Obake, inclusa la gestione di utenti e assegnazioni delle aziende? Le aziende attuali e lo stato di blocco saranno conservati.'
+                                      : action?.kind === 'delete'
+                                        ? 'L’account, le credenziali, le assegnazioni e la cronologia di annullamento dell’utente saranno eliminati definitivamente. I dati aziendali e il nome sui contenuti storici saranno conservati.'
+                                        : action?.kind === 'block'
+                                          ? 'L’utente perderà l’accesso ad Amministrazione e a tutte le aziende, anche dalle sessioni aperte. Dati e assegnazioni saranno conservati.'
+                                          : 'L’utente potrà accedere nuovamente secondo il profilo e le assegnazioni attuali.'}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
-                        {Object.entries(change.errors).map(([key, message]) => (
-                            <InputError key={key} message={message} />
-                        ))}
+                        {action?.kind === 'disable-mfa' && (
+                            <Field
+                                data-invalid={Boolean(change.errors.password)}
+                            >
+                                <FieldLabel htmlFor="mfa-admin-password">
+                                    La tua password corrente
+                                </FieldLabel>
+                                <PasswordInput
+                                    id="mfa-admin-password"
+                                    autoComplete="current-password"
+                                    value={change.data.password}
+                                    onChange={(event) =>
+                                        change.setData(
+                                            'password',
+                                            event.target.value,
+                                        )
+                                    }
+                                    disabled={change.processing}
+                                    aria-invalid={Boolean(
+                                        change.errors.password,
+                                    )}
+                                    aria-describedby={
+                                        change.errors.password
+                                            ? 'mfa-password-error'
+                                            : undefined
+                                    }
+                                    required
+                                />
+                                <InputError
+                                    id="mfa-password-error"
+                                    message={change.errors.password}
+                                />
+                            </Field>
+                        )}
+                        {Object.entries(change.errors)
+                            .filter(([key]) => key !== 'password')
+                            .map(([key, message]) => (
+                                <InputError key={key} message={message} />
+                            ))}
                         <AlertDialogFooter>
                             <AlertDialogCancel disabled={change.processing}>
                                 Annulla
@@ -523,19 +597,30 @@ export default function PlatformUsers({
                             <Button
                                 variant={
                                     action?.kind === 'delete' ||
+                                    action?.kind === 'disable-mfa' ||
                                     action?.kind === 'block'
                                         ? 'destructive'
                                         : 'default'
                                 }
-                                disabled={change.processing}
+                                disabled={
+                                    change.processing ||
+                                    (action?.kind === 'disable-mfa' &&
+                                        !change.data.password)
+                                }
                                 onClick={() => {
                                     if (!action) return;
                                     const path = `/platform/users/${action.user.id}`;
                                     const options = {
-                                        onSuccess: () => setAction(null),
+                                        onSuccess: () => {
+                                            setAction(null);
+                                            change.reset('password');
+                                        },
+                                        onError: () => change.reset('password'),
                                     };
                                     if (action.kind === 'delete')
                                         change.delete(path, options);
+                                    else if (action.kind === 'disable-mfa')
+                                        change.delete(`${path}/mfa`, options);
                                     else if (action.kind === 'promote')
                                         change.post(`${path}/promote`, options);
                                     else

@@ -70,6 +70,7 @@ Route::middleware('auth')->group(function () {
         Route::put('users/{user}/tenants', [PlatformUserController::class, 'tenants'])->name('users.tenants');
         Route::patch('users/{user}/status', [PlatformUserController::class, 'status'])->name('users.status');
         Route::post('users/{user}/promote', [PlatformUserController::class, 'promote'])->name('users.promote');
+        Route::delete('users/{user}/mfa', [PlatformUserController::class, 'disableMfa'])->middleware('throttle:6,1')->name('users.mfa.destroy');
         Route::delete('users/{user}', [PlatformUserController::class, 'destroy'])->name('users.destroy');
         Route::post('tenants/{tenant}/users', [TenantUserController::class, 'store'])->name('tenants.users.store');
         Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'destroy'])->name('tenants.users.destroy');
