@@ -117,175 +117,137 @@ it('opens the inline dialog without setting a transient field error', async () =
     expect(toast.error).not.toHaveBeenCalled();
 });
 
+it('saves ordinary automatic links without requesting a preview', async () => {
+    vi.mocked(api).mockResolvedValue({ record: { id: 4, project_id: 5 } });
+    mocks.reload.mockImplementationOnce(({ onSuccess }) => onSuccess());
+    await saveInlineRecord('/t/alfa/expenses/4', { project_id: 5 });
+    expect(api).toHaveBeenCalledExactlyOnceWith('/t/alfa/expenses/4', 'PATCH', {
+        project_id: 5,
+    });
+    expect(mocks.reload).toHaveBeenCalledOnce();
+    expect(toast.error).not.toHaveBeenCalled();
+});
+
 const preview: BudgetReassignmentPreview = {
     expense: { id: 4, title: 'Servizio' },
     target: { id: 5, type: 'project', name: 'Nuova sede', year: 2026 },
     valid: true,
     problem: null,
+    automatic: false,
     token: 'token',
+    choices: {
+        add: { valid: true, problem: null },
+        link: { valid: true, problem: null },
+    },
     years: [
         {
             year: 2026,
             budget_id: 1,
-            direct_entries: [{ id: 1, included: false }],
-            destination: 'included',
+            direct_entries: [{ id: 1 }],
+            destination: 'missing',
             expense_before: {
-                allocated: '-10.01',
+                allocated: '100.00',
                 actual: null,
-                variance: '10.01',
+                variance: '-100.00',
             },
             expense_after: {
-                allocated: '-10.01',
+                allocated: '100.00',
                 actual: null,
-                variance: '10.01',
+                variance: '-100.00',
             },
             budget_before: {
-                allocated: '0.00',
+                allocated: '100.00',
                 actual: null,
-                variance: '0.00',
+                variance: '-100.00',
             },
             budget_after: {
-                allocated: '-10.01',
-                actual: null,
-                variance: '10.01',
+                add: {
+                    allocated: '600.00',
+                    actual: null,
+                    variance: '-600.00',
+                    count: 1,
+                },
+                link: {
+                    allocated: null,
+                    actual: null,
+                    variance: '0.00',
+                    count: 0,
+                },
             },
             difference: {
-                allocated: '-10.01',
-                actual: null,
-                variance: '10.01',
+                add: { allocated: '500.00', actual: null, variance: '-500.00' },
+                link: {
+                    allocated: '-100.00',
+                    actual: null,
+                    variance: '100.00',
+                },
             },
         },
     ],
 };
-
-it('shows the move and Budget impact with secondary details initially closed', () => {
-    const html = renderToStaticMarkup(
-        <BudgetReassignmentComparison preview={preview} />,
+function renderPreview(data = preview) {
+    return renderToStaticMarkup(
+        <BudgetReassignmentComparison
+            preview={data}
+            onChoose={vi.fn()}
+            busy={false}
+        />,
     );
-    expect(html.indexOf('Prima')).toBeLessThan(html.indexOf('Dopo'));
-    expect(html).toContain('Voce singola');
-    expect(html).toContain('Esclusa');
-    expect(html).toContain('Incluso');
-    expect(html).toContain('Nuova sede');
-    expect(html).toContain('Totale Budget');
-    expect(html).toContain('0,00');
-    expect(html).toContain('-10,01');
-    expect(html).toContain('Variazione: ');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('Dettagli economici');
-    expect(html).not.toContain('Importi della spesa');
+}
+
+it('shows both explicit choices and their server totals without unavailable metrics', () => {
+    const html = renderPreview();
+    expect(html).toContain('Collega e aggiungi al Budget');
+    expect(html).toContain('Collega senza aggiungere');
+    expect(html).toContain('anche le altre spese del progetto');
+    expect(html).toContain('600,00');
+    expect(html).toContain('+500,00');
+    expect(html).toContain('-100,00');
+    expect(html).toContain('Il Budget resterà senza voci.');
     expect(html).not.toContain('Effettivo');
-    expect(html).not.toContain('voci dirette');
-});
-
-it.each(['missing', 'excluded'] as const)(
-    'keeps the consequence of a %s destination visible',
-    (destination) => {
-        const html = renderToStaticMarkup(
-            <BudgetReassignmentComparison
-                preview={{
-                    ...preview,
-                    years: [{ ...preview.years[0], destination }],
-                }}
-            />,
-        );
-        expect(html).toContain(
-            'La spesa non verrà conteggiata finché non lo includi.',
-        );
-        expect(html).toContain(
-            destination === 'missing'
-                ? 'non è nel Budget'
-                : 'escluso dal Budget',
-        );
-    },
-);
-
-it('highlights unchanged totals without repeating zero differences', () => {
-    const year = preview.years[0];
-    const html = renderToStaticMarkup(
-        <BudgetReassignmentComparison
-            preview={{
-                ...preview,
-                years: [
-                    {
-                        ...year,
-                        budget_after: year.budget_before,
-                        difference: {
-                            allocated: '0.00',
-                            actual: null,
-                            variance: '0.00',
-                        },
-                    },
-                ],
-            }}
-        />,
-    );
-    expect(html).toContain('Il totale resta invariato.');
-    expect(html).not.toContain('Variazione');
-    expect(html).not.toContain('<dl');
-    expect(html).not.toContain('0,00');
-});
-
-it('shows positive differences and zero amounts while hiding unavailable metrics', () => {
-    const html = renderToStaticMarkup(
-        <BudgetReassignmentComparison
-            preview={{
-                ...preview,
-                years: [
-                    {
-                        ...preview.years[0],
-                        budget_after: {
-                            allocated: '10.01',
-                            actual: null,
-                            variance: '-10.01',
-                        },
-                        difference: {
-                            allocated: '10.01',
-                            actual: null,
-                            variance: '-10.01',
-                        },
-                    },
-                ],
-            }}
-        />,
-    );
-    expect(html).toContain('+10,01');
-    expect(html).toContain('0,00');
     expect(html).not.toContain('—');
-    expect(html).not.toContain('Effettivo');
-    expect(html).not.toContain('risparmio');
+    expect(html).not.toContain('Esclus');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('Importi della spesa');
 });
 
-it('does not announce a Budget result for an invalid preview', () => {
-    const html = renderToStaticMarkup(
-        <BudgetReassignmentComparison preview={{ ...preview, valid: false }} />,
-    );
-    expect(html).not.toContain('Il totale resta invariato.');
+it('shows only the unchanged message when totals stay the same', () => {
+    const year = preview.years[0];
+    const after = { ...year.budget_before!, count: 1 };
+    const html = renderPreview({
+        ...preview,
+        years: [{ ...year, budget_after: { add: after, link: after } }],
+    });
+    expect(html.match(/Il totale resta invariato./g)).toHaveLength(2);
     expect(html).not.toContain('<dl');
     expect(html).not.toContain('Variazione');
 });
 
-it('shows only the changed Budget metrics', () => {
-    const year = preview.years[0];
-    const html = renderToStaticMarkup(
-        <BudgetReassignmentComparison
-            preview={{
-                ...preview,
-                years: [
-                    {
-                        ...year,
-                        budget_after: {
-                            ...year.budget_after!,
-                            variance: '0.00',
-                        },
-                    },
-                ],
-            }}
-        />,
-    );
-    expect(html).toContain('Allocato');
-    expect(html).not.toContain('Scostamento');
+it('disables only the unavailable choice with its explanation', () => {
+    const html = renderPreview({
+        ...preview,
+        choices: {
+            ...preview.choices,
+            add: { valid: false, problem: 'Anno incompatibile.' },
+        },
+    });
+    expect(html).toContain('Anno incompatibile.');
+    expect(html.match(/disabled=""/g)).toHaveLength(1);
+    expect(html).not.toContain('600,00');
+    expect(html).toContain('Collega senza aggiungere');
+});
+
+it('does not show misleading results for an invalid preview', () => {
+    const invalid = { valid: false, problem: 'Verifica gli anni.' };
+    const html = renderPreview({
+        ...preview,
+        ...invalid,
+        choices: { add: invalid, link: invalid },
+    });
     expect(html).not.toContain('Il totale resta invariato.');
+    expect(html).not.toContain('<dl');
+    expect(html).not.toContain('Dettagli economici');
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
 });
 
 it.each([
@@ -293,7 +255,7 @@ it.each([
     ['actual', 'Effettivo'],
     ['variance', 'Scostamento'],
 ] as const)(
-    'omits unavailable %s from the expense details, retaining zero amounts once',
+    'omits unavailable %s details and retains zeros once',
     (key, label) => {
         mocks.detailsOpen = true;
         const values = {
@@ -302,20 +264,16 @@ it.each([
             variance: '0.00',
             [key]: null,
         };
-        const html = renderToStaticMarkup(
-            <BudgetReassignmentComparison
-                preview={{
-                    ...preview,
-                    years: [
-                        {
-                            ...preview.years[0],
-                            expense_before: values,
-                            expense_after: values,
-                        },
-                    ],
-                }}
-            />,
-        );
+        const html = renderPreview({
+            ...preview,
+            years: [
+                {
+                    ...preview.years[0],
+                    expense_before: values,
+                    expense_after: values,
+                },
+            ],
+        });
         const detail = html.split('aria-label="Dettagli 2026"')[1];
         expect(detail).toContain('Importi della spesa');
         expect(detail).not.toContain(label);
@@ -326,58 +284,30 @@ it.each([
     },
 );
 
-it('compares changed expense values and shows only the available side for incomplete data', () => {
+it('compares changed expense values and shows only known data', () => {
     mocks.detailsOpen = true;
-    const html = renderToStaticMarkup(
-        <BudgetReassignmentComparison
-            preview={{
-                ...preview,
-                years: [
-                    {
-                        ...preview.years[0],
-                        expense_before: {
-                            allocated: '10.00',
-                            actual: null,
-                            variance: '5.00',
-                        },
-                        expense_after: {
-                            allocated: '20.00',
-                            actual: '25.00',
-                            variance: null,
-                        },
-                    },
-                ],
-            }}
-        />,
-    );
+    const html = renderPreview({
+        ...preview,
+        years: [
+            {
+                ...preview.years[0],
+                expense_before: {
+                    allocated: '10.00',
+                    actual: null,
+                    variance: '5.00',
+                },
+                expense_after: {
+                    allocated: '20.00',
+                    actual: '25.00',
+                    variance: null,
+                },
+            },
+        ],
+    });
     const detail = html.split('aria-label="Dettagli 2026"')[1];
-    expect(detail).toContain('Prima: ');
-    expect(detail).toContain('Dopo: ');
     for (const amount of ['10,00', '20,00', '25,00', '5,00'])
         expect(detail).toContain(amount);
+    expect(detail).toContain('Prima: ');
+    expect(detail).toContain('Dopo: ');
     expect(detail).not.toContain('—');
-    expect(detail).not.toContain('Variazione');
-});
-
-it('hides empty economic details and does not call unknown totals unchanged', () => {
-    const empty = { allocated: null, actual: null, variance: null };
-    const html = renderToStaticMarkup(
-        <BudgetReassignmentComparison
-            preview={{
-                ...preview,
-                years: [
-                    {
-                        ...preview.years[0],
-                        budget_before: empty,
-                        budget_after: empty,
-                        expense_before: null,
-                        expense_after: empty,
-                    },
-                ],
-            }}
-        />,
-    );
-    expect(html).not.toContain('Dettagli economici');
-    expect(html).not.toContain('Il totale resta invariato.');
-    expect(html).not.toContain('<dt');
 });

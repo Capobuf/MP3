@@ -339,22 +339,22 @@ class UndoTest extends TestCase
         $expense = $this->tenant->expenses()->create(['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '42.10']);
         $project = $this->tenant->projects()->create(['name' => 'Destinazione', 'year' => 2026]);
         $entries = [];
-        foreach ([2025 => false, 2026 => true] as $year => $included) {
+        foreach ([2025, 2026] as $year) {
             $budget = $this->tenant->budgetYears()->create(['year' => $year, 'dismissed_sources' => ['project:'.$project->id]]);
-            $entries[] = $budget->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $expense->id, 'included' => $included]);
+            $entries[] = $budget->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
         }
         $url = '/t/alfa/expenses/'.$expense->id.'/budget-reassignment';
         $data = ['project_id' => $project->id, 'title' => 'Titolo modificato'];
         $preview = $this->patchJson($url.'/preview', $data)->assertOk()->assertJsonPath('valid', true);
         $this->assertDatabaseCount('undo_actions', 0);
-        $this->patchJson($url, [...$data, 'token' => $preview->json('token'), 'confirmed' => true])->assertOk()->assertHeader('X-Undo-Action');
+        $this->patchJson($url, [...$data, 'token' => $preview->json('token'), 'confirmed' => true, 'choice' => 'link'])->assertOk()->assertHeader('X-Undo-Action');
         $this->assertDatabaseCount('undo_actions', 1);
         $this->assertDatabaseCount('budget_entries', 0);
         $id = $this->undo();
         $this->assertNull($expense->fresh()->project_id);
         $this->assertSame('Libera', $expense->fresh()->title);
         foreach ($entries as $entry) {
-            $this->assertSame($entry->included, $entry->fresh()->included);
+            $this->assertTrue($entry->fresh()->included);
             $this->assertSame(['project:'.$project->id], $entry->budgetYear->dismissed_sources);
         }
         $this->redo($id);
@@ -528,5 +528,39 @@ class UndoTest extends TestCase
         $this->postJson('/t/alfa/undo')->assertConflict();
         $this->assertTrue($entry->fresh()->included);
         $this->assertNull(UndoAction::sole()->undone_at);
+    }
+
+    public static function budgetChoices(): array
+    {
+        return [['auto'], ['add'], ['link']];
+    }
+
+    #[DataProvider('budgetChoices')]
+    public function test_each_budget_linking_choice_is_a_single_undo_redo(string $choice): void
+    {
+        $expense = $this->tenant->expenses()->create(['title' => 'Libera', 'year' => 2026, 'allocated_amount' => '100.00']);
+        $project = $this->tenant->projects()->create(['name' => 'Progetto', 'year' => 2026]);
+        $this->tenant->expenses()->create(['title' => 'Altra', 'year' => 2026, 'project_id' => $project->id, 'allocated_amount' => '500.00']);
+        $year = $this->tenant->budgetYears()->create(['year' => 2026, 'dismissed_sources' => $choice === 'auto' ? [] : ['project:'.$project->id]]);
+        $year->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'expense', 'expense_id' => $expense->id]);
+        if ($choice === 'auto') {
+            $year->entries()->create(['tenant_id' => $this->tenant->id, 'type' => 'project', 'project_id' => $project->id]);
+        }
+        $history = app(UndoHistory::class);
+        $before = $history->snapshot($this->tenant);
+        $url = '/t/alfa/expenses/'.$expense->id;
+        $data = ['project_id' => $project->id];
+        if ($choice === 'auto') {
+            $this->patchJson($url, $data)->assertOk();
+        } else {
+            $preview = $this->patchJson($url.'/budget-reassignment/preview', $data)->assertOk();
+            $this->patchJson($url.'/budget-reassignment', [...$data, 'choice' => $choice, 'confirmed' => true, 'token' => $preview->json('token')])->assertOk();
+        }
+        $this->assertSame(1, UndoAction::count());
+        $after = $history->snapshot($this->tenant);
+        $id = $this->undo();
+        $this->assertEquals($before, $history->snapshot($this->tenant));
+        $this->redo($id);
+        $this->assertEquals($after, $history->snapshot($this->tenant));
     }
 }

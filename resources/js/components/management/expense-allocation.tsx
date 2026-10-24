@@ -121,7 +121,7 @@ export function ExpenseAllocation({
                     <AlertDescription>
                         <p>
                             {allocation.type === null && !allocation.ambiguous
-                                ? 'Scegli un contratto o progetto nelle Informazioni o nel form di modifica: potrai confrontare i totali e confermare la rimozione delle sole voci dirette dal Budget.'
+                                ? 'Puoi collegarla a un contratto o progetto dalle Informazioni o dal form di modifica. Se manca nel Budget, potrai scegliere se aggiungerlo.'
                                 : 'Per correggere i collegamenti storici, rimuovi prima la sola voce da tutti i Budget indicati. Gli importi della spesa restano conservati.'}
                         </p>
                         {allocation.budgets.map((budget) => (
@@ -186,9 +186,8 @@ export function ExpenseAllocation({
                             Correggi l’imputazione {conflict?.year}
                         </DialogTitle>
                         <DialogDescription>
-                            Scegli in base alla competenza reale della spesa. Il
-                            Budget non verrà incluso o riattivato
-                            automaticamente.
+                            Scegli in base alla competenza reale della spesa.
+                            Questa correzione non aggiunge voci al Budget.
                         </DialogDescription>
                     </DialogHeader>
                     <FieldGroup>

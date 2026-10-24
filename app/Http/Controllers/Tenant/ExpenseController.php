@@ -101,16 +101,23 @@ class ExpenseController extends Controller
 
     public function update(ExpenseRequest $request, Tenant $tenant, Expense $expense): JsonResponse
     {
-        if (app(ExpenseAllocation::class)->needsBudgetReassignment($tenant, $expense, $request->validated())) {
-            return response()->json(['code' => 'budget_reassignment_required', 'message' => 'Questa spesa è già nel Budget.'], 422);
-        }
-        DB::transaction(function () use ($request, $tenant, $expense): void {
+        $record = DB::transaction(function () use ($request, $tenant, $expense): ?Expense {
+            Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
             $locked = $tenant->expenses()->whereKey($expense->id)->lockForUpdate()->firstOrFail();
+            $allocation = app(ExpenseAllocation::class);
+            if ($allocation->needsBudgetReassignment($tenant, $locked, $request->validated())) {
+                return $allocation->reassignBudget($tenant, $locked, $request->validated());
+            }
             ExpensePeriods::lockContracts($tenant, [$locked->contract_id, $request->validated('contract_id')]);
             app(ExpenseWriter::class)->persist($locked, $request->validated());
-        });
 
-        return response()->json(['warnings' => array_filter([ExpensePeriods::overlapWarning($expense->refresh())]), 'record' => $expense->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
+            return $locked;
+        });
+        if ($record === null) {
+            return response()->json(['code' => 'budget_reassignment_required', 'message' => 'Scegli se aggiungere anche il contenitore al Budget.'], 422);
+        }
+
+        return response()->json(['warnings' => array_filter([ExpensePeriods::overlapWarning($record)]), 'record' => $record->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
     }
 
     public function budgetPreview(ExpenseRequest $request, Tenant $tenant, Expense $expense, ExpenseAllocation $allocation): JsonResponse
@@ -124,10 +131,10 @@ class ExpenseController extends Controller
 
     public function reassignBudget(ExpenseRequest $request, Tenant $tenant, Expense $expense, ExpenseAllocation $allocation): JsonResponse
     {
-        $confirmation = $request->validate(['token' => ['required', 'string'], 'confirmed' => ['required', 'accepted']]);
-        $record = $allocation->reassignBudget($tenant, $expense, $request->validated(), $confirmation['token']);
+        $confirmation = $request->validate(['token' => ['required', 'string'], 'confirmed' => ['required', 'accepted'], 'choice' => ['required', Rule::in(['add', 'link'])]]);
+        $record = $allocation->reassignBudget($tenant, $expense, $request->validated(), $confirmation['token'], $confirmation['choice']);
 
-        return response()->json(['record' => $record->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
+        return response()->json(['record' => $record?->load(['vendor:id,name', 'contract:id,name', 'project:id,name', 'lines', 'costCenters.parent:id,name'])]);
     }
 
     public function destroy(Tenant $tenant, Expense $expense, AttachmentFiles $files): JsonResponse

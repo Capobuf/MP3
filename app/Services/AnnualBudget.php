@@ -86,7 +86,7 @@ class AnnualBudget
     /** @param list<int>|null $entryIds
      * @return array<string, mixed>
      */
-    public function snapshot(Tenant $tenant, BudgetYear $year, ?array $entryIds = null, ?Expense $reassignedExpense = null): array
+    public function snapshot(Tenant $tenant, BudgetYear $year, ?array $entryIds = null, ?Expense $reassignedExpense = null, Contract|Project|null $addedSource = null): array
     {
         $entries = $tenant->budgetEntries()->where('budget_year_id', $year->id)
             ->with(['contract.vendor:id,name', 'project', 'expense.vendor:id,name', 'costCenter.parent:id,name'])
@@ -96,6 +96,13 @@ class AnnualBudget
             $entries = $entries->reject(fn ($entry) => $entry->expense_id === $reassignedExpense->id);
             $expenses = $expenses->reject(fn ($expense) => $expense->id === $reassignedExpense->id)
                 ->concat(ExpenseOverview::draftRows($reassignedExpense)->where('year', $year->year));
+        }
+        if ($addedSource !== null) {
+            $type = $addedSource instanceof Contract ? 'contract' : 'project';
+            $entry = new BudgetEntry(['tenant_id' => $tenant->id, 'type' => $type, $type.'_id' => $addedSource->id]);
+            $entry->id = max(1, (int) $entries->max('id') + 1);
+            $entry->setRelation($type, $addedSource);
+            $entries->push($entry);
         }
         $owners = [];
         $warnings = [];
