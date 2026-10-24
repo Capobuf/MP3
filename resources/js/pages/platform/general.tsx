@@ -1,8 +1,15 @@
 import { Head, useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import {
     Field,
+    FieldContent,
     FieldError,
     FieldGroup,
     FieldLabel,
@@ -33,89 +40,98 @@ export default function GeneralSettings({
             <Head title="Generali · Amministrazione" />
             <PlatformSettingsLayout>
                 <h2 className="text-xl font-semibold">Generali</h2>
-                <Card className="max-w-2xl">
-                    <CardHeader>
-                        <CardTitle>Allegati</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <form
-                            onSubmit={(event) => {
-                                event.preventDefault();
-                                form.put('/platform/settings/general', {
-                                    preserveScroll: true,
-                                });
-                            }}
-                            aria-busy={form.processing}
-                        >
+                <form
+                    className="w-full max-w-2xl"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        form.put('/platform/settings/general', {
+                            preserveScroll: true,
+                        });
+                    }}
+                    aria-busy={form.processing}
+                >
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Allegati</CardTitle>
+                        </CardHeader>
+                        <CardContent>
                             <FieldGroup>
                                 <Field
+                                    orientation="responsive"
+                                    data-disabled={form.processing}
                                     data-invalid={
                                         !!form.errors.attachment_max_size_mb
                                     }
                                 >
-                                    <FieldLabel htmlFor="attachment-max-size">
-                                        Dimensione massima per allegato (MB)
-                                    </FieldLabel>
-                                    <InputGroup
-                                        className="max-w-fit"
-                                        data-disabled={form.processing}
-                                    >
-                                        <InputGroupInput
-                                            id="attachment-max-size"
-                                            className="w-[calc(4ch+1.5rem)] flex-none [appearance:textfield] tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                            type="number"
-                                            min={1 / 1024}
-                                            max={1024}
-                                            step={1 / 1024}
-                                            required
-                                            value={
-                                                form.data.attachment_max_size_mb
-                                            }
-                                            onChange={(event) =>
-                                                form.setData(
-                                                    'attachment_max_size_mb',
-                                                    event.target.value,
-                                                )
-                                            }
-                                            disabled={form.processing}
-                                            aria-invalid={
-                                                !!form.errors
-                                                    .attachment_max_size_mb
-                                            }
-                                            aria-describedby="attachment-limit-error"
-                                        />
-                                        <InputGroupAddon
-                                            align="inline-end"
-                                            className="gap-0 self-stretch p-0"
+                                    <FieldContent className="@md/field-group:pt-2">
+                                        <FieldLabel htmlFor="attachment-max-size">
+                                            Dimensione massima per allegato (MB)
+                                        </FieldLabel>
+                                    </FieldContent>
+                                    <FieldContent className="max-w-40">
+                                        <InputGroup
+                                            data-disabled={form.processing}
                                         >
-                                            <Separator orientation="vertical" />
-                                            <InputGroupText className="px-2">
-                                                MB
-                                            </InputGroupText>
-                                        </InputGroupAddon>
-                                    </InputGroup>
-                                    <FieldError id="attachment-limit-error">
-                                        {form.errors.attachment_max_size_mb}
-                                    </FieldError>
+                                            <InputGroupInput
+                                                id="attachment-max-size"
+                                                className="[appearance:textfield] tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                type="number"
+                                                min={1 / 1024}
+                                                max={1024}
+                                                step={1 / 1024}
+                                                required
+                                                value={
+                                                    form.data
+                                                        .attachment_max_size_mb
+                                                }
+                                                onChange={(event) =>
+                                                    form.setData(
+                                                        'attachment_max_size_mb',
+                                                        event.target.value,
+                                                    )
+                                                }
+                                                disabled={form.processing}
+                                                aria-invalid={
+                                                    !!form.errors
+                                                        .attachment_max_size_mb
+                                                }
+                                                aria-describedby={
+                                                    form.errors
+                                                        .attachment_max_size_mb
+                                                        ? 'attachment-limit-error'
+                                                        : undefined
+                                                }
+                                            />
+                                            <InputGroupAddon
+                                                align="inline-end"
+                                                className="gap-0 self-stretch p-0"
+                                            >
+                                                <Separator orientation="vertical" />
+                                                <InputGroupText className="px-2">
+                                                    MB
+                                                </InputGroupText>
+                                            </InputGroupAddon>
+                                        </InputGroup>
+                                        <FieldError id="attachment-limit-error">
+                                            {form.errors.attachment_max_size_mb}
+                                        </FieldError>
+                                    </FieldContent>
                                 </Field>
-                                <div className="flex items-center gap-4">
-                                    <Button
-                                        type="submit"
-                                        disabled={form.processing}
-                                    >
-                                        {form.processing && <Spinner />}
-                                        Salva
-                                    </Button>
-                                    {status && (
-                                        <p role="status" className="text-sm">
-                                            {status}
-                                        </p>
-                                    )}
-                                </div>
                             </FieldGroup>
-                        </form>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                        <CardFooter className="flex-wrap justify-end gap-4 border-t">
+                            {status && (
+                                <p role="status" className="mr-auto text-sm">
+                                    {status}
+                                </p>
+                            )}
+                            <Button type="submit" disabled={form.processing}>
+                                {form.processing && <Spinner />}
+                                Salva
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                </form>
             </PlatformSettingsLayout>
         </>
     );
