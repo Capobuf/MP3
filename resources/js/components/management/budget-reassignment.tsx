@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ArrowRight, ChevronDown } from 'lucide-react';
@@ -17,7 +18,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { api, money, varianceTextClass } from './helpers';
+import { api, money } from './helpers';
 import type { RecordData } from './types';
 
 type Values = {
@@ -59,7 +60,13 @@ export class BudgetReassignmentRequired extends Error {
     }
 }
 
-function BudgetChange({
+const metrics = [
+    ['allocated', 'Allocato'],
+    ['actual', 'Effettivo'],
+    ['variance', 'Scostamento'],
+] as const;
+
+function AmountRow({
     label,
     before,
     after,
@@ -68,31 +75,61 @@ function BudgetChange({
     label: string;
     before: string | null | undefined;
     after: string | null | undefined;
-    difference: string | null;
+    difference?: string | null;
 }) {
+    if (before == null && after == null) return null;
+    const changed = before != null && after != null && before !== after;
     return (
-        <div className="min-w-0">
-            <dt className="mb-1 text-xs text-muted-foreground">{label}</dt>
-            <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 financial-value">
-                <span className="text-muted-foreground">
-                    <span className="sr-only">Prima: </span>
-                    {money(before, '—')}
-                </span>
-                <ArrowRight
-                    className="size-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                />
-                <span className="text-base">
-                    <span className="sr-only">Dopo: </span>
-                    {money(after, '—')}
-                </span>
-            </dd>
-            {difference !== null && Number(difference) !== 0 && (
-                <dd className="mt-1 text-xs text-muted-foreground">
-                    Variazione {Number(difference) > 0 ? '+' : ''}
-                    {money(difference)}
-                </dd>
+        <div
+            className={cn(
+                'grid items-baseline gap-x-4 gap-y-1 py-2',
+                changed
+                    ? 'grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto]'
+                    : 'grid-cols-[minmax(0,1fr)_auto]',
             )}
+        >
+            <dt className="text-sm text-muted-foreground">{label}</dt>
+            <dd
+                className={cn(
+                    'flex flex-wrap items-center gap-2 financial-value',
+                    changed ? 'sm:justify-end' : 'justify-end',
+                )}
+            >
+                {changed ? (
+                    <>
+                        <span className="text-muted-foreground">
+                            <span className="sr-only">Prima: </span>
+                            {money(before)}
+                        </span>
+                        <ArrowRight
+                            className="size-3.5 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                        />
+                        <span className="font-medium">
+                            <span className="sr-only">Dopo: </span>
+                            {money(after)}
+                        </span>
+                        {difference != null && Number(difference) !== 0 && (
+                            <Badge variant="secondary">
+                                <span className="sr-only">Variazione: </span>
+                                {Number(difference) > 0 ? '+' : ''}
+                                {money(difference)}
+                            </Badge>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        {(before == null || after == null) && (
+                            <span className="text-xs text-muted-foreground">
+                                {before == null ? 'Dopo' : 'Prima'}
+                            </span>
+                        )}
+                        <span className="font-medium">
+                            {money(after ?? before)}
+                        </span>
+                    </>
+                )}
+            </dd>
         </div>
     );
 }
@@ -104,6 +141,13 @@ export function BudgetReassignmentComparison({
 }) {
     const targetLabel =
         preview.target.type === 'contract' ? 'Contratto' : 'Progetto';
+    const detailYears = preview.years.filter((year) =>
+        metrics.some(
+            ([key]) =>
+                year.expense_before?.[key] != null ||
+                year.expense_after?.[key] != null,
+        ),
+    );
     return (
         <div className="flex flex-col gap-5">
             <div>
@@ -160,8 +204,11 @@ export function BudgetReassignmentComparison({
                     preview.valid &&
                     year.budget_before !== null &&
                     year.budget_after !== null &&
-                    (['allocated', 'actual', 'variance'] as const).every(
-                        (key) =>
+                    metrics.some(
+                        ([key]) => year.budget_before?.[key] != null,
+                    ) &&
+                    metrics.every(
+                        ([key]) =>
                             year.budget_before?.[key] ===
                             year.budget_after?.[key],
                     );
@@ -171,40 +218,41 @@ export function BudgetReassignmentComparison({
                         aria-label={`Confronto ${year.year}`}
                         className="flex flex-col gap-3"
                     >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h3 className="text-sm font-medium">
-                                {year.budget_id
-                                    ? 'Totale Budget'
-                                    : 'Nessun Budget per il'}{' '}
-                                {year.year}
-                            </h3>
-                            {unchanged && (
-                                <Badge variant="secondary">
-                                    Totali invariati
-                                </Badge>
-                            )}
-                        </div>
-                        {year.budget_id !== null && (
-                            <dl className="grid gap-3 sm:grid-cols-2">
-                                {(
-                                    [
-                                        ['allocated', 'Allocato'],
-                                        ['actual', 'Effettivo'],
-                                    ] as const
-                                ).map(([key, label]) => (
-                                    <BudgetChange
-                                        key={key}
-                                        label={label}
-                                        before={year.budget_before?.[key]}
-                                        after={year.budget_after?.[key]}
-                                        difference={
-                                            preview.valid
-                                                ? year.difference[key]
-                                                : null
-                                        }
-                                    />
-                                ))}
-                            </dl>
+                        <h3 className="text-sm font-medium">
+                            {year.budget_id
+                                ? 'Totale Budget'
+                                : 'Nessun Budget per il'}{' '}
+                            {year.year}
+                        </h3>
+                        {unchanged ? (
+                            <p className="text-sm text-muted-foreground">
+                                Il totale resta invariato.
+                            </p>
+                        ) : (
+                            preview.valid &&
+                            year.budget_id !== null && (
+                                <dl className="divide-y">
+                                    {metrics
+                                        .filter(
+                                            ([key]) =>
+                                                year.budget_before?.[key] !==
+                                                year.budget_after?.[key],
+                                        )
+                                        .map(([key, label]) => (
+                                            <AmountRow
+                                                key={key}
+                                                label={label}
+                                                before={
+                                                    year.budget_before?.[key]
+                                                }
+                                                after={year.budget_after?.[key]}
+                                                difference={
+                                                    year.difference[key]
+                                                }
+                                            />
+                                        ))}
+                                </dl>
+                            )
                         )}
                         {preview.valid && year.destination !== 'included' && (
                             <Alert>
@@ -220,107 +268,52 @@ export function BudgetReassignmentComparison({
                     </section>
                 );
             })}
-            <Collapsible>
-                <CollapsibleTrigger asChild>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="group -ml-2"
-                    >
-                        Dettagli economici{' '}
-                        <ChevronDown
-                            className="size-4 group-data-[state=open]:rotate-180"
-                            aria-hidden="true"
-                        />
-                    </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-3">
-                    <div className="flex flex-col gap-5">
-                        {preview.years.map((year) => (
-                            <section
-                                key={year.year}
-                                aria-label={`Dettagli ${year.year}`}
-                                className="flex flex-col gap-3"
-                            >
-                                <h4 className="text-sm font-medium">
-                                    Valore della spesa · {year.year}
-                                </h4>
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    {(['before', 'after'] as const).map(
-                                        (side) => (
-                                            <div key={side}>
-                                                <p className="mb-2 text-xs text-muted-foreground">
-                                                    {side === 'before'
-                                                        ? 'Prima'
-                                                        : 'Dopo'}
-                                                </p>
-                                                <dl className="grid grid-cols-3 gap-2 text-sm">
-                                                    {(
-                                                        [
-                                                            [
-                                                                'allocated',
-                                                                'Allocato',
-                                                            ],
-                                                            [
-                                                                'actual',
-                                                                'Effettivo',
-                                                            ],
-                                                            [
-                                                                'variance',
-                                                                'Scostamento',
-                                                            ],
-                                                        ] as const
-                                                    ).map(([key, label]) => (
-                                                        <div
-                                                            key={key}
-                                                            className="min-w-0"
-                                                        >
-                                                            <dt className="text-xs text-muted-foreground">
-                                                                {label}
-                                                            </dt>
-                                                            <dd
-                                                                className={`financial-value [overflow-wrap:anywhere] ${key === 'variance' ? varianceTextClass(year[`expense_${side}`]?.[key]) : ''}`}
-                                                            >
-                                                                {money(
-                                                                    year[
-                                                                        `expense_${side}`
-                                                                    ]?.[key],
-                                                                    '—',
-                                                                )}
-                                                            </dd>
-                                                        </div>
-                                                    ))}
-                                                </dl>
-                                            </div>
-                                        ),
-                                    )}
-                                </div>
-                                {year.budget_id !== null && (
-                                    <dl>
-                                        <BudgetChange
-                                            label="Scostamento del Budget"
-                                            before={
-                                                year.budget_before?.variance
-                                            }
-                                            after={year.budget_after?.variance}
-                                            difference={
-                                                preview.valid
-                                                    ? year.difference.variance
-                                                    : null
-                                            }
-                                        />
+            {preview.valid && detailYears.length > 0 && (
+                <Collapsible>
+                    <CollapsibleTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="group -ml-2"
+                        >
+                            Dettagli economici
+                            <ChevronDown
+                                className="group-data-[state=open]:rotate-180"
+                                aria-hidden="true"
+                            />
+                        </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="pt-3">
+                        <div className="flex flex-col gap-5">
+                            {detailYears.map((year) => (
+                                <section
+                                    key={year.year}
+                                    aria-label={`Dettagli ${year.year}`}
+                                >
+                                    <h4 className="mb-2 text-sm font-medium">
+                                        Importi della spesa · {year.year}
+                                    </h4>
+                                    <dl className="divide-y">
+                                        {metrics.map(([key, label]) => (
+                                            <AmountRow
+                                                key={key}
+                                                label={label}
+                                                before={
+                                                    year.expense_before?.[key]
+                                                }
+                                                after={
+                                                    year.expense_after?.[key]
+                                                }
+                                            />
+                                        ))}
                                     </dl>
-                                )}
-                            </section>
-                        ))}
-                        <p className="text-xs text-muted-foreground">
-                            — = importo non disponibile. La variazione riguarda
-                            il totale del Budget, non il costo della spesa.
-                        </p>
-                    </div>
-                </CollapsibleContent>
-            </Collapsible>
+                                </section>
+                            ))}
+                        </div>
+                    </CollapsibleContent>
+                </Collapsible>
+            )}
         </div>
     );
 }
