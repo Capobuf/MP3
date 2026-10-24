@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 
 type Props = {
+    remember?: boolean;
     routes?: {
         options: UrlMethodPair;
         submit: UrlMethodPair;
@@ -19,12 +20,14 @@ type Props = {
 };
 
 export default function PasskeyVerify({
+    remember = false,
     routes,
     label,
     loadingLabel,
     separator,
 }: Props = {}) {
     const { verify, isLoading, error, isSupported } = usePasskeyVerify({
+        remember,
         ...(routes && {
             routes: {
                 options: routes.options.url,
