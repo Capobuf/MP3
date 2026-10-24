@@ -168,9 +168,7 @@ class BudgetController extends Controller
                         $entry->update(['position' => $position]);
                         break;
                     case 'remove':
-                        $year->dismissed_sources = array_values(array_unique([...($year->dismissed_sources ?? []), $entry->type.':'.$entry->getAttribute($entry->type.'_id')]));
-                        $year->save();
-                        $entry->delete();
+                        AnnualBudget::removeEntry($year, $entry);
                         break;
                     case 'delete_expense':
                         if ($entry->type !== 'expense') {

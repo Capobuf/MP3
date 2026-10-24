@@ -53,6 +53,7 @@ export class ApiError extends Error {
     constructor(
         message: string,
         public errors: Record<string, string[]> = {},
+        public code?: string,
     ) {
         super(message);
     }
@@ -98,12 +99,17 @@ async function requestJson<T>(
                 response.status === 419
                     ? 'Sessione scaduta. Ricarica la pagina dopo aver copiato le modifiche.'
                     : 'Salvataggio non riuscito. Riprova.',
-        }))) as { message?: string; errors?: Record<string, string[]> };
+        }))) as {
+            message?: string;
+            errors?: Record<string, string[]>;
+            code?: string;
+        };
         throw new ApiError(
             Object.values(error.errors ?? {}).flat()[0] ??
                 error.message ??
                 'Operazione non riuscita.',
             error.errors,
+            error.code,
         );
     }
     return readJson<T>(response);

@@ -2,15 +2,161 @@
 
 namespace App\Services;
 
+use App\Http\Controllers\Tenant\BudgetController;
+use App\Models\Contract;
 use App\Models\Expense;
 use App\Models\Tenant;
 use App\Support\ExpenseOverview;
+use App\Support\ExpensePeriods;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ExpenseAllocation
 {
+    /** @param array<string, mixed> $data */
+    public function needsBudgetReassignment(Tenant $tenant, Expense $expense, array $data): bool
+    {
+        return $expense->contract_id === null && $expense->project_id === null
+            && ((isset($data['contract_id']) ? 1 : 0) + (isset($data['project_id']) ? 1 : 0) === 1)
+            && $tenant->budgetEntries()->where('expense_id', $expense->id)->exists();
+    }
+
+    /** @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public function budgetPreview(Tenant $tenant, Expense $expense, array $data): array
+    {
+        $type = isset($data['contract_id']) ? 'contract' : 'project';
+        $target = $tenant->{$type.'s'}()->whereKey($data[$type.'_id'] ?? 0)->first();
+        if ($target === null || ! $this->needsBudgetReassignment($tenant, $expense, $data)) {
+            throw ValidationException::withMessages(['budget' => 'Scegli un solo contratto o progetto per una spesa autonoma presente nel Budget. Rimuovi esplicitamente eventuali collegamenti precedenti.']);
+        }
+        $expense->load(['lines', 'costCenters']);
+        $direct = $tenant->budgetEntries()->where('expense_id', $expense->id)->with('budgetYear')->orderBy('id')->get();
+        $beforeRows = ExpenseOverview::economicQuery($tenant)->where('id', $expense->id)->get()->keyBy('year');
+        $draft = clone $expense;
+        $problem = null;
+        try {
+            // Prepare the full form without bypassing the normal writer's Budget guard.
+            app(ExpenseWriter::class)->persist($draft, array_diff_key($data, ['contract_id' => true, 'project_id' => true, 'contract_entry' => true]), write: false);
+            $draft->setAttribute($type.'_id', $target->id);
+            ExpensePeriods::validate($draft);
+            $afterRows = ExpenseOverview::draftRows($draft)->keyBy('year');
+            if ($target->year === null || $afterRows->contains(fn ($row) => $row->year !== $target->year)) {
+                $problem = 'Gli anni economici della spesa non coincidono con l’anno del contenitore. Correggi gli anni o separa manualmente le quote prima di collegarla.';
+            }
+            foreach (['allocated', 'actual'] as $metric) {
+                if ($expense->lines->contains(fn ($line) => $line->year !== null)) {
+                    $parts = $expense->lines->where('type', $metric);
+                    $total = $parts->isEmpty() ? null : Money::decimal($parts->sum(fn ($line) => Money::cents((string) $line->total)));
+                    if ($expense->{$metric.'_amount'} !== $total) {
+                        $problem = 'Gli importi storici non corrispondono alle righe. Verifica e correggi manualmente la spesa prima di collegarla.';
+                    }
+                }
+            }
+        } catch (ValidationException $error) {
+            $problem = collect($error->errors())->flatten()->first();
+            $afterRows = collect();
+        }
+        $years = $beforeRows->keys()->merge($afterRows->keys())->merge($direct->map(fn ($entry) => $entry->budgetYear->year))
+            ->push($target->year)->filter()->unique()->sort()->values();
+        $budget = app(AnnualBudget::class);
+        $states = [];
+        $rows = [];
+        $addProblem = null;
+        $automatic = true;
+        foreach ($years as $year) {
+            $budgetYear = $tenant->budgetYears()->where('year', $year)->first();
+            $before = $budgetYear === null ? null : $budget->snapshot($tenant, $budgetYear);
+            $after = $budgetYear === null || $problem !== null ? null : $budget->snapshot($tenant, $budgetYear, reassignedExpense: $draft);
+            /** @var array<int, array<string, mixed>> $budgetEntries */
+            $budgetEntries = $before['entries'] ?? [];
+            $destination = collect($budgetEntries)->first(fn ($entry) => $entry['type'] === $type && $entry['source_id'] === $target->id);
+            if (($before['warnings'] ?? []) !== []) {
+                $problem = 'Il Budget contiene collegamenti storici incompatibili. Correggili manualmente prima di confermare.';
+            }
+            $withTarget = $after;
+            $directYear = $direct->contains(fn ($entry) => $entry->budgetYear->year === $year);
+            if ($directYear && $destination === null && $budgetYear !== null) {
+                $automatic = false;
+                try {
+                    AnnualBudget::validateSource($tenant, $budgetYear, $target);
+                    if ($problem === null) {
+                        $withTarget = $budget->snapshot($tenant, $budgetYear, reassignedExpense: $draft, addedSource: $target);
+                    }
+                } catch (ValidationException $error) {
+                    $addProblem = 'Budget '.$year.': '.collect($error->errors())->flatten()->first();
+                    $withTarget = null;
+                }
+            }
+            $states[] = [$budgetYear?->getAttributes(), $before, $withTarget];
+            $afterChoices = ['add' => $withTarget['totals'] ?? null, 'link' => $after['totals'] ?? null];
+            $difference = [];
+            foreach ($afterChoices as $choice => $totals) {
+                foreach (['allocated', 'actual', 'variance'] as $metric) {
+                    $old = $before['totals'][$metric] ?? null;
+                    $new = $totals[$metric] ?? null;
+                    $difference[$choice][$metric] = $before === null || $totals === null || ($old === null && $new === null)
+                        ? null : Money::decimal(Money::cents($new ?? '0.00') - Money::cents($old ?? '0.00'));
+                }
+            }
+            $values = fn (?Expense $row) => $row === null ? null : ['allocated' => $row->allocated_amount, 'actual' => $row->actual_amount, 'variance' => $row->variance];
+            $rows[] = [
+                'year' => $year, 'budget_id' => $budgetYear?->id,
+                'direct_entries' => $direct->filter(fn ($entry) => $entry->budgetYear->year === $year)->map(fn ($entry) => $entry->only(['id']))->values()->all(),
+                'destination' => $destination === null ? 'missing' : 'present',
+                'expense_before' => $values($beforeRows->get($year)), 'expense_after' => $values($afterRows->get($year)),
+                'budget_before' => $before['totals'] ?? null, 'budget_after' => $afterChoices, 'difference' => $difference,
+            ];
+        }
+
+        return [
+            'expense' => $expense->only(['id', 'title']),
+            'target' => ['type' => $type, 'id' => $target->id, 'name' => $target instanceof Contract ? $target->display_name : $target->name, 'year' => $target->year],
+            'years' => $rows, 'valid' => $problem === null, 'problem' => $problem,
+            'automatic' => $automatic && $problem === null,
+            'choices' => [
+                'add' => ['valid' => $problem === null && $addProblem === null, 'problem' => $problem ?? $addProblem],
+                'link' => ['valid' => $problem === null, 'problem' => $problem],
+            ],
+            'token' => hash_hmac('sha256', json_encode([$data, $expense->getAttributes(), $expense->lines->toArray(), $expense->costCenters->toArray(), $direct->toArray(), $target->getAttributes(), $states], JSON_THROW_ON_ERROR), (string) config('app.key')),
+        ];
+    }
+
+    /** @param array<string, mixed> $data */
+    public function reassignBudget(Tenant $tenant, Expense $expense, array $data, ?string $token = null, string $choice = 'link'): ?Expense
+    {
+        return DB::transaction(function () use ($tenant, $expense, $data, $token, $choice): ?Expense {
+            Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            $expense = $tenant->expenses()->whereKey($expense->id)->lockForUpdate()->firstOrFail();
+            ExpensePeriods::lockContracts($tenant, [$data['contract_id'] ?? null]);
+            $tenant->projects()->whereKey($data['project_id'] ?? 0)->lockForUpdate()->first();
+            $years = $tenant->budgetYears()->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $entries = $tenant->budgetEntries()->where('expense_id', $expense->id)->orderBy('id')->lockForUpdate()->get();
+            abort_unless($this->needsBudgetReassignment($tenant, $expense, $data), 409, 'I collegamenti sono cambiati. Ricarica l’anteprima prima di confermare.');
+            $preview = $this->budgetPreview($tenant, $expense, $data);
+            if ($token === null && ! $preview['automatic']) {
+                return null;
+            }
+            abort_unless($token === null || hash_equals($preview['token'], $token), 409, 'La spesa, la destinazione o il Budget sono cambiati. Ricarica l’anteprima prima di confermare.');
+            if (! ($preview['choices'][$choice]['valid'] ?? false)) {
+                throw ValidationException::withMessages(['budget' => $preview['choices'][$choice]['problem'] ?? 'Scegli come collegare la spesa.']);
+            }
+            foreach ($entries as $entry) {
+                AnnualBudget::removeEntry($years->get($entry->budget_year_id), $entry);
+            }
+            app(ExpenseWriter::class)->persist($expense, $data);
+            if ($choice === 'add') {
+                foreach ($entries->pluck('budget_year_id')->unique() as $yearId) {
+                    app(BudgetController::class)->add($tenant, $years->get($yearId), ['type' => $preview['target']['type'], 'source_id' => $preview['target']['id'], 'restore' => true], 0);
+                }
+            }
+
+            return $expense->refresh();
+        });
+    }
+
     /** @return array<string, mixed> */
     public function preview(Tenant $tenant, Expense $expense): array
     {

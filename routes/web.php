@@ -170,6 +170,8 @@ Route::middleware('auth')->group(function () {
         Route::get('expenses/{expense}', [ExpenseController::class, 'show'])->name('expenses.show');
         Route::patch('expenses/{expense}', [ExpenseController::class, 'update'])->name('expenses.update');
         Route::post('expenses/{expense}/allocation', [ExpenseController::class, 'allocation'])->name('expenses.allocation');
+        Route::patch('expenses/{expense}/budget-reassignment/preview', [ExpenseController::class, 'budgetPreview'])->withoutMiddleware(RecordUndo::class)->name('expenses.budget-preview');
+        Route::patch('expenses/{expense}/budget-reassignment', [ExpenseController::class, 'reassignBudget'])->name('expenses.budget-reassignment');
         Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])->name('expenses.destroy');
         Route::get('{catalog}/options', [CatalogController::class, 'options'])->whereIn('catalog', ['vendors', 'contracts', 'projects'])->name('catalog.options');
         Route::get('{catalog}', [CatalogController::class, 'index'])->whereIn('catalog', ['vendors', 'contracts', 'projects'])->name('catalog.index');

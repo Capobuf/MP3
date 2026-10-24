@@ -1,7 +1,11 @@
 import { router, usePage } from '@inertiajs/react';
 import { DeleteRecord } from './delete-record';
+import {
+    BudgetReassignment,
+    BudgetReassignmentRequired,
+} from './budget-reassignment';
 import { Plus, ArrowLeft } from 'lucide-react';
-import { useEffect, useImperativeHandle, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { toast } from 'sonner';
 import {
@@ -251,10 +255,13 @@ export function EntityForm({
     const [creatingCostCenter, setCreatingCostCenter] = useState<string | null>(
         null,
     );
+    const saveButton = useRef<HTMLButtonElement>(null);
+    const [reassignment, setReassignment] =
+        useState<BudgetReassignmentRequired | null>(null);
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [busy, setBusy] = useState(false);
     const [attachmentsBusy, setAttachmentsBusy] = useState(false);
-    const formBusy = busy || attachmentsBusy;
+    const formBusy = busy || attachmentsBusy || reassignment !== null;
     useEffect(() => {
         onBusyChange?.(formBusy);
         return () => onBusyChange?.(false);
@@ -545,6 +552,20 @@ export function EntityForm({
                 onSaved(data.record);
             }
         } catch (error) {
+            if (
+                current.kind === 'expenses' &&
+                current.record &&
+                error instanceof ApiError &&
+                error.code === 'budget_reassignment_required'
+            ) {
+                setReassignment(
+                    new BudgetReassignmentRequired(
+                        `/t/${tenant.slug}/expenses/${current.record.id}`,
+                        payload,
+                    ),
+                );
+                return;
+            }
             const message =
                 error instanceof Error
                     ? error.message
@@ -609,6 +630,20 @@ export function EntityForm({
 
     return (
         <>
+            {reassignment && (
+                <BudgetReassignment
+                    request={reassignment}
+                    onClose={() => setReassignment(null)}
+                    returnFocus={() =>
+                        requestAnimationFrame(() => saveButton.current?.focus())
+                    }
+                    onSaved={(saved) => {
+                        setReassignment(null);
+                        navigation.allow();
+                        onSaved(saved);
+                    }}
+                />
+            )}
             <FormSurface
                 title={
                     <>
@@ -1292,7 +1327,11 @@ export function EntityForm({
                         >
                             Annulla
                         </Button>
-                        <Button disabled={formBusy} type="submit">
+                        <Button
+                            ref={saveButton}
+                            disabled={formBusy}
+                            type="submit"
+                        >
                             {busy && <Spinner />}
                             {busy ? 'Salvataggio…' : 'Salva'}
                         </Button>

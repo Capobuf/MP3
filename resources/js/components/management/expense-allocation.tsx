@@ -120,9 +120,9 @@ export function ExpenseAllocation({
                     <AlertTitle>Spesa singola nel Budget</AlertTitle>
                     <AlertDescription>
                         <p>
-                            Per collegarla a un contratto o progetto, rimuovi
-                            prima la sola voce da tutti i Budget indicati. Gli
-                            importi della spesa restano conservati.
+                            {allocation.type === null && !allocation.ambiguous
+                                ? 'Puoi collegarla a un contratto o progetto dalle Informazioni o dal form di modifica. Se manca nel Budget, potrai scegliere se aggiungerlo.'
+                                : 'Per correggere i collegamenti storici, rimuovi prima la sola voce da tutti i Budget indicati. Gli importi della spesa restano conservati.'}
                         </p>
                         {allocation.budgets.map((budget) => (
                             <Button
@@ -186,9 +186,8 @@ export function ExpenseAllocation({
                             Correggi l’imputazione {conflict?.year}
                         </DialogTitle>
                         <DialogDescription>
-                            Scegli in base alla competenza reale della spesa. Il
-                            Budget non verrà incluso o riattivato
-                            automaticamente.
+                            Scegli in base alla competenza reale della spesa.
+                            Questa correzione non aggiunge voci al Budget.
                         </DialogDescription>
                     </DialogHeader>
                     <FieldGroup>

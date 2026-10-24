@@ -6,10 +6,33 @@ use App\Models\Expense;
 use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 final class ExpenseOverview
 {
+    /** In-memory counterpart of economicQuery for a validated, unsaved expense draft.
+     * @return Collection<int, Expense>
+     */
+    public static function draftRows(Expense $expense): Collection
+    {
+        if (! $expense->lines->contains(fn ($line) => $line->year !== null)) {
+            return collect([$expense]);
+        }
+
+        return $expense->lines->groupBy(fn ($line) => $line->year ?? $expense->year)->map(function ($lines, $year) use ($expense) {
+            $row = clone $expense;
+            $row->setAttribute('year', (int) $year);
+            foreach (['allocated', 'actual'] as $metric) {
+                $parts = $lines->where('type', $metric);
+                $row->{$metric.'_amount'} = $parts->isEmpty() ? null : Money::decimal($parts->sum(fn ($line) => Money::cents((string) $line->total)));
+            }
+            $row->setRelation('lines', $lines);
+
+            return $row;
+        })->values();
+    }
+
     /**
      * One economic row per expense and attribution year, retaining legacy expenses without dated lines.
      *
