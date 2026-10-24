@@ -48,7 +48,7 @@ import { Spinner } from '@/components/ui/spinner';
 import type { Tenant } from '@/types';
 import { commentExtensions } from './comment-content';
 import { CommentEditor } from './comment-editor';
-import { api } from './helpers';
+import { api, ApiError } from './helpers';
 
 type Comment = {
     id: number;
@@ -333,11 +333,13 @@ export function CommentsSection({
                 setEditorVersion((version) => version + 1);
             refresh(comment || parentId ? query.page : 1);
         } catch (error) {
-            setSaveError(
+            const message =
                 error instanceof Error
                     ? error.message
-                    : 'Salvataggio del commento non riuscito.',
-            );
+                    : 'Salvataggio del commento non riuscito.';
+            if (error instanceof ApiError && Object.keys(error.errors).length) {
+                setSaveError(message);
+            } else toast.error(message);
         } finally {
             operation.current = false;
             setBusy(false);

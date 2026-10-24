@@ -64,6 +64,7 @@ vi.mock('../../resources/js/components/ui/collapsible', async (original) => {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal('requestAnimationFrame', vi.fn());
     mocks.setters = [];
     mocks.detailsOpen = false;
 });
@@ -115,6 +116,58 @@ it('opens the inline dialog without setting a transient field error', async () =
     expect(mocks.setters[0]).toHaveBeenCalledWith(false);
     expect(mocks.setters[3].mock.calls).toEqual([['']]);
     expect(toast.error).not.toHaveBeenCalled();
+});
+
+it.each([
+    [new Error('Rete non disponibile'), true],
+    [
+        new ApiError('Importo non valido', {
+            actual_amount: ['Importo non valido'],
+        }),
+        false,
+    ],
+])(
+    'keeps the inline draft and uses one error channel for %s',
+    async (failure, transient) => {
+        for (const value of [true, 'bozza', false, '', null]) {
+            const setter = vi.fn();
+            mocks.setters.push(setter);
+            vi.mocked(useState).mockImplementationOnce(() => [value, setter]);
+        }
+        const save = vi.fn().mockRejectedValue(failure);
+        renderToStaticMarkup(
+            <InlineEdit value="originale" label="Importo" onSave={save} />,
+        );
+        mocks.keyDown({ key: 'Enter', preventDefault: vi.fn() });
+        await vi.waitFor(() =>
+            expect(mocks.setters[3]).toHaveBeenCalledWith(failure.message),
+        );
+        expect(save).toHaveBeenCalledExactlyOnceWith('bozza');
+        expect(mocks.setters[0]).not.toHaveBeenCalled();
+        expect(mocks.setters[1]).not.toHaveBeenCalled();
+        expect(mocks.setters[2]).toHaveBeenLastCalledWith(false);
+        expect(requestAnimationFrame).toHaveBeenCalledOnce();
+        if (transient)
+            expect(toast.error).toHaveBeenCalledExactlyOnceWith(
+                failure.message,
+            );
+        else expect(toast.error).not.toHaveBeenCalled();
+    },
+);
+
+it('keeps inline error details out of the cell layout and reachable by keyboard', () => {
+    for (const value of [true, 'bozza', false, 'Importo non valido', null]) {
+        vi.mocked(useState).mockImplementationOnce(() => [value, vi.fn()]);
+    }
+    const html = renderToStaticMarkup(
+        <InlineEdit value="originale" label="Importo" onSave={vi.fn()} />,
+    );
+    expect(html).toContain('data-invalid="true"');
+    expect(html).toContain('aria-describedby=');
+    expect(html).toContain('aria-label="Errore: Importo"');
+    expect(html).toContain('class="sr-only">Importo non valido</span>');
+    expect(html).not.toContain('role="alert"');
+    expect(html).not.toContain('data-slot="field-error"');
 });
 
 it('saves ordinary automatic links without requesting a preview', async () => {

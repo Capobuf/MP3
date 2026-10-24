@@ -16,7 +16,7 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -78,7 +78,6 @@ export function ReportPrintDialog<Block extends string, Column extends string>({
         useState<PrintReportOptions<Block, Column>>(defaults);
     const [order, setOrder] = useState(Object.keys(columnLabels) as Column[]);
     const [createdAt] = useState(() => new Date().toLocaleString('it-IT'));
-    const [error, setError] = useState('');
     const [printing, setPrinting] = useState(false);
     const [downloading, setDownloading] = useState(false);
     const busy = printing || downloading;
@@ -133,12 +132,11 @@ export function ReportPrintDialog<Block extends string, Column extends string>({
         onAfterPrint: () => setPrinting(false),
         onPrintError: (_location, failure) => {
             setPrinting(false);
-            setError(`Stampa non riuscita: ${failure.message}`);
+            toast.error(`Stampa non riuscita: ${failure.message}`);
         },
     });
     async function download() {
         if (!contentRef.current || invalid || busy) return;
-        setError('');
         setDownloading(true);
         try {
             const { downloadBudgetPdf } = await import('./budget-pdf');
@@ -148,7 +146,7 @@ export function ReportPrintDialog<Block extends string, Column extends string>({
                 options,
             );
         } catch (failure) {
-            setError(
+            toast.error(
                 `Download non riuscito: ${failure instanceof Error ? failure.message : 'Riprova oppure usa Stampa.'}`,
             );
         } finally {
@@ -711,12 +709,6 @@ export function ReportPrintDialog<Block extends string, Column extends string>({
                         )}
                     </div>
                 </div>
-                {error && (
-                    <Alert variant="destructive">
-                        <AlertTitle>Operazione non completata</AlertTitle>
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                )}
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     {invalid && (
                         <p className="text-sm text-muted-foreground">
@@ -737,7 +729,6 @@ export function ReportPrintDialog<Block extends string, Column extends string>({
                             className="bg-orange-500 text-black hover:bg-orange-500/90"
                             disabled={invalid || busy}
                             onClick={() => {
-                                setError('');
                                 setPrinting(true);
                                 print();
                             }}

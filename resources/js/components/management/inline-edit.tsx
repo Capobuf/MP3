@@ -1,8 +1,10 @@
 import { router } from '@inertiajs/react';
 import { DismissableLayer } from '@radix-ui/react-dismissable-layer';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import type { ReactNode } from 'react';
-import { Field, FieldError } from '@/components/ui/field';
+import { Field } from '@/components/ui/field';
+import { CellError } from './cell-error';
 import {
     NativeSelect,
     NativeSelectOption,
@@ -61,6 +63,8 @@ export function InlineEdit({
         useState<BudgetReassignmentRequired | null>(null);
     const lock = useRef(false);
     const trigger = useRef<HTMLElement>(null);
+    const editor = useRef<HTMLDivElement>(null);
+    const errorId = useId();
     const keyboardHint = multiline
         ? 'Ctrl o ⌘ + Invio per salvare · Esc per annullare'
         : 'Invio per salvare · Esc per annullare';
@@ -96,10 +100,25 @@ export function InlineEdit({
                 setReassignment(failure);
                 return;
             }
-            setError(
+            const message =
                 failure instanceof Error
                     ? failure.message
-                    : 'Salvataggio non riuscito.',
+                    : 'Salvataggio non riuscito.';
+            setError(message);
+            if (
+                !(
+                    failure instanceof ApiError &&
+                    Object.keys(failure.errors).length
+                )
+            ) {
+                toast.error(message);
+            }
+            requestAnimationFrame(() =>
+                editor.current
+                    ?.querySelector<HTMLElement>(
+                        'input, textarea, select, [role="combobox"], [data-slot="toggle-group-item"]',
+                    )
+                    ?.focus(),
             );
         } finally {
             lock.current = false;
@@ -114,9 +133,12 @@ export function InlineEdit({
             }}
         >
             <Field
+                ref={editor}
+                aria-label={label}
+                aria-describedby={error ? errorId : undefined}
                 data-invalid={!!error}
                 data-disabled={saving}
-                className={cn('min-w-28', className)}
+                className={cn('relative min-w-36 pr-9', className)}
                 onKeyDown={(event) => {
                     if (event.defaultPrevented || event.nativeEvent.isComposing)
                         return;
@@ -151,6 +173,7 @@ export function InlineEdit({
                             disabled={saving}
                             aria-label={label}
                             aria-invalid={!!error}
+                            aria-describedby={error ? errorId : undefined}
                             onChange={(event) => {
                                 setDraft(event.target.value);
                                 setError('');
@@ -178,6 +201,8 @@ export function InlineEdit({
                             value={draft}
                             disabled={saving}
                             aria-label={label}
+                            aria-invalid={!!error}
+                            aria-describedby={error ? errorId : undefined}
                             className="flex-wrap"
                             onValueChange={(value) => {
                                 if (value) {
@@ -200,6 +225,7 @@ export function InlineEdit({
                             autoFocus
                             aria-label={label}
                             aria-description={keyboardHint}
+                            aria-describedby={error ? errorId : undefined}
                             title={keyboardHint}
                             aria-invalid={!!error}
                             value={draft}
@@ -229,6 +255,7 @@ export function InlineEdit({
                             type={type}
                             aria-label={label}
                             aria-description={keyboardHint}
+                            aria-describedby={error ? errorId : undefined}
                             title={keyboardHint}
                             aria-invalid={!!error}
                             value={draft}
@@ -250,7 +277,7 @@ export function InlineEdit({
                         />
                     )}
                 </div>
-                {error && <FieldError role="alert">{error}</FieldError>}
+                <CellError id={errorId} label={label} message={error} />
             </Field>
         </DismissableLayer>
     ) : (

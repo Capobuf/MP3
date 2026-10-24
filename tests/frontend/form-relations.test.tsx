@@ -151,3 +151,45 @@ describe('Record relation selectors', () => {
         });
     });
 });
+
+it('associates line validation with each cell without adding error paragraphs to rows', () => {
+    const html = renderToStaticMarkup(
+        <ExpenseLines
+            lines={[
+                {
+                    key: 'draft',
+                    type: 'allocated',
+                    description: 'Bozza',
+                    unit_price: 'abc',
+                    quantity: '-2',
+                },
+            ]}
+            onChange={() => {}}
+            errors={{
+                'lines.0.description': ['Descrizione richiesta'],
+                'lines.0.unit_price': ['Prezzo non valido'],
+                'lines.0.quantity': ['Quantità non valida'],
+            }}
+        />,
+    );
+    for (const [field, label, message] of [
+        ['description', 'Descrizione', 'Descrizione richiesta'],
+        ['unit_price', 'Prezzo unitario', 'Prezzo non valido'],
+        ['quantity', 'Quantità', 'Quantità non valida'],
+    ]) {
+        expect(html).toContain(`aria-label="Errore: ${label} riga 1"`);
+        expect(html).toContain(
+            `-draft-${field}" class="sr-only">${message}</span>`,
+        );
+        expect(html).toMatch(
+            new RegExp(
+                `aria-describedby="[^"]+-draft-${field}" aria-invalid="true"`,
+            ),
+        );
+    }
+    const rows = html.slice(html.indexOf('<tbody'), html.indexOf('</tbody>'));
+    expect(rows).not.toContain('role="alert"');
+    expect(rows).toContain('value="Bozza"');
+    expect(rows).toContain('value="abc"');
+    expect(rows).toContain('value="-2"');
+});

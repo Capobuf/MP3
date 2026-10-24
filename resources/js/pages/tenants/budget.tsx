@@ -114,7 +114,6 @@ function BudgetWorkspace({
     const [missing, setMissing] = useState(false);
     const [importing, setImporting] = useState(false);
     const [typeFilter, setTypeFilter] = useState('all');
-    const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
     const [editing, setEditing] = useState<RecordData | null>(null);
     const [expenseFormBusy, setExpenseFormBusy] = useState(false);
@@ -135,7 +134,6 @@ function BudgetWorkspace({
         if (lock.current) return false;
         lock.current = true;
         setBusy(true);
-        setError('');
         try {
             const result = await api<{
                 budget: BudgetSnapshot;
@@ -143,15 +141,18 @@ function BudgetWorkspace({
                 reassigned: number[];
             }>(`${base}/${suffix}`, method, payload);
             setBudget(result.budget);
-            setNotice(result.reassigned.length ? result.message : '');
-            toast.success(result.message);
+            setError('');
+            toast.success(result.message, {
+                description: result.reassigned.length
+                    ? 'Le spese originali conservano i loro collegamenti.'
+                    : undefined,
+            });
             return true;
         } catch (failure) {
             const message =
                 failure instanceof Error
                     ? failure.message
                     : 'Operazione non riuscita.';
-            setError(message);
             toast.error(message);
             return false;
         } finally {
@@ -171,7 +172,6 @@ function BudgetWorkspace({
                     ? failure.message
                     : 'Aggiornamento non riuscito.';
             setError(message);
-            toast.error(message);
         } finally {
             setLoading(false);
         }
@@ -191,8 +191,7 @@ function BudgetWorkspace({
                 'PATCH',
                 changes,
             );
-            const result = await api<{ budget: BudgetSnapshot }>(base);
-            setBudget(result.budget);
+            await refresh();
         } finally {
             lock.current = false;
             setBusy(false);
@@ -256,19 +255,12 @@ function BudgetWorkspace({
                     </Button>
                 </div>
             </div>
-            {notice && (
-                <Alert>
-                    <AlertTitle>Attribuzione aggiornata</AlertTitle>
-                    <AlertDescription>
-                        {notice} Le spese originali conservano i loro
-                        collegamenti.
-                    </AlertDescription>
-                </Alert>
-            )}
             {error && (
                 <Alert variant="destructive">
-                    <AlertTitle>Operazione non completata</AlertTitle>
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertTitle>Budget non aggiornato</AlertTitle>
+                    <AlertDescription>
+                        {error} Usa «Aggiorna» per riprovare.
+                    </AlertDescription>
                 </Alert>
             )}
             {budget.warnings?.map((warning) => (

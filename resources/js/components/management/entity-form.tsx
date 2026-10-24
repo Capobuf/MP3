@@ -585,12 +585,16 @@ export function EntityForm({
                           ),
                       )
                     : {};
-            setErrors(
-                error instanceof ApiError
-                    ? { ...mappedErrors, _form: [message] }
-                    : { _form: [message] },
-            );
-            toast.error(message);
+            if (Object.keys(mappedErrors).length) {
+                setErrors({ ...mappedErrors, _form: [message] });
+                requestAnimationFrame(() =>
+                    document
+                        .querySelector<HTMLElement>(
+                            '#entity-form [aria-invalid="true"]',
+                        )
+                        ?.focus(),
+                );
+            } else toast.error(message);
         } finally {
             setBusy(false);
         }

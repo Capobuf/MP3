@@ -12,11 +12,16 @@ function Toaster({ ...props }: ToasterProps) {
             theme={appearance}
             className="toaster group"
             position="bottom-right"
+            closeButton
+            toastOptions={{ closeButtonAriaLabel: 'Chiudi notifica' }}
             style={
                 {
                     '--normal-bg': 'var(--popover)',
                     '--normal-text': 'var(--popover-foreground)',
                     '--normal-border': 'var(--border)',
+                    '--toast-close-button-start': 'unset',
+                    '--toast-close-button-end': '0',
+                    '--toast-close-button-transform': 'translate(35%, -35%)',
                 } as React.CSSProperties
             }
             {...props}
