@@ -140,26 +140,28 @@ const preview: BudgetReassignmentPreview = {
     ],
 };
 
-it('renders annual intrinsic values separately from Budget totals and signed differences', () => {
+it('shows the move and Budget impact with secondary details initially closed', () => {
     const html = renderToStaticMarkup(
         <BudgetReassignmentComparison preview={preview} />,
     );
-    expect(html).toContain('sm:grid-cols-2');
-    expect(html.indexOf('PRIMA')).toBeLessThan(html.indexOf('DOPO'));
-    expect(html).toContain('Voce diretta esclusa');
-    expect(html).toContain('presente e inclusa');
+    expect(html.indexOf('Prima')).toBeLessThan(html.indexOf('Dopo'));
+    expect(html).toContain('Voce singola');
+    expect(html).toContain('Esclusa');
+    expect(html).toContain('Incluso');
     expect(html).toContain('Nuova sede');
-    expect(html).toContain('Valore della spesa nell’anno');
     expect(html).toContain('Totale Budget');
-    expect(html).toContain('Non disponibile');
     expect(html).toContain('0,00');
     expect(html).toContain('-10,01');
-    expect(html).toContain('+10,01');
-    expect(html).toContain('non è un risparmio');
+    expect(html).toContain('Variazione -10,01');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('Dettagli economici');
+    expect(html).not.toContain('Valore della spesa');
+    expect(html).not.toContain('Scostamento');
+    expect(html).not.toContain('voci dirette');
 });
 
 it.each(['missing', 'excluded'] as const)(
-    'explains that a %s destination will not contribute',
+    'keeps the consequence of a %s destination visible',
     (destination) => {
         const html = renderToStaticMarkup(
             <BudgetReassignmentComparison
@@ -169,7 +171,74 @@ it.each(['missing', 'excluded'] as const)(
                 }}
             />,
         );
-        expect(html).toContain('non contribuirà ai totali');
-        expect(html).toContain('incluso o riattivato manualmente');
+        expect(html).toContain(
+            'La spesa non verrà conteggiata finché non lo includi.',
+        );
+        expect(html).toContain(
+            destination === 'missing'
+                ? 'non è nel Budget'
+                : 'escluso dal Budget',
+        );
     },
 );
+
+it('highlights unchanged totals without repeating zero differences', () => {
+    const year = preview.years[0];
+    const html = renderToStaticMarkup(
+        <BudgetReassignmentComparison
+            preview={{
+                ...preview,
+                years: [
+                    {
+                        ...year,
+                        budget_after: year.budget_before,
+                        difference: {
+                            allocated: '0.00',
+                            actual: null,
+                            variance: '0.00',
+                        },
+                    },
+                ],
+            }}
+        />,
+    );
+    expect(html).toContain('Totali invariati');
+    expect(html).not.toContain('Variazione');
+});
+
+it('shows positive differences without calling them savings and keeps unknown values distinct from zero', () => {
+    const html = renderToStaticMarkup(
+        <BudgetReassignmentComparison
+            preview={{
+                ...preview,
+                years: [
+                    {
+                        ...preview.years[0],
+                        budget_after: {
+                            allocated: '10.01',
+                            actual: null,
+                            variance: '-10.01',
+                        },
+                        difference: {
+                            allocated: '10.01',
+                            actual: null,
+                            variance: '-10.01',
+                        },
+                    },
+                ],
+            }}
+        />,
+    );
+    expect(html).toContain('Variazione +10,01');
+    expect(html).toContain('0,00');
+    expect(html).toContain('—');
+    expect(html).not.toContain('risparmio');
+});
+
+it('does not announce a Budget result for an invalid preview', () => {
+    const html = renderToStaticMarkup(
+        <BudgetReassignmentComparison preview={{ ...preview, valid: false }} />,
+    );
+    expect(html).not.toContain('Totali invariati');
+    expect(html).not.toContain('Variazione');
+});

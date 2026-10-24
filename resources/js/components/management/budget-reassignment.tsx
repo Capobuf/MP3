@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ArrowRight, ChevronDown } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import {
     Dialog,
     DialogContent,
@@ -53,38 +59,41 @@ export class BudgetReassignmentRequired extends Error {
     }
 }
 
-function Amounts({
-    values,
-    difference = false,
+function BudgetChange({
+    label,
+    before,
+    after,
+    difference,
 }: {
-    values: Values | null;
-    difference?: boolean;
+    label: string;
+    before: string | null | undefined;
+    after: string | null | undefined;
+    difference: string | null;
 }) {
     return (
-        <dl className="grid grid-cols-3 gap-2 text-sm">
-            {(
-                [
-                    ['allocated', 'Allocato'],
-                    ['actual', 'Effettivo'],
-                    ['variance', 'Scostamento'],
-                ] as const
-            ).map(([key, label]) => {
-                const value = values?.[key];
-                return (
-                    <div key={key} className="min-w-0">
-                        <dt className="text-xs text-muted-foreground">
-                            {label}
-                        </dt>
-                        <dd
-                            className={`financial-value break-words ${key === 'variance' && !difference ? varianceTextClass(value) : ''}`}
-                        >
-                            {difference && Number(value) > 0 ? '+' : ''}
-                            {money(value, 'Non disponibile')}
-                        </dd>
-                    </div>
-                );
-            })}
-        </dl>
+        <div className="min-w-0">
+            <dt className="mb-1 text-xs text-muted-foreground">{label}</dt>
+            <dd className="flex flex-wrap items-center gap-x-2 gap-y-1 financial-value">
+                <span className="text-muted-foreground">
+                    <span className="sr-only">Prima: </span>
+                    {money(before, '—')}
+                </span>
+                <ArrowRight
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                />
+                <span className="text-base">
+                    <span className="sr-only">Dopo: </span>
+                    {money(after, '—')}
+                </span>
+            </dd>
+            {difference !== null && Number(difference) !== 0 && (
+                <dd className="mt-1 text-xs text-muted-foreground">
+                    Variazione {Number(difference) > 0 ? '+' : ''}
+                    {money(difference)}
+                </dd>
+            )}
+        </div>
     );
 }
 
@@ -94,99 +103,224 @@ export function BudgetReassignmentComparison({
     preview: BudgetReassignmentPreview;
 }) {
     const targetLabel =
-        preview.target.type === 'contract' ? 'contratto' : 'progetto';
+        preview.target.type === 'contract' ? 'Contratto' : 'Progetto';
     return (
-        <div className="flex flex-col gap-4">
-            <p className="text-sm">
-                <strong>{preview.expense.title}</strong> → {targetLabel}{' '}
-                <strong>{preview.target.name}</strong>
-            </p>
-            {preview.years.map((year) => (
-                <section
-                    key={year.year}
-                    aria-label={`Confronto ${year.year}`}
-                    className="flex flex-col gap-3"
-                >
-                    <h3 className="font-medium">
-                        {year.budget_id ? 'Budget' : 'Anno senza Budget'}{' '}
-                        {year.year}
-                    </h3>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        {(['before', 'after'] as const).map((side) => (
-                            <Card key={side}>
-                                <CardHeader>
-                                    <CardTitle>
-                                        {side === 'before' ? 'PRIMA' : 'DOPO'}
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="flex flex-col gap-3">
-                                    <p className="text-sm">
-                                        {side === 'before'
-                                            ? year.direct_entries.length
-                                                ? `Voce singola Budget ${year.year}`
-                                                : 'Spesa autonoma'
-                                            : `Spesa del ${targetLabel} ${preview.target.name}`}
-                                    </p>
-                                    {side === 'before' ? (
-                                        year.direct_entries.map((entry) => (
-                                            <p
-                                                key={entry.id}
-                                                className="text-xs text-muted-foreground"
-                                            >
-                                                Voce diretta{' '}
-                                                {entry.included
-                                                    ? 'inclusa'
-                                                    : 'esclusa'}
-                                            </p>
-                                        ))
-                                    ) : (
-                                        <p className="text-xs text-muted-foreground">
-                                            Destinazione{' '}
-                                            {year.destination === 'included'
-                                                ? 'presente e inclusa'
-                                                : year.destination ===
-                                                    'excluded'
-                                                  ? 'presente ed esclusa'
-                                                  : 'non presente'}{' '}
-                                            nel Budget
-                                        </p>
-                                    )}
-                                    <p className="text-xs font-medium">
-                                        Valore della spesa nell’anno
-                                    </p>
-                                    <Amounts values={year[`expense_${side}`]} />
-                                    <p className="text-xs font-medium">
-                                        Totale Budget
-                                    </p>
-                                    <Amounts values={year[`budget_${side}`]} />
-                                </CardContent>
-                            </Card>
+        <div className="flex flex-col gap-5">
+            <div>
+                <h3 className="mb-3 font-semibold [overflow-wrap:anywhere]">
+                    {preview.expense.title}
+                </h3>
+                <div className="grid gap-3 rounded-lg bg-muted/50 p-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                    <div className="min-w-0">
+                        <p className="mb-1 text-xs text-muted-foreground">
+                            Prima
+                        </p>
+                        <p className="font-medium">Voce singola</p>
+                        {preview.years.flatMap((year) =>
+                            year.direct_entries.map((entry) => (
+                                <p
+                                    key={entry.id}
+                                    className="mt-1 text-xs text-muted-foreground"
+                                >
+                                    Budget {year.year} ·{' '}
+                                    {entry.included ? 'Inclusa' : 'Esclusa'}
+                                </p>
+                            )),
+                        )}
+                    </div>
+                    <ArrowRight
+                        className="size-5 rotate-90 text-muted-foreground sm:rotate-0"
+                        aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                        <p className="mb-1 text-xs text-muted-foreground">
+                            Dopo · {targetLabel.toLowerCase()}
+                        </p>
+                        <p className="font-semibold [overflow-wrap:anywhere]">
+                            {preview.target.name}
+                        </p>
+                        {preview.years.map((year) => (
+                            <p
+                                key={year.year}
+                                className="mt-1 text-xs text-muted-foreground"
+                            >
+                                Budget {year.year} ·{' '}
+                                {year.destination === 'included'
+                                    ? 'Incluso'
+                                    : year.destination === 'excluded'
+                                      ? 'Escluso'
+                                      : 'Non presente'}
+                            </p>
                         ))}
                     </div>
-                    {preview.valid && (
-                        <>
-                            <p className="text-xs font-medium">
-                                Differenza del totale Budget (DOPO − PRIMA)
-                            </p>
-                            <Amounts values={year.difference} difference />
-                        </>
-                    )}
-                    {year.destination !== 'included' && (
-                        <p className="text-sm text-muted-foreground">
-                            Dopo il collegamento la spesa non contribuirà ai
-                            totali di questo Budget finché il {targetLabel} non
-                            verrà incluso o riattivato manualmente nell’anno
-                            compatibile.
+                </div>
+            </div>
+            {preview.years.map((year) => {
+                const unchanged =
+                    preview.valid &&
+                    year.budget_before !== null &&
+                    year.budget_after !== null &&
+                    (['allocated', 'actual', 'variance'] as const).every(
+                        (key) =>
+                            year.budget_before?.[key] ===
+                            year.budget_after?.[key],
+                    );
+                return (
+                    <section
+                        key={year.year}
+                        aria-label={`Confronto ${year.year}`}
+                        className="flex flex-col gap-3"
+                    >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="text-sm font-medium">
+                                {year.budget_id
+                                    ? 'Totale Budget'
+                                    : 'Nessun Budget per il'}{' '}
+                                {year.year}
+                            </h3>
+                            {unchanged && (
+                                <Badge variant="secondary">
+                                    Totali invariati
+                                </Badge>
+                            )}
+                        </div>
+                        {year.budget_id !== null && (
+                            <dl className="grid gap-3 sm:grid-cols-2">
+                                {(
+                                    [
+                                        ['allocated', 'Allocato'],
+                                        ['actual', 'Effettivo'],
+                                    ] as const
+                                ).map(([key, label]) => (
+                                    <BudgetChange
+                                        key={key}
+                                        label={label}
+                                        before={year.budget_before?.[key]}
+                                        after={year.budget_after?.[key]}
+                                        difference={
+                                            preview.valid
+                                                ? year.difference[key]
+                                                : null
+                                        }
+                                    />
+                                ))}
+                            </dl>
+                        )}
+                        {preview.valid && year.destination !== 'included' && (
+                            <Alert>
+                                <AlertDescription>
+                                    {year.destination === 'excluded'
+                                        ? `Il ${targetLabel.toLowerCase()} è escluso dal Budget.`
+                                        : `Il ${targetLabel.toLowerCase()} non è nel Budget.`}{' '}
+                                    La spesa non verrà conteggiata finché non lo
+                                    includi.
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                    </section>
+                );
+            })}
+            <Collapsible>
+                <CollapsibleTrigger asChild>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="group -ml-2"
+                    >
+                        Dettagli economici{' '}
+                        <ChevronDown
+                            className="size-4 group-data-[state=open]:rotate-180"
+                            aria-hidden="true"
+                        />
+                    </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-3">
+                    <div className="flex flex-col gap-5">
+                        {preview.years.map((year) => (
+                            <section
+                                key={year.year}
+                                aria-label={`Dettagli ${year.year}`}
+                                className="flex flex-col gap-3"
+                            >
+                                <h4 className="text-sm font-medium">
+                                    Valore della spesa · {year.year}
+                                </h4>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    {(['before', 'after'] as const).map(
+                                        (side) => (
+                                            <div key={side}>
+                                                <p className="mb-2 text-xs text-muted-foreground">
+                                                    {side === 'before'
+                                                        ? 'Prima'
+                                                        : 'Dopo'}
+                                                </p>
+                                                <dl className="grid grid-cols-3 gap-2 text-sm">
+                                                    {(
+                                                        [
+                                                            [
+                                                                'allocated',
+                                                                'Allocato',
+                                                            ],
+                                                            [
+                                                                'actual',
+                                                                'Effettivo',
+                                                            ],
+                                                            [
+                                                                'variance',
+                                                                'Scostamento',
+                                                            ],
+                                                        ] as const
+                                                    ).map(([key, label]) => (
+                                                        <div
+                                                            key={key}
+                                                            className="min-w-0"
+                                                        >
+                                                            <dt className="text-xs text-muted-foreground">
+                                                                {label}
+                                                            </dt>
+                                                            <dd
+                                                                className={`financial-value [overflow-wrap:anywhere] ${key === 'variance' ? varianceTextClass(year[`expense_${side}`]?.[key]) : ''}`}
+                                                            >
+                                                                {money(
+                                                                    year[
+                                                                        `expense_${side}`
+                                                                    ]?.[key],
+                                                                    '—',
+                                                                )}
+                                                            </dd>
+                                                        </div>
+                                                    ))}
+                                                </dl>
+                                            </div>
+                                        ),
+                                    )}
+                                </div>
+                                {year.budget_id !== null && (
+                                    <dl>
+                                        <BudgetChange
+                                            label="Scostamento del Budget"
+                                            before={
+                                                year.budget_before?.variance
+                                            }
+                                            after={year.budget_after?.variance}
+                                            difference={
+                                                preview.valid
+                                                    ? year.difference.variance
+                                                    : null
+                                            }
+                                        />
+                                    </dl>
+                                )}
+                            </section>
+                        ))}
+                        <p className="text-xs text-muted-foreground">
+                            — = importo non disponibile. La variazione riguarda
+                            il totale del Budget, non il costo della spesa.
                         </p>
-                    )}
-                </section>
-            ))}
-            <p className="text-sm text-muted-foreground">
-                La variazione del totale Budget non è un risparmio né una
-                cancellazione della spesa. Gli importi non disponibili restano
-                distinti da zero; lo scostamento segue il calcolo Effettivo −
-                Allocato del Budget.
-            </p>
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
         </div>
     );
 }
@@ -247,9 +381,7 @@ export function BudgetReassignment({
                 'PATCH',
                 { ...request.data, token: preview.token, confirmed: true },
             );
-            toast.success(
-                'Spesa collegata. Rimosse le sole voci dirette dal Budget.',
-            );
+            toast.success('Spesa collegata. Budget aggiornato.');
             onSaved(result.record);
         } catch (failure) {
             setPreview(null);
@@ -270,7 +402,7 @@ export function BudgetReassignment({
             }}
         >
             <DialogContent
-                className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl"
+                className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl"
                 aria-busy={busy || loading}
                 onCloseAutoFocus={(event) => {
                     event.preventDefault();
@@ -278,34 +410,32 @@ export function BudgetReassignment({
                     else if (opener instanceof HTMLElement) opener.focus();
                 }}
             >
-                <DialogHeader>
+                <DialogHeader className="shrink-0 px-6 pt-6 pb-4 text-left">
                     <DialogTitle>Questa spesa è già nel Budget</DialogTitle>
                     <DialogDescription>
-                        Verifica il confronto prima di rimuovere le sole voci
-                        dirette e collegare la spesa.
+                        Collegandola, non comparirà più come voce singola. La
+                        spesa non viene eliminata.
                     </DialogDescription>
                 </DialogHeader>
-                {loading && <p role="status">Caricamento anteprima…</p>}
-                {error && (
-                    <Alert variant="destructive">
-                        <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                )}
-                {preview && <BudgetReassignmentComparison preview={preview} />}
-                {preview?.problem && (
-                    <Alert variant="destructive">
-                        <AlertDescription>{preview.problem}</AlertDescription>
-                    </Alert>
-                )}
-                <p className="text-sm">
-                    La spesa non viene cancellata: conserva ID, righe
-                    economiche, importi, date, fornitore, centri di costo,
-                    allegati e commenti. Si rimuovono soltanto le voci dirette
-                    dai Budget e si aggiorna il collegamento. Le altre modifiche
-                    del form, se presenti, vengono salvate insieme alla
-                    conferma.
-                </p>
-                <DialogFooter className="sm:flex-wrap">
+                <div className="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pb-4">
+                    {loading && <p role="status">Caricamento anteprima…</p>}
+                    {error && (
+                        <Alert variant="destructive">
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+                    {preview && (
+                        <BudgetReassignmentComparison preview={preview} />
+                    )}
+                    {preview?.problem && (
+                        <Alert variant="destructive">
+                            <AlertDescription>
+                                {preview.problem}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </div>
+                <DialogFooter className="shrink-0 gap-2 border-t px-6 py-4 sm:flex-wrap">
                     <Button
                         type="button"
                         variant="outline"
@@ -337,7 +467,7 @@ export function BudgetReassignment({
                     >
                         {busy
                             ? 'Collegamento…'
-                            : `Rimuovi dal Budget e collega al ${preview?.target.type === 'contract' ? 'contratto' : 'progetto'}`}
+                            : `Collega al ${request.data.contract_id ? 'contratto' : 'progetto'}`}
                     </Button>
                 </DialogFooter>
             </DialogContent>
