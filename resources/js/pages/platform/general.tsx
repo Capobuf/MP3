@@ -1,12 +1,6 @@
 import { Head, useForm } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Field,
     FieldError,
@@ -42,12 +36,6 @@ export default function GeneralSettings({
                 <Card className="max-w-2xl">
                     <CardHeader>
                         <CardTitle>Allegati</CardTitle>
-                        <CardDescription id="attachment-limit-description">
-                            Valido per contratti, spese e progetti di tutte le
-                            aziende. Non modifica i file già caricati né i
-                            limiti dei backup. Il server può imporre un limite
-                            di caricamento inferiore.
-                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form
@@ -93,7 +81,7 @@ export default function GeneralSettings({
                                                 !!form.errors
                                                     .attachment_max_size_mb
                                             }
-                                            aria-describedby="attachment-limit-description attachment-limit-error"
+                                            aria-describedby="attachment-limit-error"
                                         />
                                         <InputGroupAddon
                                             align="inline-end"
