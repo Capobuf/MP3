@@ -13,7 +13,13 @@ import {
     FieldGroup,
     FieldLabel,
 } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import {
+    InputGroup,
+    InputGroupAddon,
+    InputGroupInput,
+    InputGroupText,
+} from '@/components/ui/input-group';
+import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import PlatformSettingsLayout from '@/layouts/platform/settings-layout';
 
@@ -33,7 +39,7 @@ export default function GeneralSettings({
             <Head title="Generali · Amministrazione" />
             <PlatformSettingsLayout>
                 <h2 className="text-xl font-semibold">Generali</h2>
-                <Card>
+                <Card className="max-w-2xl">
                     <CardHeader>
                         <CardTitle>Allegati</CardTitle>
                         <CardDescription id="attachment-limit-description">
@@ -62,26 +68,43 @@ export default function GeneralSettings({
                                     <FieldLabel htmlFor="attachment-max-size">
                                         Dimensione massima per allegato (MB)
                                     </FieldLabel>
-                                    <Input
-                                        id="attachment-max-size"
-                                        type="number"
-                                        min={1 / 1024}
-                                        max={1024}
-                                        step={1 / 1024}
-                                        required
-                                        value={form.data.attachment_max_size_mb}
-                                        onChange={(event) =>
-                                            form.setData(
-                                                'attachment_max_size_mb',
-                                                event.target.value,
-                                            )
-                                        }
-                                        disabled={form.processing}
-                                        aria-invalid={
-                                            !!form.errors.attachment_max_size_mb
-                                        }
-                                        aria-describedby="attachment-limit-description attachment-limit-error"
-                                    />
+                                    <InputGroup
+                                        className="max-w-xs"
+                                        data-disabled={form.processing}
+                                    >
+                                        <InputGroupInput
+                                            id="attachment-max-size"
+                                            type="number"
+                                            min={1 / 1024}
+                                            max={1024}
+                                            step={1 / 1024}
+                                            required
+                                            value={
+                                                form.data.attachment_max_size_mb
+                                            }
+                                            onChange={(event) =>
+                                                form.setData(
+                                                    'attachment_max_size_mb',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            disabled={form.processing}
+                                            aria-invalid={
+                                                !!form.errors
+                                                    .attachment_max_size_mb
+                                            }
+                                            aria-describedby="attachment-limit-description attachment-limit-error"
+                                        />
+                                        <InputGroupAddon
+                                            align="inline-end"
+                                            className="gap-0 self-stretch p-0"
+                                        >
+                                            <Separator orientation="vertical" />
+                                            <InputGroupText className="px-2">
+                                                MB
+                                            </InputGroupText>
+                                        </InputGroupAddon>
+                                    </InputGroup>
                                     <FieldError id="attachment-limit-error">
                                         {form.errors.attachment_max_size_mb}
                                     </FieldError>
