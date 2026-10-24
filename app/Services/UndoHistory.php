@@ -236,6 +236,25 @@ class UndoHistory
         }
     }
 
+    public function discardUser(User $user): void
+    {
+        // The caller holds tenant and user locks until account deletion commits.
+        UndoAction::where('user_id', $user->id)->orWhereNotNull('changes->attachments')
+            ->chunkById(100, function ($actions) use ($user): void {
+                foreach ($actions as $action) {
+                    $discard = $action->user_id === $user->id;
+                    foreach ($action->changes['attachments'] ?? [] as $change) {
+                        foreach (['before', 'after'] as $side) {
+                            $discard = $discard || (string) ($change[$side]['uploaded_by'] ?? '') === (string) $user->id;
+                        }
+                    }
+                    if ($discard) {
+                        $this->discard($action);
+                    }
+                }
+            });
+    }
+
     private function discard(UndoAction $action, bool $expiredOnly = false): void
     {
         DB::transaction(function () use ($action, $expiredOnly): void {

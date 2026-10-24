@@ -2,11 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\UndoAction;
+use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -32,40 +31,38 @@ class UserAccess
         }
     }
 
-    private function hasHistoricalAttachments(User $user): bool
+    /** @return array{cleanup_failed: bool, message: string} */
+    public function delete(User $user): array
     {
-        return UndoAction::whereNotNull('changes->attachments')->cursor()->contains(function (UndoAction $action) use ($user): bool {
-            foreach ($action->changes['attachments'] as $change) {
-                foreach (['before', 'after'] as $side) {
-                    if (($change[$side]['uploaded_by'] ?? null) === $user->id) {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
-        });
-    }
-
-    public function delete(User $user): void
-    {
-        $avatar = DB::transaction(function () use ($user): ?string {
+        $files = app(AttachmentFiles::class);
+        $files->cleanupFailed = false;
+        DB::transaction(function () use ($user, $files): void {
+            // Tenant locks precede user locks, as in writes, undo and tenant restore.
+            // All tenants are needed: historical attachments may belong to other users' undo.
+            $tenants = Tenant::orderBy('id')->lockForUpdate()->get();
             $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             abort_if($user->is_super_admin, 403);
-            if (DB::table('comments')->where('user_id', $user->id)->exists()
-                || DB::table('undo_actions')->where('user_id', $user->id)->exists()
-                || DB::table('attachments')->where('uploaded_by', $user->id)->exists()
-                || $this->hasHistoricalAttachments($user)) {
-                throw ValidationException::withMessages(['user' => 'Questo utente ha dati collegati. Puoi bloccarne l’accesso.']);
+            DB::table('comments')->where('user_id', $user->id)->update(['author_name' => $user->name, 'user_id' => null]);
+            DB::table('attachments')->where('uploaded_by', $user->id)->update(['uploaded_by_name' => $user->name, 'uploaded_by' => null]);
+            foreach ($tenants as $tenant) {
+                $settings = $tenant->contract_reminders;
+                if ($settings !== null && in_array($user->id, $settings['user_ids'])) {
+                    $settings['user_ids'] = array_values(array_diff($settings['user_ids'], [$user->id]));
+                    $tenant->contract_reminders = $settings;
+                    $tenant->saveOrFail();
+                }
             }
+            app(UndoHistory::class)->discardUser($user);
             $this->revokeSessions($user);
             Password::broker(config('fortify.passwords'))->deleteToken($user);
-            $user->delete();
+            abort_unless($user->delete(), 409, 'Eliminazione account non riuscita.');
+            DB::afterCommit(function () use ($user, $files): void {
+                if ($user->avatar_path !== null) {
+                    $files->cleanup('local', $user->avatar_path);
+                }
+            });
+        }, 3);
 
-            return $user->avatar_path;
-        });
-        if ($avatar !== null && ! Storage::disk('local')->delete($avatar)) {
-            throw new \RuntimeException('Account eliminato, ma la foto profilo non è stata rimossa dallo storage.');
-        }
+        return $files->result('Account eliminato definitivamente.');
     }
 }

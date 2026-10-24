@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\Tenant;
+use App\Models\User;
 use App\Services\AttachmentFiles;
 use App\Services\UndoHistory;
 use Closure;
@@ -29,6 +30,7 @@ class RecordUndo
         try {
             $response = DB::transaction(function () use ($request, $next, $tenant, $history): Response {
                 Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+                User::whereKey($request->user()?->id)->lockForUpdate()->firstOrFail();
                 $before = $history->snapshot($tenant);
                 $response = $next($request);
                 if ($response->isSuccessful()) {

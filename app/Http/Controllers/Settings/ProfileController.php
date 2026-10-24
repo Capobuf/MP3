@@ -118,11 +118,13 @@ class ProfileController extends Controller
     {
         $user = $request->user();
 
-        $access->delete($user);
+        $result = $access->delete($user);
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        Inertia::flash('toast', ['type' => $result['cleanup_failed'] ? 'warning' : 'success', 'message' => $result['message']]);
 
         return redirect('/');
     }

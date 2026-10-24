@@ -27,7 +27,7 @@ export default function DeleteUser() {
             <Heading
                 variant="small"
                 title="Elimina account"
-                description="Elimina il tuo account solo se non ci sono dati storici collegati."
+                description="Elimina definitivamente il tuo account e le credenziali."
             />
             <div className="space-y-4 rounded-lg border border-destructive/25 bg-destructive/5 p-4">
                 <div className="relative space-y-0.5 text-destructive">
@@ -52,9 +52,10 @@ export default function DeleteUser() {
                         </DialogTitle>
                         <DialogDescription>
                             L’account e le credenziali saranno eliminati
-                            definitivamente. Se ci sono dati storici collegati,
-                            contatta un amministratore per bloccare l’accesso.
-                            Inserisci la password per confermare.
+                            definitivamente. I dati aziendali e il tuo nome sui
+                            contenuti storici saranno conservati. La tua
+                            cronologia di annullamento sarà rimossa. Inserisci
+                            la password per confermare.
                         </DialogDescription>
 
                         <Form
