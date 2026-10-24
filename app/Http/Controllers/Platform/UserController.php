@@ -101,8 +101,8 @@ class UserController extends Controller
     public function destroy(Request $request, User $user, UserAccess $access): RedirectResponse
     {
         abort_if($request->user()->is($user), 403);
-        $access->delete($user);
-        Inertia::flash('toast', ['type' => 'success', 'message' => 'Account eliminato.']);
+        $result = $access->delete($user);
+        Inertia::flash('toast', ['type' => $result['cleanup_failed'] ? 'warning' : 'success', 'message' => $result['message']]);
 
         return back();
     }

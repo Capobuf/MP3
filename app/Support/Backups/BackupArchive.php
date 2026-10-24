@@ -102,7 +102,7 @@ class BackupArchive
         $manifest = self::json($zip, 'manifest.json');
         unset($files['manifest.json']);
         self::check(($manifest['format'] ?? null) === 'mp3-backup' && ($manifest['version'] ?? null) === 1 && ($manifest['kind'] ?? null) === $kind, 'Formato o versione del backup incompatibile.');
-        self::check(($manifest['schema'] ?? null) === self::schema(), 'Schema incompatibile: usa la stessa versione dell’applicazione.');
+        self::check(($manifest['schema'] ?? null) === self::schema() || ($kind === 'tenant' && ($manifest['schema'] ?? null) === self::schema(legacyAuthors: true)), 'Schema incompatibile: usa la stessa versione dell’applicazione.');
         self::check(($manifest['files'] ?? null) === $files, 'Integrità del backup non valida: file mancanti o alterati.');
 
         if ($kind === 'tenant' && ($manifest['installation'] ?? null) === hash('sha256', (string) config('app.key'))) {
@@ -122,11 +122,14 @@ class BackupArchive
         self::check(array_diff($expected, $migrator->getRepository()->getRan()) === [], 'Migration pendenti: aggiorna lo schema prima di creare un backup.');
     }
 
-    public static function schema(): string
+    public static function schema(bool $legacyAuthors = false): string
     {
         $files = [...File::files(database_path('migrations')), ...File::files(base_path('vendor/ryangjchandler/laravel-comments/database/migrations'))];
         $hashes = [];
         foreach ($files as $file) {
+            if ($legacyAuthors && $file->getFilename() === 'extend_comments_and_attachments_with_historical_names.php') {
+                continue;
+            }
             $hashes[$file->getFilename()] = hash_file('sha256', $file->getPathname());
         }
         ksort($hashes);

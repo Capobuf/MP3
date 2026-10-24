@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\BackupManager;
 use App\Services\PlatformBackup;
 use App\Services\TenantBackup;
+use App\Services\UserAccess;
 use App\Support\Backups\BackupArchive;
 use App\Support\Backups\BackupBusy;
 use App\Support\Backups\BackupLock;
@@ -16,6 +17,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Backup\Events\BackupZipWasCreated;
@@ -96,6 +98,121 @@ class BackupTest extends TestCase
     private function tenant(string $slug): Tenant
     {
         return Tenant::create(['name' => $slug, 'slug' => $slug]);
+    }
+
+    public static function historicalArchives(): array
+    {
+        return [['after', false], ['before', false], ['before', true]];
+    }
+
+    #[DataProvider('historicalArchives')]
+    public function test_deleted_authorship_round_trips_without_creating_accounts(string $when, bool $foreign): void
+    {
+        [$source, $user] = $this->fixture();
+        $name = $user->name;
+        $backups = app(BackupManager::class);
+        if ($when === 'before') {
+            $source->users()->detach($user);
+            $path = $backups->path($source, $backups->create($source));
+            $this->rewriteArchive($path, function ($zip, &$data): void {
+                foreach (['comments' => 'author_name', 'attachments' => 'uploaded_by_name'] as $table => $column) {
+                    foreach ($data['tables'][$table] as &$row) {
+                        unset($row[$column]);
+                    }
+                    unset($row);
+                }
+            });
+            $zip = BackupArchive::open($path);
+            $zip->deleteName('manifest.json');
+            $zip->close();
+            BackupArchive::seal($path, 'tenant', ['installation' => $foreign ? 'another-installation' : hash('sha256', config('app.key')), 'schema' => BackupArchive::schema(legacyAuthors: true)]);
+        }
+        app(UserAccess::class)->delete($user);
+        if ($when === 'after') {
+            $path = $backups->path($source, $backups->create($source));
+            $zip = BackupArchive::open($path);
+            $data = BackupArchive::json($zip, 'data.json');
+            $zip->close();
+            $this->assertSame([], $data['users']);
+            $this->assertNull($data['tables']['comments'][0]['user_id']);
+            $this->assertSame($name, $data['tables']['comments'][0]['author_name']);
+            $this->assertNull($data['tables']['attachments'][0]['uploaded_by']);
+            $this->assertSame($name, $data['tables']['attachments'][0]['uploaded_by_name']);
+        }
+        // Reusing the email must not reconnect attribution to this new account.
+        $replacement = User::factory()->create(['email' => $user->email]);
+        $target = $this->tenant('restored');
+        $backups->restoreTenant($target, $path);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertSame([], $target->users()->pluck('users.id')->all());
+        $this->assertSame([], $target->fresh()->contract_reminders['user_ids']);
+        $this->assertSame([], $replacement->tenants()->pluck('tenants.id')->all());
+        $expense = $target->expenses()->sole();
+        $comments = $expense->comments()->orderBy('id')->get();
+        $this->assertCount(2, $comments);
+        $this->assertSame($comments[0]->id, $comments[1]->parent_id);
+        foreach ($comments as $comment) {
+            $this->assertNull($comment->user_id);
+            $this->assertSame($name, $comment->getAttribute('author_name'));
+        }
+        $file = $target->attachments()->sole();
+        $this->assertNull($file->uploaded_by);
+        $this->assertSame($name, $file->uploaded_by_name);
+        $this->assertSame('allegato verificabile', Storage::disk('attachments')->get($file->path));
+    }
+
+    public function test_old_local_membership_cannot_resurrect_deleted_user_and_leaves_target_empty(): void
+    {
+        [$source, $user] = $this->fixture();
+        $backups = app(BackupManager::class);
+        $path = $backups->path($source, $backups->create($source));
+        app(UserAccess::class)->delete($user);
+        $target = $this->tenant('restored');
+        $files = Storage::disk('attachments')->allFiles();
+        try {
+            $backups->restoreTenant($target, $path);
+            $this->fail('Deleted membership restored');
+        } catch (\RuntimeException $error) {
+            $this->assertStringContainsString('account non più presente', $error->getMessage());
+        }
+        $this->assertDatabaseCount('users', 0);
+        $this->assertTrue(app(TenantBackup::class)->isEmpty($target));
+        $this->assertSame($files, Storage::disk('attachments')->allFiles());
+    }
+
+    public function test_legacy_columns_are_optional_but_other_missing_unknown_and_invalid_columns_are_rejected(): void
+    {
+        [$source] = $this->fixture();
+        $backups = app(BackupManager::class);
+        foreach (['legacy', 'missing', 'unknown', 'long-name', 'invalid-name'] as $case) {
+            $path = $backups->path($source, $backups->create($source));
+            $this->rewriteArchive($path, function ($zip, &$data) use ($case): void {
+                foreach (['comments' => 'author_name', 'attachments' => 'uploaded_by_name'] as $table => $column) {
+                    foreach ($data['tables'][$table] as &$row) {
+                        unset($row[$column]);
+                        if ($case === 'missing') {
+                            unset($row['created_at']);
+                        } elseif ($case === 'unknown') {
+                            $row['unexpected'] = null;
+                        } elseif ($case === 'long-name') {
+                            $row[$column] = str_repeat('x', 256);
+                        } elseif ($case === 'invalid-name') {
+                            $row[$column] = 123;
+                        }
+                    }
+                    unset($row);
+                }
+            });
+            $target = $this->tenant($case);
+            try {
+                $backups->restoreTenant($target, $path);
+                $this->assertSame('legacy', $case);
+                $this->assertSame(2, $target->expenses()->sole()->comments()->count());
+            } catch (\RuntimeException|ValidationException $error) {
+                $this->assertNotSame('legacy', $case, $error->getMessage());
+                $this->assertTrue(app(TenantBackup::class)->isEmpty($target));
+            }
+        }
     }
 
     public function test_backup_names_use_rome_time_and_only_add_a_suffix_for_collisions(): void

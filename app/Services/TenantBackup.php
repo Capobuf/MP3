@@ -109,7 +109,7 @@ class TenantBackup
         try {
             $manifest = Archive::verify($zip, 'tenant');
             $data = Archive::json($zip, 'data.json');
-            $this->validate($data, $manifest);
+            $data = $this->validate($data, $manifest);
             DB::transaction(function () use ($tenant, $zip, $manifest, $data, &$createdFiles): void {
                 $tenant = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
                 Archive::check($this->isEmpty($tenant), 'Il ripristino richiede un’azienda nuova o vuota, senza impostazioni personalizzate.');
@@ -121,7 +121,8 @@ class TenantBackup
                     Archive::copyEntry($zip, 'logo', $destination);
                     $this->validateLogo($destination, basename($logoPath));
                 }
-                $maps = ['users' => $this->users($data['users'], $manifest['installation'])];
+                $maps = ['users' => $this->users($data['users'], $data['members'], $manifest['installation'])];
+                $names = array_column($data['users'], 'name', 'id');
                 $members = array_map(fn ($id) => $this->reference($maps, 'users', $id), $data['members']);
                 Archive::check(array_diff($tenant->users()->pluck('users.id')->all(), $members) === [], 'Le associazioni utente del tenant di destinazione sono in conflitto con il backup.');
                 $tenant->projectStatuses()->delete();
@@ -132,6 +133,13 @@ class TenantBackup
                         unset($row['id']);
                         if (array_key_exists('tenant_id', $row)) {
                             $row['tenant_id'] = $tenant->id;
+                        }
+                        if ($table === 'comments' || $table === 'attachments') {
+                            $column = $table === 'comments' ? 'user_id' : 'uploaded_by';
+                            $nameColumn = $table === 'comments' ? 'author_name' : 'uploaded_by_name';
+                            if ($row[$column] !== null && $maps['users'][$row[$column]] === null) {
+                                $row[$nameColumn] = $names[$row[$column]];
+                            }
                         }
                         foreach (self::REFS[$table] ?? [] as $column => $target) {
                             $row[$column] = $target === $table ? null : $this->reference($maps, $target, $row[$column]);
@@ -184,7 +192,7 @@ class TenantBackup
                 }
                 $settings = $data['tenant']['contract_reminders'];
                 if ($settings !== null) {
-                    $settings['user_ids'] = array_map(fn ($id) => $this->reference($maps, 'users', $id), $settings['user_ids']);
+                    $settings['user_ids'] = array_values(array_filter(array_map(fn ($id) => $this->reference($maps, 'users', $id), $settings['user_ids'])));
                 }
                 $tenant->forceFill(['contract_reminders' => $settings, 'logo_path' => $logoPath])->saveOrFail();
                 foreach (User::whereIn('id', $members)->orderBy('id')->lockForUpdate()->get() as $member) {
@@ -216,12 +224,22 @@ class TenantBackup
     }
 
     /** @param list<array<string, mixed>> $users
-     * @return array<int, int>
+     * @param  list<int>  $members
+     * @return array<int, int|null>
      */
-    private function users(array $users, string $installation): array
+    private function users(array $users, array $members, string $installation): array
     {
         $map = [];
+        $local = $installation === hash('sha256', (string) config('app.key'));
+        usort($users, fn ($a, $b) => $a['id'] <=> $b['id']);
         foreach ($users as $identity) {
+            if (! in_array($identity['id'], $members, true)) {
+                $original = $local ? User::whereKey($identity['id'])->lockForUpdate()->first() : null;
+                $map[$identity['id']] = $original !== null && $original->email === $identity['email'] && $original->name === $identity['name'] ? $original->id : null;
+
+                continue;
+            }
+            Archive::check(! $local || User::whereKey($identity['id'])->lockForUpdate()->exists(), 'Il backup richiede un account non più presente in questa installazione. Ripristino delle associazioni bloccato: nessun account eliminato è stato ricreato.');
             $existing = User::where('email', $identity['email'])->lockForUpdate()->first();
             if ($existing !== null) {
                 Archive::check($installation === hash('sha256', (string) config('app.key')) && $existing->id === $identity['id'] && $existing->name === $identity['name'] && $existing->email === $identity['email'], 'Conflitto di identità utente: nessun account esistente è stato modificato.');
@@ -236,29 +254,30 @@ class TenantBackup
         return $map;
     }
 
-    /** @param array<string, array<int, int>> $maps */
+    /** @param array<string, array<int, int|null>> $maps */
     private function reference(array $maps, string $table, mixed $id): ?int
     {
         if ($id === null) {
             return null;
         }
-        Archive::check((is_int($id) || is_string($id)) && isset($maps[$table][$id]), 'Riferimento mancante o esterno al tenant nel backup.');
+        Archive::check((is_int($id) || is_string($id)) && array_key_exists($id, $maps[$table]), 'Riferimento mancante o esterno al tenant nel backup.');
 
         return $maps[$table][$id];
     }
 
     /** @param array<string, mixed> $data
      * @param  array<string, mixed>  $manifest
+     * @return array<string, mixed>
      */
-    private function validate(array $data, array $manifest): void
+    private function validate(array $data, array $manifest): array
     {
         Validator::make($data, [
             'tenant' => ['required', 'array:id,name,slug,contract_reminders,logo_path'],
             'tenant.logo_path' => ['sometimes', 'nullable', 'string'],
             'tenant.id' => ['required', 'integer', 'min:1'],
             'tenant.name' => ['required', 'string'], 'tenant.slug' => ['required', 'string'],
-            'tenant.contract_reminders' => ['present', 'nullable', 'array'],
-            'tenant.contract_reminders.user_ids' => ['required_with:tenant.contract_reminders', 'array'],
+            'tenant.contract_reminders' => ['present', 'nullable', 'array', 'required_array_keys:user_ids'],
+            'tenant.contract_reminders.user_ids' => ['sometimes', 'array'],
             'users' => ['present', 'array', 'list'], 'users.*' => ['array:id,name,email'],
             'users.*.id' => ['required', 'integer', 'min:1', 'distinct'],
             'users.*.email' => ['required', 'email', 'max:255', 'distinct:ignore_case'],
@@ -275,8 +294,18 @@ class TenantBackup
             Archive::check(is_array($rows) && array_is_list($rows), 'Dati tabellari non validi.');
             $columns = Schema::getColumnListing($table);
             $maps[$table] = [];
-            foreach ($rows as $row) {
-                Archive::check(is_array($row) && count($row) === count($columns) && array_diff(array_keys($row), $columns) === [], 'Colonne incompatibili nel backup.');
+            foreach ($rows as $index => $row) {
+                Archive::check(is_array($row), 'Dati tabellari non validi.');
+                $nameColumn = match ($table) {
+                    'comments' => 'author_name', 'attachments' => 'uploaded_by_name', default => null,
+                };
+                if ($nameColumn !== null) {
+                    // Only these two columns may be absent in archives predating account deletion.
+                    $row += [$nameColumn => null];
+                    Validator::make($row, [$nameColumn => ['nullable', 'string', 'max:255']])->validate();
+                    $data['tables'][$table][$index] = $row;
+                }
+                Archive::check(count($row) === count($columns) && array_diff(array_keys($row), $columns) === [], 'Colonne incompatibili nel backup.');
                 foreach ($row as $value) {
                     Archive::check(is_scalar($value) || $value === null, 'Valore tabellare non valido.');
                 }
@@ -335,5 +364,7 @@ class TenantBackup
         }
         sort($expectedFiles);
         Archive::check(array_keys($manifest['files']) === $expectedFiles, 'File inattesi o mancanti nel backup tenant.');
+
+        return $data;
     }
 }

@@ -507,7 +507,7 @@ export default function PlatformUsers({
                                 {action?.kind === 'promote'
                                     ? 'Confermi l’accesso alle impostazioni globali di Obake, inclusa la gestione di utenti e assegnazioni delle aziende? Le aziende attuali e lo stato di blocco saranno conservati.'
                                     : action?.kind === 'delete'
-                                      ? 'L’eliminazione è definitiva e consentita solo se non ci sono dati storici collegati. Le credenziali e le assegnazioni saranno rimosse.'
+                                      ? 'L’account, le credenziali, le assegnazioni e la cronologia di annullamento dell’utente saranno eliminati definitivamente. I dati aziendali e il nome sui contenuti storici saranno conservati.'
                                       : action?.kind === 'block'
                                         ? 'L’utente perderà l’accesso ad Amministrazione e a tutte le aziende, anche dalle sessioni aperte. Dati e assegnazioni saranno conservati.'
                                         : 'L’utente potrà accedere nuovamente secondo il profilo e le assegnazioni attuali.'}

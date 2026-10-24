@@ -45,11 +45,16 @@ class CommentController extends Controller
             'parent_id' => $comment->parent_id,
             'deleted' => $deleted,
             'content' => $deleted ? null : json_decode($comment->content, true, flags: JSON_THROW_ON_ERROR),
-            'author' => $deleted ? null : ['id' => $comment->user_id, 'name' => $comment->user->name ?? 'Utente non disponibile', 'avatar' => $comment->user->avatar ?? null],
+            'author' => $deleted ? null : [
+                'id' => $comment->user?->getKey(),
+                'name' => $comment->user->name ?? $comment->getAttribute('author_name') ?? 'Utente non disponibile',
+                'avatar' => $comment->user->avatar ?? null,
+                'deleted' => $comment->user === null && $comment->getAttribute('author_name') !== null,
+            ],
             'created_at' => $comment->created_at?->toISOString(),
             'updated_at' => $comment->updated_at?->toISOString(),
-            'can_update' => ! $deleted && $comment->user_id === $request->user()?->id,
-            'can_delete' => ! $deleted && $comment->user_id === $request->user()?->id,
+            'can_update' => ! $deleted && $comment->user !== null && $comment->user_id === $request->user()?->id,
+            'can_delete' => ! $deleted && $comment->user !== null && $comment->user_id === $request->user()?->id,
         ];
     }
 
@@ -78,7 +83,8 @@ class CommentController extends Controller
     public function store(CommentRequest $request, Tenant $tenant, string $resource, int $record): JsonResponse
     {
         $comment = DB::transaction(function () use ($request, $tenant, $resource, $record) {
-            // Serialize new authorship with account deletion (comments have no user FK).
+            // Match account deletion: tenant, user, then owner.
+            Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
             User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
             $owner = $this->owner($tenant, $resource, $record, true);
             $parentId = $request->validated('parent_id');
@@ -99,6 +105,8 @@ class CommentController extends Controller
     public function update(CommentRequest $request, Tenant $tenant, string $resource, int $record, int $comment): JsonResponse
     {
         $stored = DB::transaction(function () use ($request, $tenant, $resource, $record, $comment) {
+            Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            User::whereKey($request->user()?->id)->lockForUpdate()->firstOrFail();
             $stored = $this->owner($tenant, $resource, $record, true)->comments()->findOrFail($comment);
             abort_unless($stored->user_id === $request->user()?->id, 403);
             $stored->update(['content' => json_encode($request->validated('content'), JSON_THROW_ON_ERROR)]);
@@ -112,6 +120,8 @@ class CommentController extends Controller
     public function destroy(Request $request, Tenant $tenant, string $resource, int $record, int $comment): JsonResponse
     {
         DB::transaction(function () use ($request, $tenant, $resource, $record, $comment): void {
+            Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            User::whereKey($request->user()?->id)->lockForUpdate()->firstOrFail();
             $stored = $this->owner($tenant, $resource, $record, true)->comments()->findOrFail($comment);
             abort_unless($stored->user_id === $request->user()?->id, 403);
             $stored->delete();

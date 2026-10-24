@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/react';
 import { renderToReactElement } from '@tiptap/static-renderer/pm/react';
-import { Ellipsis, Pencil, Trash2 } from 'lucide-react';
+import { Ellipsis, Pencil, Trash2, UserRound } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { UserAvatar } from '@/components/user-info';
@@ -55,7 +55,12 @@ type Comment = {
     parent_id: number | null;
     deleted: boolean;
     content: JSONContent | null;
-    author: { id: number | null; name: string; avatar: string | null } | null;
+    author: {
+        id: number | null;
+        name: string;
+        avatar: string | null;
+        deleted: boolean;
+    } | null;
     created_at: string;
     updated_at: string;
     can_update: boolean;
@@ -108,6 +113,13 @@ function CommentMessage({
                 >
                     <Trash2 className="size-4" />
                 </div>
+            ) : comment.author?.deleted ? (
+                <div
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                    aria-hidden="true"
+                >
+                    <UserRound className="size-4" />
+                </div>
             ) : (
                 <UserAvatar
                     user={comment.author ?? { name: 'Utente non disponibile' }}
@@ -124,6 +136,12 @@ function CommentMessage({
                             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1 pt-1">
                                 <span className="text-sm font-medium break-words">
                                     {comment.author?.name}
+                                    {comment.author?.deleted && (
+                                        <span className="font-normal text-muted-foreground">
+                                            {' '}
+                                            (eliminato)
+                                        </span>
+                                    )}
                                 </span>
                                 <time
                                     className="text-xs text-muted-foreground"

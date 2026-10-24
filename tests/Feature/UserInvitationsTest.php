@@ -431,36 +431,6 @@ class UserInvitationsTest extends TestCase
         $this->assertModelExists($tenant);
     }
 
-    public function test_comments_and_undo_history_prevent_global_and_self_deletion(): void
-    {
-        $tenant = $this->tenant();
-        $admin = User::factory()->create(['is_platform_admin' => true]);
-        $vendor = $tenant->vendors()->create(['name' => 'Vendor']);
-        foreach (['comment', 'undo', 'historical-attachment', 'attachment'] as $kind) {
-            $user = $this->member($tenant);
-            if ($kind === 'comment') {
-                $vendor->comments()->create(['content' => 'Historical comment', 'user_id' => $user->id, 'deleted_at' => now()]);
-            } elseif ($kind === 'undo') {
-                DB::table('undo_actions')->insert(['user_id' => $user->id, 'tenant_id' => $tenant->id, 'label' => 'History', 'before_hash' => 'a', 'after_hash' => 'b', 'changes' => '[]', 'files' => '[]', 'created_at' => now()]);
-            } elseif ($kind === 'historical-attachment') {
-                DB::table('undo_actions')->insert(['user_id' => $admin->id, 'tenant_id' => $tenant->id, 'label' => 'Deleted attachment', 'before_hash' => 'a', 'after_hash' => 'b', 'changes' => json_encode(['attachments' => [123 => ['before' => ['uploaded_by' => $user->id], 'after' => null]]]), 'files' => '[]', 'created_at' => now()]);
-            } else {
-                $project = $tenant->projects()->create(['name' => 'History']);
-                $attachment = $project->attachments()->make(['uploaded_by' => $user->id, 'original_name' => 'history.pdf', 'path' => 'history.pdf', 'disk' => 'attachments', 'mime_type' => 'application/pdf', 'size_bytes' => 1]);
-                $attachment->tenant_id = $tenant->id;
-                $attachment->save();
-            }
-            $this->actingAs($admin)->delete('/platform/users/'.$user->id)->assertSessionHasErrors('user');
-            $this->actingAs($user)->delete('/settings/profile', ['password' => 'password'])->assertSessionHasErrors('user');
-            $this->assertModelExists($user);
-            $this->assertAuthenticatedAs($user);
-            $this->assertSame([$tenant->id], $user->tenants()->pluck('tenants.id')->all());
-        }
-        $this->assertDatabaseCount('comments', 1);
-        $this->assertDatabaseCount('undo_actions', 2);
-        $this->assertDatabaseCount('attachments', 1);
-    }
-
     public function test_blocking_revokes_database_sessions_and_remember_token_without_touching_credentials(): void
     {
         $user = User::factory()->withTwoFactor()->create(['is_platform_admin' => true]);

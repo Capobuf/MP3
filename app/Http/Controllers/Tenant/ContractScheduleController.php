@@ -47,12 +47,12 @@ class ContractScheduleController extends Controller
 
     public function update(Request $request, Tenant $tenant, ContractSchedule $schedule): JsonResponse
     {
-        $data = $this->validated($request, $tenant, true);
-        if ($data['enabled'] && $schedule->recipients($tenant, $data) === []) {
-            throw ValidationException::withMessages(['user_ids' => 'Seleziona almeno un destinatario valido.']);
-        }
-        DB::transaction(function () use ($tenant, $data): void {
+        DB::transaction(function () use ($request, $tenant, $schedule): void {
             $record = Tenant::query()->whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+            $data = $this->validated($request, $record, true);
+            if ($data['enabled'] && $schedule->recipients($record, $data) === []) {
+                throw ValidationException::withMessages(['user_ids' => 'Seleziona almeno un destinatario valido.']);
+            }
             $record->contract_reminders = [...$data, 'starts_at' => now(ContractSchedule::TIMEZONE)->toIso8601String()];
             $record->save();
         });

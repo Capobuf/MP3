@@ -756,11 +756,43 @@ Il backup tenant **non contiene password, passkey, segreti 2FA, sessioni o
 privilegi globali**. Nella stessa installazione un’identità esistente viene
 riutilizzata solo se ID, nome ed email coincidono e la firma HMAC del backup è
 valida; l’account non viene aggiornato. Su un’altra installazione qualsiasi
-email già esistente è un conflitto che blocca il ripristino. Le identità nuove
-creano account non privilegiati, non verificati e con password casuale:
+email già esistente per una membership è un conflitto che blocca il ripristino.
+Solo le membership importate da un’altra installazione possono creare account
+non privilegiati, non verificati e con password casuale:
 si accede attraverso il recupero password Fortify. Altri tenant e account
 condivisi restano invariati. Una rotazione di `APP_KEY` rende l’archivio tenant
 un archivio proveniente da un’altra installazione ai fini del riuso identità.
+
+L’eliminazione da **Amministrazione → Utenti** o dal proprio **Profilo** rimuove
+fisicamente l’account, credenziali, sessioni database, accessi e cronologia Undo
+personale. Commenti (anche risposte e cestinati), documenti e dati aziendali
+restano: si conserva l’ultimo nome come testo, senza ID dell’account. Nei
+commenti visibili appare «Nome (eliminato)»; gli orfani senza nome storico
+mostrano «Utente non disponibile». Sono scartati anche gli Undo di altri utenti
+che potrebbero ripristinare il vecchio caricatore; gli altri conservano i
+controlli di integrità e possono restituire 409 dopo la modifica. Una nuova
+registrazione con la stessa email non eredita attribuzioni o accessi.
+La rimozione di un utente dalla singola azienda continua a revocare solo
+quell’accesso. Super admin e autoeliminazione da Amministrazione sono protetti.
+
+I nuovi ZIP tenant conservano `comments.author_name` e
+`attachments.uploaded_by_name`. Il ripristino accetta archivi precedenti privi
+solo di questi due nuovi campi; i soli autori/caricatori storici non generano
+account. Nella stessa installazione una membership per un ID ormai assente
+blocca il ripristino con rollback, anche se l’email è stata riutilizzata.
+Negli archivi precedenti i riferimenti puramente storici diventano nomi testuali
+quando l’identità originale non è più disponibile.
+
+L’ID viene rimosso dai destinatari dei promemoria. Gli indirizzi configurati
+separatamente come destinatari esterni e lo storico delle consegne restano:
+un indirizzo esterno può quindi continuare a ricevere promemoria. ZIP locali,
+copie Google Drive e backup globali precedenti non vengono riscritti; un
+ripristino globale riporta anche gli account allo stato del backup. Conservare
+nomi, email storiche e vecchi backup è deliberato: questa funzione gestisce
+l’uscita dell’utente dall’applicazione, non una cancellazione GDPR integrale.
+Se la pulizia di avatar o file temporanei Undo fallisce dopo il commit,
+l’account resta eliminato: l’interfaccia avvisa e i percorsi da pulire sono
+registrati nel log.
 
 I limiti di upload e decompressione sono in `config/platform-backups.php`;
 anche i limiti PHP e del proxy devono consentire il caricamento. Per impostazione
