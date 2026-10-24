@@ -62,7 +62,7 @@ export default function GeneralSettings({
                                     >
                                         <InputGroupInput
                                             id="attachment-max-size"
-                                            className="w-[calc(4ch+2.5rem)] flex-none tabular-nums"
+                                            className="w-[calc(4ch+1.5rem)] flex-none [appearance:textfield] tabular-nums [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                             type="number"
                                             min={1 / 1024}
                                             max={1024}
