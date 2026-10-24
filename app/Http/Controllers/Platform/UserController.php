@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Laravel\Fortify\Actions\DisableTwoFactorAuthentication;
 
 class UserController extends Controller
 {
@@ -94,6 +95,26 @@ class UserController extends Controller
             }
         });
         Inertia::flash('toast', ['type' => 'success', 'message' => $data['is_active'] ? 'Utente riattivato.' : 'Utente bloccato.']);
+
+        return back();
+    }
+
+    public function disableMfa(Request $request, User $user, DisableTwoFactorAuthentication $disable, UserAccess $access): RedirectResponse
+    {
+        abort_unless($request->user()->is_super_admin && ! $request->user()->is($user) && ! $user->is_super_admin, 403);
+        $request->validate([
+            'confirmed' => ['required', 'accepted'],
+            'password' => ['required', 'current_password'],
+        ]);
+
+        DB::transaction(function () use ($user, $disable, $access) {
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            abort_if($user->is_super_admin, 403);
+            $disable($user);
+            $access->revokeSessions($user);
+        });
+
+        Inertia::flash('toast', ['type' => 'success', 'message' => 'MFA disattivata. L’utente dovrà accedere nuovamente e riconfigurare l’autenticazione a due fattori.']);
 
         return back();
     }

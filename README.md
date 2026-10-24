@@ -341,6 +341,14 @@ Commenti, anche eliminati logicamente, storico undo o allegati con autore
 impediscono la cancellazione, anche dal profilo personale. Super admin e
 account corrente sono protetti dalle azioni distruttive di Platform.
 
+La lista mostra lo stato **TOTP: attivo/non attivo**, senza segreti o codici.
+Solo il super admin può usare **Disattiva MFA** su un altro utente non super
+admin, anche quando la configurazione TOTP è ancora da confermare. La modale
+richiede la password corrente del super admin a ogni operazione. Il reset usa
+Fortify, revoca sessioni database e Ricordami e conserva lo stato dell’account.
+L’utente può riconfigurare TOTP da **Impostazioni → Sicurezza**; le passkey
+restano invariate. Non sono necessarie migration per questa funzione.
+
 **Rollout:** applicare la migration `2026_10_23_000001_add_platform_access_to_users`.
 Gli account esistenti restano abilitati e non ricevono nuovi privilegi. Controllare
 il profilo nella pagina Utenti: gli account aziendali legacy con più ambienti
